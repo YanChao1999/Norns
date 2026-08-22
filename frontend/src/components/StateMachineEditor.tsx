@@ -122,7 +122,9 @@ export function StateMachineEditor({ boardId }: Props) {
             <MachineEdge label="create" />
             {stages.map((stage, index) => (
               <div key={stage.id} className="machine-step">
-                {index > 0 ? <MachineEdge label={stages[index - 1].require_approval ? 'Human gate' : 'Auto-advance'} gated={stages[index - 1].require_approval} /> : null}
+                {index > 0 ? (
+                  <MachineEdge label={stages[index - 1].require_approval ? 'Human gate' : 'Auto-advance'} gated={stages[index - 1].require_approval} />
+                ) : null}
                 <button
                   type="button"
                   className={`machine-node${stage.id === selectedId ? ' is-selected' : ''}${stage.require_approval ? ' is-gated' : ' is-auto'}`}
@@ -135,14 +137,15 @@ export function StateMachineEditor({ boardId }: Props) {
                 </button>
               </div>
             ))}
-            {stages.length ? <MachineEdge label={stages[stages.length - 1].require_approval ? 'Human gate' : 'Auto-advance'} gated={stages[stages.length - 1].require_approval} /> : null}
+            {stages.length ? (
+              <MachineEdge
+                label={stages[stages.length - 1].require_approval ? 'Human gate' : 'Auto-advance'}
+                gated={stages[stages.length - 1].require_approval}
+              />
+            ) : null}
             <div className="machine-terminal is-done">Done</div>
           </div>
-          <AddStageForm
-            disabled={busy}
-            pending={createStage.isPending}
-            onAdd={(name) => createStage.mutate(name)}
-          />
+          <AddStageForm disabled={busy} pending={createStage.isPending} onAdd={(name) => createStage.mutate(name)} />
         </section>
 
         <aside className="panel machine-inspector">
@@ -276,13 +279,7 @@ function StageInspector({
     >
       <label className="field">
         Name
-        <input
-          className="input"
-          name="stage-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          disabled={busy}
-        />
+        <input className="input" name="stage-name" value={name} onChange={(event) => setName(event.target.value)} disabled={busy} />
       </label>
       <button type="submit" className="btn" disabled={busy || !name.trim() || name.trim() === stage.name}>
         Save name
@@ -291,12 +288,7 @@ function StageInspector({
       <div className="field">
         <span>Progression</span>
         <label className="tool-row">
-          <input
-            type="checkbox"
-            checked={stage.require_approval}
-            disabled={busy}
-            onChange={(event) => onToggleGate(event.target.checked)}
-          />
+          <input type="checkbox" checked={stage.require_approval} disabled={busy} onChange={(event) => onToggleGate(event.target.checked)} />
           Require human approval
         </label>
       </div>
@@ -315,7 +307,13 @@ function StageInspector({
         <button type="button" className="btn" onClick={onEditAgent}>
           Edit agent
         </button>
-        <button type="button" className="btn btn-danger" onClick={onDelete} disabled={busy || !canDelete} title={!canDelete ? 'Keep at least one stage, and move cards off this stage first' : undefined}>
+        <button
+          type="button"
+          className="btn btn-danger"
+          onClick={onDelete}
+          disabled={busy || !canDelete}
+          title={!canDelete ? 'Keep at least one stage, and move cards off this stage first' : undefined}
+        >
           Delete
         </button>
       </div>
