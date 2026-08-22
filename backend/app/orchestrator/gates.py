@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from ..models import AgentRun, Approval, Board, Card, Stage
 from .enqueue import enqueue_stage_run
+from .progression import next_stage_after
 from .state_machine import CardStatus, advance_card, reject_card_state
 
 
@@ -53,10 +54,7 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
     )
     session.add(approval)
 
-    stages = sorted(card.current_stage.board.stages, key=lambda stage: stage.order)
-    current_index = next(index for index, stage in enumerate(stages) if stage.id == card.current_stage_id)
-    next_stage = stages[current_index + 1] if current_index + 1 < len(stages) else None
-
+    next_stage = next_stage_after(card.current_stage.board.stages, card.current_stage_id)
     advance_card(card, next_stage.id if next_stage else None)
     await session.commit()
     await session.refresh(approval)

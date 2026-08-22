@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from cryptography.fernet import Fernet
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,9 +24,23 @@ class Settings(BaseSettings):
     session_max_age: int = 60 * 60 * 8
     auto_create_tables: bool = True
 
+    @field_validator("encryption_key")
+    @classmethod
+    def encryption_key_must_be_fernet(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError(
+                "ENCRYPTION_KEY is required. Generate one with: "
+                'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+        try:
+            Fernet(value.encode("utf-8"))
+        except Exception as exc:
+            raise ValueError("ENCRYPTION_KEY must be a valid Fernet key") from exc
+        return value
+
     @property
     def resolved_encryption_key(self) -> str:
-        return self.encryption_key or Fernet.generate_key().decode("utf-8")
+        return self.encryption_key
 
 
 @lru_cache(maxsize=1)

@@ -53,5 +53,15 @@ def advance_card(card: object, next_stage_id: str | None = None) -> None:
     setattr(card, "status", CardStatus.DONE)
 
 
+def auto_advance_card(card: object, next_stage_id: str | None = None) -> None:
+    current = _current_status(card)
+    if current != CardStatus.RUNNING:
+        raise ValueError(f"Cannot auto-advance a card from {current.value}")
+    if next_stage_id:
+        setattr(card, "current_stage_id", next_stage_id)
+        return
+    transition_card(card, CardStatus.DONE)
+
+
 def reject_card_state(card: object) -> None:
     transition_card(card, CardStatus.BLOCKED)

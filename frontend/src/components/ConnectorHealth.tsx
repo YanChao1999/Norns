@@ -6,14 +6,7 @@ import { Connector } from '../types';
 export function ConnectorHealth() {
   const { data = [], isLoading } = useQuery({
     queryKey: ['connectors'],
-    queryFn: async () => {
-      try {
-        return await apiClient.get<Connector[]>('/connectors');
-      } catch {
-        await apiClient.post('/auth/login', { username: 'admin', password: 'admin' });
-        return apiClient.get<Connector[]>('/connectors');
-      }
-    }
+    queryFn: () => apiClient.get<Connector[]>('/connectors')
   });
 
   return (

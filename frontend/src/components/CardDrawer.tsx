@@ -27,12 +27,21 @@ export function CardDrawer({ card, onClose }: Props) {
     }
   });
 
+  const runMutation = useMutation({
+    mutationFn: async () => apiClient.post(`/cards/${card?.id}/run`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
+      queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+    }
+  });
+
   if (!card) {
     return null;
   }
 
   const latestRun = runs[0];
   const plantuml = latestRun?.handoff?.plantuml?.svg as string | undefined;
+  const canRun = card.status === 'idle' || card.status === 'blocked';
 
   return (
     <aside style={drawerStyle}>
@@ -54,13 +63,26 @@ export function CardDrawer({ card, onClose }: Props) {
           {plantuml ? (
             <div>
               <h3>PlantUML preview</h3>
-              <div dangerouslySetInnerHTML={{ __html: plantuml }} />
+              <iframe
+                sandbox=""
+                srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}</style></head><body>${plantuml}</body></html>`}
+                title="PlantUML preview"
+                style={previewFrameStyle}
+              />
             </div>
           ) : null}
         </>
       ) : (
         <div>No stage runs yet.</div>
       )}
+
+      {canRun ? (
+        <div style={{ marginTop: 12 }}>
+          <button onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
+            {runMutation.isPending ? 'Starting…' : 'Run this stage'}
+          </button>
+        </div>
+      ) : null}
 
       {card.status === 'waiting_approval' ? (
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -96,4 +118,12 @@ const preStyle: CSSProperties = {
   padding: 12,
   borderRadius: 8,
   fontSize: 13
+};
+
+const previewFrameStyle: CSSProperties = {
+  width: '100%',
+  minHeight: 220,
+  border: '1px solid #e5e7eb',
+  borderRadius: 8,
+  background: 'white'
 };

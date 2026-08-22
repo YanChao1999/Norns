@@ -13,7 +13,9 @@ from sqlalchemy.orm import selectinload
 from ..config import get_settings
 from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
-from ..orchestrator.state_machine import CardStatus, start_card_run, wait_for_approval
+from ..orchestrator.enqueue import enqueue_stage_run
+from ..orchestrator.progression import next_stage_after
+from ..orchestrator.state_machine import CardStatus, auto_advance_card, start_card_run, wait_for_approval
 from ..plantuml.renderer import render_plantuml
 from ..tools.registry import RuntimeTool, create_default_registry
 
@@ -55,6 +57,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     runtime_tools = registry.get_runtime_tools(allowlist, connectors)
     run.inputs = _build_inputs(card)
 
+    next_stage = None
     try:
         model_output, tool_calls, handoff = await _execute_agent(
             settings=settings,
@@ -67,7 +70,11 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         run.handoff = handoff
         run.status = "completed"
         run.completed_at = datetime.utcnow()
-        wait_for_approval(card)
+        if stage.require_approval:
+            wait_for_approval(card)
+        else:
+            next_stage = next_stage_after(card.board.stages, stage.id)
+            auto_advance_card(card, next_stage.id if next_stage else None)
         await session.commit()
     except Exception as exc:
         run.status = "failed"
@@ -77,6 +84,9 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         card.status = CardStatus.BLOCKED
         await session.commit()
         raise
+
+    if next_stage:
+        await enqueue_stage_run(card.id, next_stage.id)
 
 
 def _build_inputs(card: Card) -> dict[str, Any]:
@@ -131,9 +141,12 @@ async def _execute_agent(
     if getattr(message, "tool_calls", None):
         messages.append(message.model_dump(exclude_none=True))
         for tool_call in message.tool_calls:
-            runtime_tool = tool_map[tool_call.function.name]
+            runtime_tool = tool_map.get(tool_call.function.name)
             arguments = json.loads(tool_call.function.arguments or "{}")
-            result = await runtime_tool.execute(arguments)
+            if runtime_tool is None:
+                result: Any = {"error": f"Unknown or disallowed tool: {tool_call.function.name}"}
+            else:
+                result = await runtime_tool.execute(arguments)
             executed_tool_calls.append({"name": tool_call.function.name, "arguments": arguments, "result": result})
             messages.append(
                 {

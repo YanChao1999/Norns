@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_session
 from ..models import AgentConfig, Board, Card, Stage
-from .auth import SessionUser, get_current_user
+from .auth import get_current_user
 
 router = APIRouter(tags=["boards"], dependencies=[Depends(get_current_user)])
 

@@ -6,15 +6,11 @@ interface Props {
   cards: Card[];
   onOpenCard: (card: Card) => void;
   onOpenConfig: (stage: Stage) => void;
-  onDropCard: (stage: Stage) => void;
-  onDragStart: (card: Card) => void;
 }
 
-export function Column({ stage, cards, onOpenCard, onOpenConfig, onDropCard, onDragStart }: Props) {
+export function Column({ stage, cards, onOpenCard, onOpenConfig }: Props) {
   return (
     <section
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={() => onDropCard(stage)}
       style={{
         minWidth: 300,
         background: '#f8fafc',
@@ -35,7 +31,7 @@ export function Column({ stage, cards, onOpenCard, onOpenConfig, onDropCard, onD
         </button>
       </div>
       {cards.map((card) => (
-        <CardItem key={card.id} card={card} onOpen={onOpenCard} onDragStart={onDragStart} />
+        <CardItem key={card.id} card={card} onOpen={onOpenCard} />
       ))}
       {!cards.length ? <div style={{ color: '#94a3b8' }}>No cards in this stage.</div> : null}
     </section>

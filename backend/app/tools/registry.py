@@ -26,10 +26,12 @@ class ToolRegistry:
         self._providers[name] = provider
 
     def get_runtime_tools(self, allowlist: list[str], connectors: list[Connector]) -> list[RuntimeTool]:
+        if not allowlist:
+            return []
         selected: list[RuntimeTool] = []
         normalized_allowlist = set(allowlist)
         for provider_name, provider in self._providers.items():
-            if normalized_allowlist and provider_name not in normalized_allowlist:
+            if provider_name not in normalized_allowlist:
                 continue
             selected.extend(provider(connectors))
         return selected

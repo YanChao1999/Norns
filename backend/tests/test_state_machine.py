@@ -2,7 +2,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.app.orchestrator.state_machine import CardStatus, advance_card, reject_card_state, start_card_run, wait_for_approval
+from backend.app.orchestrator.state_machine import (
+    CardStatus,
+    advance_card,
+    auto_advance_card,
+    reject_card_state,
+    start_card_run,
+    wait_for_approval,
+)
 
 
 @pytest.mark.parametrize(
@@ -42,3 +49,9 @@ def test_invalid_transition_raises():
     card = SimpleNamespace(status=CardStatus.IDLE, current_stage_id="stage-a")
     with pytest.raises(ValueError):
         wait_for_approval(card)
+
+
+def test_auto_advance_rejects_non_running_cards():
+    card = SimpleNamespace(status=CardStatus.WAITING_APPROVAL, current_stage_id="stage-a")
+    with pytest.raises(ValueError):
+        auto_advance_card(card, "stage-b")

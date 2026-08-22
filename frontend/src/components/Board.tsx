@@ -15,12 +15,12 @@ export function Board({ boardId }: Props) {
   const queryClient = useQueryClient();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
-  const [draggedCard, setDraggedCard] = useState<Card | null>(null);
   const [newCard, setNewCard] = useState({ title: '', body: '' });
 
   const { data: board, isLoading } = useQuery({
     queryKey: ['board', boardId],
-    queryFn: () => apiClient.get<BoardDetail>(`/boards/${boardId}`)
+    queryFn: () => apiClient.get<BoardDetail>(`/boards/${boardId}`),
+    refetchInterval: (query) => (query.state.data?.cards.some((card) => card.status === 'running') ? 2000 : false)
   });
 
   const createCard = useMutation({
@@ -29,12 +29,6 @@ export function Board({ boardId }: Props) {
       setNewCard({ title: '', body: '' });
       queryClient.invalidateQueries({ queryKey: ['board', boardId] });
     }
-  });
-
-  const moveCard = useMutation({
-    mutationFn: async ({ cardId, stageId }: { cardId: string; stageId: string }) =>
-      apiClient.put(`/cards/${cardId}`, { current_stage_id: stageId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['board', boardId] })
   });
 
   const cardsByStage = useMemo(() => {
@@ -47,19 +41,6 @@ export function Board({ boardId }: Props) {
     });
     return groups;
   }, [board]);
-
-  const handleDrop = (stage: Stage) => {
-    if (!board || !draggedCard || draggedCard.status === 'waiting_approval') {
-      return;
-    }
-    const currentIndex = board.stages.findIndex((item) => item.id === draggedCard.current_stage_id);
-    const targetIndex = board.stages.findIndex((item) => item.id === stage.id);
-    if (Math.abs(targetIndex - currentIndex) > 1) {
-      return;
-    }
-    moveCard.mutate({ cardId: draggedCard.id, stageId: stage.id });
-    setDraggedCard(null);
-  };
 
   if (isLoading || !board) {
     return <div>Loading board…</div>;
@@ -102,13 +83,14 @@ export function Board({ boardId }: Props) {
             cards={cardsByStage.get(stage.id) ?? []}
             onOpenCard={setSelectedCard}
             onOpenConfig={setSelectedStage}
-            onDropCard={handleDrop}
-            onDragStart={setDraggedCard}
           />
         ))}
       </div>
 
-      <CardDrawer card={selectedCard} onClose={() => setSelectedCard(null)} />
+      <CardDrawer
+        card={selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null}
+        onClose={() => setSelectedCard(null)}
+      />
       <AgentConfigModal stage={selectedStage} onClose={() => setSelectedStage(null)} />
     </div>
   );

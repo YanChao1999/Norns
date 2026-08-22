@@ -29,8 +29,6 @@ class CardUpdate(BaseModel):
     title: str | None = None
     body: str | None = None
     external_id: str | None = None
-    current_stage_id: str | None = None
-    status: CardStatus | None = None
 
 
 class ApprovalRequest(BaseModel):
@@ -135,8 +133,14 @@ async def approve_or_reject_card(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Approval:
     if payload.approved:
-        return await approve_card(session, card_id, current_user.username, payload.comment)
-    return await reject_card(session, card_id, current_user.username, payload.comment)
+        try:
+            return await approve_card(session, card_id, current_user.username, payload.comment)
+        except ValueError as exc:
+            raise _gate_http_exception(exc) from exc
+    try:
+        return await reject_card(session, card_id, current_user.username, payload.comment)
+    except ValueError as exc:
+        raise _gate_http_exception(exc) from exc
 
 
 @router.get("/cards/{card_id}/runs", response_model=list[AgentRunRead])
@@ -156,7 +160,15 @@ async def trigger_card_run(card_id: str, session: Annotated[AsyncSession, Depend
         raise HTTPException(status_code=404, detail="Card not found")
     if not card.current_stage_id:
         raise HTTPException(status_code=400, detail="Card has no stage assigned")
+    if card.status not in {CardStatus.IDLE, CardStatus.BLOCKED}:
+        raise HTTPException(status_code=409, detail="Card can only be run when idle or blocked")
     start_card_run(card)
     await session.commit()
     run_id = await enqueue_stage_run(card.id, card.current_stage_id)
     return {"run_id": run_id}
+
+
+def _gate_http_exception(exc: ValueError) -> HTTPException:
+    detail = str(exc)
+    status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_409_CONFLICT
+    return HTTPException(status_code=status_code, detail=detail)

@@ -13,14 +13,11 @@ const badgeStyles: Record<Card['status'], CSSProperties> = {
 interface Props {
   card: Card;
   onOpen: (card: Card) => void;
-  onDragStart?: (card: Card) => void;
 }
 
-export function CardItem({ card, onOpen, onDragStart }: Props) {
+export function CardItem({ card, onOpen }: Props) {
   return (
     <div
-      draggable={card.status !== 'waiting_approval'}
-      onDragStart={() => onDragStart?.(card)}
       onClick={() => onOpen(card)}
       style={{
         border: '1px solid #d1d5db',
