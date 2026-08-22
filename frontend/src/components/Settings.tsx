@@ -44,12 +44,7 @@ export function Settings({ onCreated }: Props) {
         <h2>New board</h2>
         <label className="field">
           Name
-          <input
-            className="input"
-            value={boardName}
-            onChange={(event) => setBoardName(event.target.value)}
-            placeholder="Board name"
-          />
+          <input className="input" value={boardName} onChange={(event) => setBoardName(event.target.value)} placeholder="Board name" />
         </label>
         <button type="submit" className="btn btn-primary" disabled={!boardName || createBoard.isPending}>
           {createBoard.isPending ? 'Creating…' : 'Create board'}

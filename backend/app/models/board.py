@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -23,7 +23,7 @@ class Board(Base):
         cascade="all, delete-orphan",
         order_by="Stage.order",
     )
-    cards: Mapped[list["Card"]] = relationship(back_populates="board", cascade="all, delete-orphan")
+    cards: Mapped[list[Card]] = relationship(back_populates="board", cascade="all, delete-orphan")
 
 
 class Stage(Base):
@@ -41,7 +41,7 @@ class Stage(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
-    cards: Mapped[list["Card"]] = relationship(back_populates="current_stage")
+    cards: Mapped[list[Card]] = relationship(back_populates="current_stage")
 
 
 class AgentConfig(Base):

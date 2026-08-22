@@ -50,7 +50,7 @@ export interface AgentRun {
   inputs: Record<string, unknown>;
   tool_calls: Array<Record<string, unknown>>;
   model_output: string;
-  handoff: Record<string, any>;
+  handoff: Record<string, unknown>;
   status: string;
   created_at: string;
   completed_at?: string | null;

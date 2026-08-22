@@ -78,10 +78,11 @@ Backend -> Frontend : waiting_approval state
 ```bash
 pip install -e ".[dev]"
 python -m pytest backend/tests/ -q
+bash scripts/lint.sh
 cd frontend && npm install && npm run dev
 ```
 
-Pull requests to `main` must pass the **CI** GitHub Actions check (`backend` tests, `frontend` typecheck/build). Direct pushes to `main` are not blocked, but merges are.
+Pull requests to `main` must pass the **CI** GitHub Actions check (`backend` tests, `frontend` typecheck/build, `lint` static analysis and format). Direct pushes to `main` are not blocked, but merges are.
 
 ## Notes
 - Use PostgreSQL in normal deployments via `DATABASE_URL`.

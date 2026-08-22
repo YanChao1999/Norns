@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+import backend.app.orchestrator.enqueue as enqueue
 from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
-import backend.app.orchestrator.enqueue as enqueue
 from backend.app.orchestrator.gates import approve_card, reject_card
 from backend.app.orchestrator.state_machine import CardStatus
 

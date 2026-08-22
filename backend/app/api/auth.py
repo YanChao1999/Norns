@@ -61,7 +61,9 @@ def get_current_user(session_cookie: Annotated[str | None, Cookie(alias=serializ
 @router.post("/login", response_model=SessionUser)
 async def login(payload: LoginRequest, response: Response) -> SessionUser:
     settings = get_settings()
-    if not (_matches(payload.username, settings.admin_username) and _matches(payload.password, settings.admin_password)):
+    if not (
+        _matches(payload.username, settings.admin_username) and _matches(payload.password, settings.admin_password)
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     cookie_value = serializer.dumps(payload.username)
     response.set_cookie(

@@ -9,11 +9,7 @@ interface Props {
 
 export function CardItem({ card, isOpen, onOpen }: Props) {
   return (
-    <button
-      type="button"
-      className={`card status-${card.status}${isOpen ? ' is-open' : ''}`}
-      onClick={() => onOpen(card)}
-    >
+    <button type="button" className={`card status-${card.status}${isOpen ? ' is-open' : ''}`} onClick={() => onOpen(card)}>
       <div className="card-top">
         <strong>{card.title}</strong>
         <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>

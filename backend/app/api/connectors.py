@@ -45,8 +45,12 @@ async def list_connectors(session: Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.post("", response_model=ConnectorRead, status_code=status.HTTP_201_CREATED)
-async def create_connector(payload: ConnectorCreate, session: Annotated[AsyncSession, Depends(get_session)]) -> Connector:
-    connector = Connector(name=payload.name, connector_type=payload.connector_type, is_active=payload.is_active, encrypted_config=b"")
+async def create_connector(
+    payload: ConnectorCreate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Connector:
+    connector = Connector(
+        name=payload.name, connector_type=payload.connector_type, is_active=payload.is_active, encrypted_config=b""
+    )
     connector.set_config(payload.config)
     session.add(connector)
     await session.commit()
@@ -55,7 +59,9 @@ async def create_connector(payload: ConnectorCreate, session: Annotated[AsyncSes
 
 
 @router.put("/{connector_id}", response_model=ConnectorRead)
-async def update_connector(connector_id: str, payload: ConnectorUpdate, session: Annotated[AsyncSession, Depends(get_session)]) -> Connector:
+async def update_connector(
+    connector_id: str, payload: ConnectorUpdate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Connector:
     connector = await session.get(Connector, connector_id)
     if not connector:
         raise HTTPException(status_code=404, detail="Connector not found")

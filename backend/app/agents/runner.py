@@ -36,7 +36,9 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             selectinload(Card.current_stage),
         )
     )
-    stage_result = await session.execute(select(Stage).where(Stage.id == stage_id).options(selectinload(Stage.agent_config)))
+    stage_result = await session.execute(
+        select(Stage).where(Stage.id == stage_id).options(selectinload(Stage.agent_config))
+    )
     connectors_result = await session.execute(select(Connector).where(Connector.is_active.is_(True)))
 
     card = card_result.scalar_one_or_none()
@@ -101,11 +103,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
 
 
 def _latest_handoff(card: Card) -> dict[str, Any] | None:
-    completed = [
-        run
-        for run in card.runs
-        if run.status == "completed"
-    ]
+    completed = [run for run in card.runs if run.status == "completed"]
     if not completed:
         return None
     previous_runs = sorted(completed, key=lambda item: item.created_at or datetime.min)

@@ -63,11 +63,7 @@ export function AgentConfigModal({ stage, onClose }: Props) {
 
       <label className="field">
         Model
-        <input
-          className="input"
-          value={form.model}
-          onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
-        />
+        <input className="input" value={form.model} onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))} />
       </label>
 
       <label className="field">
@@ -96,9 +92,7 @@ export function AgentConfigModal({ stage, onClose }: Props) {
                   onChange={() =>
                     setForm((current) => ({
                       ...current,
-                      tool_allowlist: checked
-                        ? current.tool_allowlist.filter((item) => item !== tool)
-                        : [...current.tool_allowlist, tool]
+                      tool_allowlist: checked ? current.tool_allowlist.filter((item) => item !== tool) : [...current.tool_allowlist, tool]
                     }))
                   }
                 />

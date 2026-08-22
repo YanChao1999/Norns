@@ -1,4 +1,5 @@
 """PlantUML renderer: optional local/remote servers only. Public egress is opt-in."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,9 +12,7 @@ from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_PLANTUML_ALPHABET = (
-    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
-)
+_PLANTUML_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
 
 
 def _encode_plantuml(text: str) -> str:

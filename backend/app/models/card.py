@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, JSON, String, Text, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -27,8 +27,8 @@ class Card(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    board: Mapped["Board"] = relationship(back_populates="cards")
-    current_stage: Mapped["Stage | None"] = relationship(back_populates="cards")
+    board: Mapped[Board] = relationship(back_populates="cards")
+    current_stage: Mapped[Stage | None] = relationship(back_populates="cards")
     runs: Mapped[list[AgentRun]] = relationship(back_populates="card", cascade="all, delete-orphan")
     approvals: Mapped[list[Approval]] = relationship(back_populates="card", cascade="all, delete-orphan")
 
@@ -48,7 +48,7 @@ class AgentRun(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
 
     card: Mapped[Card] = relationship(back_populates="runs")
-    stage: Mapped["Stage"] = relationship()
+    stage: Mapped[Stage] = relationship()
     approvals: Mapped[list[Approval]] = relationship(back_populates="agent_run")
 
 
@@ -66,7 +66,7 @@ class Approval(Base):
 
     card: Mapped[Card] = relationship(back_populates="approvals")
     agent_run: Mapped[AgentRun] = relationship(back_populates="approvals")
-    stage: Mapped["Stage"] = relationship()
+    stage: Mapped[Stage] = relationship()
 
 
 from .board import Board, Stage  # noqa: E402

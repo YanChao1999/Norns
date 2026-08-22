@@ -100,14 +100,8 @@ export default function App() {
           ))}
         </nav>
         <div className="topbar-meta">
-          <span className={`wait-count${waitingCount ? '' : ' is-clear'}`}>
-            {waitingCount} waiting
-          </span>
-          <button
-            type="button"
-            className={`chip${view === 'settings' ? ' is-active' : ''}`}
-            onClick={() => setView('settings')}
-          >
+          <span className={`wait-count${waitingCount ? '' : ' is-clear'}`}>{waitingCount} waiting</span>
+          <button type="button" className={`chip${view === 'settings' ? ' is-active' : ''}`} onClick={() => setView('settings')}>
             Settings
           </button>
           <span className="user-name">{username}</span>
@@ -128,9 +122,7 @@ export default function App() {
         ) : (
           <>
             {isLoading ? <div className="muted">Loading boards…</div> : null}
-            {!boards.length && !isLoading ? (
-              <div className="empty-board">Create a board in Settings to start orchestration.</div>
-            ) : null}
+            {!boards.length && !isLoading ? <div className="empty-board">Create a board in Settings to start orchestration.</div> : null}
             {selectedBoardId ? <Board boardId={selectedBoardId} /> : null}
           </>
         )}

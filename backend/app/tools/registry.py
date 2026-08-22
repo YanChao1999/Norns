@@ -6,7 +6,6 @@ from typing import Any
 
 from ..models.connector import Connector
 
-
 ToolExecutor = Callable[[dict[str, Any]], Awaitable[Any]]
 ToolProvider = Callable[[list[Connector]], list["RuntimeTool"]]
 
