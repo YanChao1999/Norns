@@ -81,6 +81,8 @@ python -m pytest backend/tests/ -q
 cd frontend && npm install && npm run dev
 ```
 
+Pull requests to `main` must pass the **CI** GitHub Actions check (`backend` tests, `frontend` typecheck/build). Direct pushes to `main` are not blocked, but merges are.
+
 ## Notes
 - Use PostgreSQL in normal deployments via `DATABASE_URL`.
 - Redis backs ARQ worker execution.
