@@ -1,7 +1,7 @@
 """PlantUML renderer: local plantuml Python package → Kroki API fallback."""
 from __future__ import annotations
 
-import base64
+import asyncio
 import zlib
 import logging
 import httpx
@@ -32,8 +32,8 @@ def _encode_plantuml(text: str) -> str:
     return "".join(result)
 
 
-def _render_via_plantuml_lib(source: str) -> str | None:
-    """Try to render using the plantuml Python package."""
+def _render_via_plantuml_lib_sync(source: str) -> str | None:
+    """Try to render using the plantuml Python package (blocking)."""
     try:
         import plantuml  # type: ignore
 
@@ -48,13 +48,19 @@ def _render_via_plantuml_lib(source: str) -> str | None:
         return None
 
 
-def _render_via_kroki(source: str) -> str | None:
+async def _render_via_plantuml_lib(source: str) -> str | None:
+    """Try to render using the plantuml Python package."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _render_via_plantuml_lib_sync, source)
+
+
+async def _render_via_kroki(source: str) -> str | None:
     """Try to render via Kroki public API."""
     try:
         encoded = _encode_plantuml(source)
         url = f"https://kroki.io/plantuml/svg/{encoded}"
-        with httpx.Client(timeout=10.0) as client:
-            resp = client.get(url)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url)
             resp.raise_for_status()
             return resp.text
     except Exception as exc:
@@ -62,17 +68,17 @@ def _render_via_kroki(source: str) -> str | None:
         return None
 
 
-def render_plantuml(source: str) -> str:
+async def render_plantuml(source: str) -> str:
     """Render a PlantUML diagram to SVG.
 
     Tries local plantuml Python package first, then falls back to Kroki API.
     Returns an SVG string, or an error placeholder SVG if both fail.
     """
-    svg = _render_via_plantuml_lib(source)
+    svg = await _render_via_plantuml_lib(source)
     if svg:
         return svg
 
-    svg = _render_via_kroki(source)
+    svg = await _render_via_kroki(source)
     if svg:
         return svg
 
