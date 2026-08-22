@@ -87,7 +87,9 @@ async def list_cards(board_id: str, session: Annotated[AsyncSession, Depends(get
 
 
 @router.post("/boards/{board_id}/cards", response_model=CardRead, status_code=status.HTTP_201_CREATED)
-async def create_card(board_id: str, payload: CardCreate, session: Annotated[AsyncSession, Depends(get_session)]) -> Card:
+async def create_card(
+    board_id: str, payload: CardCreate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Card:
     board_result = await session.execute(select(Board).where(Board.id == board_id).options(selectinload(Board.stages)))
     board = board_result.scalar_one_or_none()
     if not board:
@@ -118,7 +120,9 @@ async def get_card(card_id: str, session: Annotated[AsyncSession, Depends(get_se
 
 
 @router.put("/cards/{card_id}", response_model=CardRead)
-async def update_card(card_id: str, payload: CardUpdate, session: Annotated[AsyncSession, Depends(get_session)]) -> Card:
+async def update_card(
+    card_id: str, payload: CardUpdate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Card:
     card = await session.get(Card, card_id)
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
@@ -157,13 +161,17 @@ async def list_runs(card_id: str, session: Annotated[AsyncSession, Depends(get_s
     card = await session.get(Card, card_id)
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")
-    result = await session.execute(select(AgentRun).where(AgentRun.card_id == card_id).order_by(AgentRun.created_at.desc()))
+    result = await session.execute(
+        select(AgentRun).where(AgentRun.card_id == card_id).order_by(AgentRun.created_at.desc())
+    )
     return list(result.scalars().all())
 
 
 @router.post("/cards/{card_id}/run", response_model=dict[str, str], status_code=status.HTTP_202_ACCEPTED)
 async def trigger_card_run(card_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, str]:
-    card_result = await session.execute(select(Card).where(Card.id == card_id).options(selectinload(Card.current_stage)))
+    card_result = await session.execute(
+        select(Card).where(Card.id == card_id).options(selectinload(Card.current_stage))
+    )
     card = card_result.scalar_one_or_none()
     if not card:
         raise HTTPException(status_code=404, detail="Card not found")

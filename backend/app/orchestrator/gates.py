@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..models import AgentRun, Approval, Board, Card, Stage
+from ..models import Approval, Board, Card, Stage
 from .enqueue import EnqueueError, enqueue_stage_run
 from .progression import next_stage_after
 from .state_machine import CardStatus, advance_card, reject_card_state

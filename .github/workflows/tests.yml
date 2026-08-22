@@ -48,13 +48,31 @@ jobs:
       - name: Build
         run: npm run build
 
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Ruff
+        run: pip install "ruff>=0.8.0"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Lint and format
+        run: bash scripts/lint.sh
+
   ci:
     name: CI
     if: always()
-    needs: [backend, frontend]
+    needs: [backend, frontend, lint]
     runs-on: ubuntu-latest
     steps:
-      - name: Require backend and frontend
+      - name: Require backend, frontend, and lint
         run: |
           test "${{ needs.backend.result }}" = "success"
           test "${{ needs.frontend.result }}" = "success"
+          test "${{ needs.lint.result }}" = "success"

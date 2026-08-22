@@ -3,6 +3,7 @@ from __future__ import annotations
 from arq.connections import RedisSettings
 
 from backend.app.config import get_settings
+
 from .tasks import run_stage_task
 
 settings = get_settings()

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_session
-from ..models import AgentConfig, Board, Card, Stage
+from ..models import AgentConfig, Board, Stage
 from .auth import get_current_user
 
 router = APIRouter(tags=["boards"], dependencies=[Depends(get_current_user)])
@@ -95,7 +95,9 @@ class StageUpdate(BaseModel):
 
 @router.get("/boards", response_model=list[BoardRead])
 async def list_boards(session: Annotated[AsyncSession, Depends(get_session)]) -> list[Board]:
-    result = await session.execute(select(Board).options(selectinload(Board.stages).selectinload(Stage.agent_config)).order_by(Board.created_at))
+    result = await session.execute(
+        select(Board).options(selectinload(Board.stages).selectinload(Stage.agent_config)).order_by(Board.created_at)
+    )
     return list(result.scalars().unique().all())
 
 
@@ -149,7 +151,9 @@ async def get_board(board_id: str, session: Annotated[AsyncSession, Depends(get_
 
 
 @router.put("/boards/{board_id}", response_model=BoardDetail)
-async def update_board(board_id: str, payload: BoardUpdate, session: Annotated[AsyncSession, Depends(get_session)]) -> Board:
+async def update_board(
+    board_id: str, payload: BoardUpdate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Board:
     board = await _get_board_or_404(session, board_id)
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(board, field, value)
@@ -167,12 +171,16 @@ async def delete_board(board_id: str, session: Annotated[AsyncSession, Depends(g
 @router.get("/boards/{board_id}/stages", response_model=list[StageRead])
 async def list_stages(board_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> list[Stage]:
     await _get_board_or_404(session, board_id)
-    result = await session.execute(select(Stage).where(Stage.board_id == board_id).options(selectinload(Stage.agent_config)).order_by(Stage.order))
+    result = await session.execute(
+        select(Stage).where(Stage.board_id == board_id).options(selectinload(Stage.agent_config)).order_by(Stage.order)
+    )
     return list(result.scalars().all())
 
 
 @router.post("/boards/{board_id}/stages", response_model=StageRead, status_code=status.HTTP_201_CREATED)
-async def create_stage(board_id: str, payload: StageCreate, session: Annotated[AsyncSession, Depends(get_session)]) -> Stage:
+async def create_stage(
+    board_id: str, payload: StageCreate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Stage:
     await _get_board_or_404(session, board_id)
     order = payload.order
     if order is None:
@@ -193,17 +201,24 @@ async def create_stage(board_id: str, payload: StageCreate, session: Annotated[A
 
 
 @router.put("/stages/{stage_id}", response_model=StageRead)
-async def update_stage(stage_id: str, payload: StageUpdate, session: Annotated[AsyncSession, Depends(get_session)]) -> Stage:
+async def update_stage(
+    stage_id: str, payload: StageUpdate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> Stage:
     result = await session.execute(select(Stage).where(Stage.id == stage_id).options(selectinload(Stage.agent_config)))
     stage = result.scalar_one_or_none()
     if not stage:
         raise HTTPException(status_code=404, detail="Stage not found")
 
-    stage_fields = payload.model_dump(exclude_none=True, exclude={"system_prompt", "model", "temperature", "tool_allowlist"})
+    stage_fields = payload.model_dump(
+        exclude_none=True, exclude={"system_prompt", "model", "temperature", "tool_allowlist"}
+    )
     for field, value in stage_fields.items():
         setattr(stage, field, value)
 
-    if any(value is not None for value in [payload.system_prompt, payload.model, payload.temperature, payload.tool_allowlist]):
+    if any(
+        value is not None
+        for value in [payload.system_prompt, payload.model, payload.temperature, payload.tool_allowlist]
+    ):
         if not stage.agent_config:
             stage.agent_config = AgentConfig(stage_id=stage.id)
         if payload.system_prompt is not None:

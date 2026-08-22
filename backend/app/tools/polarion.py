@@ -134,7 +134,11 @@ def _make_get_workitem(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
             workitem = _polarion_client(connector).getWorkitem(arguments["workitem_id"])
-            return {"id": workitem.id, "title": getattr(workitem, "title", None), "status": getattr(workitem, "status", None)}
+            return {
+                "id": workitem.id,
+                "title": getattr(workitem, "title", None),
+                "status": getattr(workitem, "status", None),
+            }
 
         return await asyncio.to_thread(_call)
 
