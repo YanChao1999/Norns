@@ -5,8 +5,11 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 echo "==> Ruff"
-ruff check backend worker
-ruff format --check backend worker
+ruff check backend worker norns
+ruff format --check backend worker norns
+
+echo "==> Electron shell"
+node --check norns/electron/main.js
 
 echo "==> ESLint"
 cd frontend

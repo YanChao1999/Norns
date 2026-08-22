@@ -224,3 +224,8 @@ norns.db
 
 # Node
 node_modules/
+
+# Packaged Control Room UI copied from frontend/dist
+norns/web/*
+!norns/web/.gitkeep
+

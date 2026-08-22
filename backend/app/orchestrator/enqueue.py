@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 from arq import create_pool
@@ -25,6 +26,12 @@ async def _get_pool():
 
 async def enqueue_stage_run(card_id: str, stage_id: str, run_id: str | None = None) -> str:
     resolved_run_id = run_id or str(uuid4())
+    settings = get_settings()
+    if settings.queue_backend == "inline":
+        from ..agents.runner import run_stage
+
+        asyncio.create_task(run_stage(card_id, stage_id, resolved_run_id))
+        return resolved_run_id
     try:
         redis = await _get_pool()
         await redis.enqueue_job("run_stage_task", card_id=card_id, stage_id=stage_id, run_id=resolved_run_id)

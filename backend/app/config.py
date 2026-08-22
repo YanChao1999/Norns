@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     plantuml_url: str = Field(default="", alias="PLANTUML_URL")
     kroki_url: str = Field(default="", alias="KROKI_URL")
     auto_create_tables: bool = True
+    queue_backend: str = Field(default="redis", alias="QUEUE_BACKEND")
 
     @field_validator("encryption_key")
     @classmethod

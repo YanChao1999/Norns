@@ -48,6 +48,46 @@ jobs:
       - name: Build
         run: npm run build
 
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Stage Control Room UI
+        run: bash scripts/stage-ui.sh
+      - name: Build wheel and sdist
+        run: |
+          pip install build
+          python -m build
+      - name: Install package
+        run: pip install dist/*.whl
+      - name: Check CLI and local server
+        run: |
+          norns --help
+          norns init --home "$RUNNER_TEMP/norns-home"
+          norns run --home "$RUNNER_TEMP/norns-home" --no-window &
+          server_pid=$!
+          for _ in $(seq 1 50); do
+            if curl -fsS "http://127.0.0.1:8765/api/health"; then
+              kill "$server_pid"
+              wait "$server_pid" || true
+              exit 0
+            fi
+            sleep 0.2
+          done
+          kill "$server_pid" || true
+          echo "Norns local server did not become healthy"
+          exit 1
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -68,11 +108,12 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [backend, frontend, lint]
+    needs: [backend, frontend, lint, package]
     runs-on: ubuntu-latest
     steps:
-      - name: Require backend, frontend, and lint
+      - name: Require backend, frontend, lint, and package
         run: |
           test "${{ needs.backend.result }}" = "success"
           test "${{ needs.frontend.result }}" = "success"
           test "${{ needs.lint.result }}" = "success"
+          test "${{ needs.package.result }}" = "success"
