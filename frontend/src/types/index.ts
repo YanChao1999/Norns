@@ -63,3 +63,8 @@ export interface Connector {
   is_active: boolean;
   config_keys: string[];
 }
+
+export interface CardStatusMachine {
+  states: CardStatus[];
+  transitions: Partial<Record<CardStatus, CardStatus[]>>;
+}

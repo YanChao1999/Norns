@@ -4,6 +4,7 @@ Norns is a Kanban orchestration system where each board column runs an isolated 
 
 ## Features
 - Local Electron IDE (`norns init` / `norns run`) — TypeScript UI in Chromium, config under `~/.norns`
+- Visual state machine editor for board stages, order, and human-gate vs auto-advance
 - FastAPI + async SQLAlchemy backend with PostgreSQL-ready configuration
 - ARQ/Redis queue for isolated stage execution (optional; local IDE runs stages in-process)
 - React + TypeScript Kanban UI with approval-aware movement
@@ -51,7 +52,7 @@ Backend -> Frontend : waiting_approval state
 ```
 
 ## Architecture Overview
-- **Boards / Stages** define the workflow and per-column agent configuration.
+- **Boards / Stages** define the workflow and per-column agent configuration. Edit them in the Control Room **Machine** view.
 - **Cards** carry the work item body and current stage pointer.
 - **Agent runs** are isolated; no chat memory is shared between stages.
 - **Handoffs** from stage _N_ are the only structured context for stage _N+1_.

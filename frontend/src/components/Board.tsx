@@ -9,9 +9,10 @@ import { Column } from './Column';
 
 interface Props {
   boardId: string;
+  onEditMachine?: () => void;
 }
 
-export function Board({ boardId }: Props) {
+export function Board({ boardId, onEditMachine }: Props) {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
 
@@ -42,8 +43,15 @@ export function Board({ boardId }: Props) {
   return (
     <div>
       <div className="board-head">
-        <h1>{board.name}</h1>
-        <p>{board.description || 'Isolated stage agents. Human gate between columns.'}</p>
+        <div>
+          <h1>{board.name}</h1>
+          <p>{board.description || 'Isolated stage agents. Human gate between columns.'}</p>
+        </div>
+        {onEditMachine ? (
+          <button type="button" className="btn" onClick={onEditMachine}>
+            Edit state machine
+          </button>
+        ) : null}
       </div>
 
       <div className="board-columns">

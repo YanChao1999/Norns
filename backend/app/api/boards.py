@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_session
-from ..models import AgentConfig, Board, Stage
+from ..models import AgentConfig, Board, Card, Stage
+from ..orchestrator.state_machine import TRANSITIONS, CardStatus
 from .auth import get_current_user
 
 router = APIRouter(tags=["boards"], dependencies=[Depends(get_current_user)])
@@ -93,6 +94,15 @@ class StageUpdate(BaseModel):
     tool_allowlist: list[str] | None = None
 
 
+class StageReorder(BaseModel):
+    stage_ids: list[str] = Field(min_length=1)
+
+
+class CardStatusMachine(BaseModel):
+    states: list[str]
+    transitions: dict[str, list[str]]
+
+
 @router.get("/boards", response_model=list[BoardRead])
 async def list_boards(session: Annotated[AsyncSession, Depends(get_session)]) -> list[Board]:
     result = await session.execute(
@@ -168,6 +178,16 @@ async def delete_board(board_id: str, session: Annotated[AsyncSession, Depends(g
     await session.commit()
 
 
+@router.get("/orchestration/card-status", response_model=CardStatusMachine)
+async def card_status_machine() -> CardStatusMachine:
+    return CardStatusMachine(
+        states=[status.value for status in CardStatus],
+        transitions={
+            source.value: sorted(target.value for target in targets) for source, targets in TRANSITIONS.items()
+        },
+    )
+
+
 @router.get("/boards/{board_id}/stages", response_model=list[StageRead])
 async def list_stages(board_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> list[Stage]:
     await _get_board_or_404(session, board_id)
@@ -235,12 +255,41 @@ async def update_stage(
     return result.scalar_one()
 
 
+@router.put("/boards/{board_id}/stages/reorder", response_model=list[StageRead])
+async def reorder_stages(
+    board_id: str, payload: StageReorder, session: Annotated[AsyncSession, Depends(get_session)]
+) -> list[Stage]:
+    await _get_board_or_404(session, board_id)
+    result = await session.execute(
+        select(Stage).where(Stage.board_id == board_id).options(selectinload(Stage.agent_config))
+    )
+    stages = list(result.scalars().unique().all())
+    existing_ids = {stage.id for stage in stages}
+    requested = payload.stage_ids
+    if len(requested) != len(set(requested)) or set(requested) != existing_ids:
+        raise HTTPException(status_code=400, detail="stage_ids must list every stage on this board exactly once")
+    order_by_id = {stage_id: index for index, stage_id in enumerate(requested, start=1)}
+    for stage in stages:
+        stage.order = order_by_id[stage.id]
+    await session.commit()
+    result = await session.execute(
+        select(Stage).where(Stage.board_id == board_id).options(selectinload(Stage.agent_config)).order_by(Stage.order)
+    )
+    return list(result.scalars().all())
+
+
 @router.delete("/stages/{stage_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_stage(stage_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> None:
     result = await session.execute(select(Stage).where(Stage.id == stage_id))
     stage = result.scalar_one_or_none()
     if not stage:
         raise HTTPException(status_code=404, detail="Stage not found")
+    remaining = await session.scalar(select(func.count()).select_from(Stage).where(Stage.board_id == stage.board_id))
+    if remaining is not None and remaining <= 1:
+        raise HTTPException(status_code=409, detail="A board must keep at least one stage")
+    cards_here = await session.scalar(select(func.count()).select_from(Card).where(Card.current_stage_id == stage_id))
+    if cards_here:
+        raise HTTPException(status_code=409, detail="Cannot delete a stage that still has cards")
     await session.delete(stage)
     await session.commit()
 
