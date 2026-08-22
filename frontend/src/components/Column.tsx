@@ -1,39 +1,104 @@
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+import { apiClient } from '../api/client';
 import { Card, Stage } from '../types';
 import { CardItem } from './CardItem';
 
 interface Props {
+  boardId: string;
   stage: Stage;
   cards: Card[];
+  isFirst: boolean;
+  openCardId: string | null;
   onOpenCard: (card: Card) => void;
   onOpenConfig: (stage: Stage) => void;
 }
 
-export function Column({ stage, cards, onOpenCard, onOpenConfig }: Props) {
+export function Column({ boardId, stage, cards, isFirst, openCardId, onOpenCard, onOpenConfig }: Props) {
   return (
-    <section
-      style={{
-        minWidth: 300,
-        background: '#f8fafc',
-        border: '1px solid #e5e7eb',
-        borderRadius: 12,
-        padding: 16,
-        display: 'grid',
-        gap: 12
+    <section className="column">
+      <header className="column-head">
+        <div>
+          <h2>{stage.name}</h2>
+          <p>{stage.require_approval ? 'Human gate' : 'Auto-advance'}</p>
+        </div>
+        <div className="column-actions">
+          <span className="column-count">{cards.length}</span>
+          <button type="button" className="btn btn-icon" title="Configure agent" onClick={() => onOpenConfig(stage)}>
+            Agent
+          </button>
+        </div>
+      </header>
+      {isFirst ? <AddCard boardId={boardId} /> : null}
+      {cards.map((card) => (
+        <CardItem key={card.id} card={card} isOpen={openCardId === card.id} onOpen={onOpenCard} />
+      ))}
+      {!cards.length ? <div className="empty-col">No cards in this station.</div> : null}
+    </section>
+  );
+}
+
+function AddCard({ boardId }: { boardId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [newCard, setNewCard] = useState({ title: '', body: '' });
+
+  const createCard = useMutation({
+    mutationFn: async () => apiClient.post(`/boards/${boardId}/cards`, newCard),
+    onSuccess: () => {
+      setNewCard({ title: '', body: '' });
+      setOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['board', boardId] });
+    }
+  });
+
+  if (!open) {
+    return (
+      <button type="button" className="add-toggle" onClick={() => setOpen(true)}>
+        Add card to this station
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="add-card"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (newCard.title) {
+          createCard.mutate();
+        }
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h3 style={{ margin: 0 }}>{stage.name}</h3>
-          <small>{stage.require_approval ? 'Approval required' : 'Auto-advance enabled'}</small>
-        </div>
-        <button title="Configure agent" onClick={() => onOpenConfig(stage)}>
-          ⚙
+      <label className="field">
+        Title
+        <input
+          className="input"
+          value={newCard.title}
+          onChange={(event) => setNewCard((current) => ({ ...current, title: event.target.value }))}
+          placeholder="Card title"
+          autoFocus
+        />
+      </label>
+      <label className="field">
+        Body
+        <textarea
+          className="textarea"
+          rows={3}
+          value={newCard.body}
+          onChange={(event) => setNewCard((current) => ({ ...current, body: event.target.value }))}
+          placeholder="Markdown body"
+        />
+      </label>
+      <div className="new-board">
+        <button type="submit" className="btn btn-primary" disabled={!newCard.title || createCard.isPending}>
+          {createCard.isPending ? 'Adding…' : 'Add card'}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>
+          Cancel
         </button>
       </div>
-      {cards.map((card) => (
-        <CardItem key={card.id} card={card} onOpen={onOpenCard} />
-      ))}
-      {!cards.length ? <div style={{ color: '#94a3b8' }}>No cards in this stage.</div> : null}
-    </section>
+    </form>
   );
 }

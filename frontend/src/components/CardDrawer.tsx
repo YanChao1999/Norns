@@ -1,12 +1,19 @@
-import type { CSSProperties } from 'react';
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import { STATUS_LABEL } from '../status';
 import { AgentRun, Card } from '../types';
 
 interface Props {
   card: Card | null;
   onClose: () => void;
+}
+
+interface Handoff {
+  summary?: string;
+  links?: string[];
+  plantuml?: { svg?: string; source?: string };
 }
 
 export function CardDrawer({ card, onClose }: Props) {
@@ -17,9 +24,25 @@ export function CardDrawer({ card, onClose }: Props) {
     queryFn: () => apiClient.get<AgentRun[]>(`/cards/${card?.id}/runs`)
   });
 
+  useEffect(() => {
+    if (!card) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [card, onClose]);
+
   const approvalMutation = useMutation({
     mutationFn: async (approved: boolean) =>
-      apiClient.post(`/cards/${card?.id}/approve`, { approved, comment: approved ? 'Approved in UI' : 'Rejected in UI' }),
+      apiClient.post(`/cards/${card?.id}/approve`, {
+        approved,
+        comment: approved ? 'Approved in UI' : 'Rejected in UI'
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
@@ -40,90 +63,116 @@ export function CardDrawer({ card, onClose }: Props) {
   }
 
   const latestRun = runs[0];
-  const plantuml = latestRun?.handoff?.plantuml?.svg as string | undefined;
+  const handoff = (latestRun?.handoff ?? {}) as Handoff;
+  const plantuml = handoff.plantuml?.svg;
   const canRun = card.status === 'idle' || card.status === 'blocked';
+  const waiting = card.status === 'waiting_approval';
+  const summary = handoff.summary || latestRun?.model_output;
+  const links = Array.isArray(handoff.links) ? handoff.links : [];
 
   return (
-    <aside style={drawerStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ marginTop: 0 }}>{card.title}</h2>
-        <button onClick={onClose}>Close</button>
-      </div>
-      <div style={{ color: '#6b7280', marginBottom: 12 }}>{card.status.replace('_', ' ')}</div>
-      <pre style={preStyle}>{card.body || 'No markdown body provided.'}</pre>
+    <>
+      <div className="drawer-backdrop" onClick={onClose} />
+      <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="card-drawer-title">
+        <header className="drawer-head">
+          <div>
+            {card.external_id ? <p className="drawer-kicker">{card.external_id}</p> : null}
+            <h2 id="card-drawer-title">{card.title}</h2>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            Close
+          </button>
+        </header>
 
-      {latestRun ? (
-        <>
-          <h3>Current run log</h3>
-          <pre style={preStyle}>{latestRun.model_output}</pre>
-          <h3>Tool calls</h3>
-          <pre style={preStyle}>{JSON.stringify(latestRun.tool_calls, null, 2)}</pre>
-          <h3>Handoff</h3>
-          <pre style={preStyle}>{JSON.stringify(latestRun.handoff, null, 2)}</pre>
+        <div className="drawer-body">
+          <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
+
+          <section>
+            <h3>Card body</h3>
+            <p className="handoff">{card.body || 'No markdown body provided.'}</p>
+          </section>
+
+          {summary ? (
+            <section>
+              <h3>Handoff</h3>
+              <p className="handoff">{summary}</p>
+            </section>
+          ) : (
+            <section>
+              <h3>Handoff</h3>
+              <p className="muted">No stage run yet. Run this station to produce a handoff.</p>
+            </section>
+          )}
+
+          {links.length ? (
+            <section>
+              <h3>Links</h3>
+              <div className="links">
+                {links.map((link) => (
+                  <a key={link} href={link} target="_blank" rel="noreferrer">
+                    {link}
+                  </a>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {latestRun ? (
+            <section>
+              <h3>Run log</h3>
+              <pre className="log">{latestRun.model_output}</pre>
+            </section>
+          ) : null}
+
           {plantuml ? (
-            <div>
+            <section>
               <h3>PlantUML preview</h3>
               <iframe
                 sandbox=""
                 srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}</style></head><body>${plantuml}</body></html>`}
                 title="PlantUML preview"
-                style={previewFrameStyle}
+                className="preview-frame"
               />
-            </div>
+            </section>
           ) : null}
-        </>
-      ) : (
-        <div>No stage runs yet.</div>
-      )}
 
-      {canRun ? (
-        <div style={{ marginTop: 12 }}>
-          <button onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
-            {runMutation.isPending ? 'Starting…' : 'Run this stage'}
-          </button>
+          {latestRun ? (
+            <details className="disclosure">
+              <summary>Raw tool calls and handoff JSON</summary>
+              <pre className="log">{JSON.stringify({ tool_calls: latestRun.tool_calls, handoff: latestRun.handoff }, null, 2)}</pre>
+            </details>
+          ) : null}
         </div>
-      ) : null}
 
-      {card.status === 'waiting_approval' ? (
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button onClick={() => approvalMutation.mutate(true)} disabled={approvalMutation.isPending}>
-            Approve
-          </button>
-          <button onClick={() => approvalMutation.mutate(false)} disabled={approvalMutation.isPending}>
-            Reject
-          </button>
-        </div>
-      ) : null}
-    </aside>
+        <footer className="drawer-foot">
+          {canRun ? (
+            <button type="button" className="btn btn-primary" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
+              {runMutation.isPending ? 'Starting…' : 'Run this stage'}
+            </button>
+          ) : null}
+          {waiting ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-gate"
+                onClick={() => approvalMutation.mutate(true)}
+                disabled={approvalMutation.isPending}
+              >
+                Approve · next stage
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => approvalMutation.mutate(false)}
+                disabled={approvalMutation.isPending}
+              >
+                Reject
+              </button>
+            </>
+          ) : null}
+          {!canRun && !waiting ? <span className="muted">No gate action on this card.</span> : null}
+        </footer>
+      </aside>
+    </>
   );
 }
-
-const drawerStyle: CSSProperties = {
-  position: 'fixed',
-  top: 0,
-  right: 0,
-  width: 'min(560px, 92vw)',
-  height: '100vh',
-  overflowY: 'auto',
-  background: 'white',
-  boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
-  padding: 24,
-  zIndex: 30
-};
-
-const preStyle: CSSProperties = {
-  whiteSpace: 'pre-wrap',
-  background: '#111827',
-  color: '#f9fafb',
-  padding: 12,
-  borderRadius: 8,
-  fontSize: 13
-};
-
-const previewFrameStyle: CSSProperties = {
-  width: '100%',
-  minHeight: 220,
-  border: '1px solid #e5e7eb',
-  borderRadius: 8,
-  background: 'white'
-};

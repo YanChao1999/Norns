@@ -10,22 +10,20 @@ export function ConnectorHealth() {
   });
 
   return (
-    <section style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #e5e7eb' }}>
-      <h3 style={{ marginTop: 0 }}>Connector health</h3>
-      {isLoading ? <div>Loading connectors…</div> : null}
-      <div style={{ display: 'grid', gap: 8 }}>
-        {data.map((connector) => (
-          <div key={connector.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-            <span>
-              {connector.name} · {connector.connector_type}
-            </span>
-            <span style={{ color: connector.is_active ? '#166534' : '#b91c1c' }}>
-              {connector.is_active ? 'active' : 'inactive'}
-            </span>
-          </div>
-        ))}
-        {!data.length && !isLoading ? <div>No connectors configured.</div> : null}
-      </div>
+    <section className="panel">
+      <h2>Connectors</h2>
+      {isLoading ? <div className="muted">Loading connectors…</div> : null}
+      {data.map((connector) => (
+        <div key={connector.id} className="connector-row">
+          <span>
+            {connector.name} · {connector.connector_type}
+          </span>
+          <span className={connector.is_active ? 'is-active-text' : 'is-inactive-text'}>
+            {connector.is_active ? 'active' : 'inactive'}
+          </span>
+        </div>
+      ))}
+      {!data.length && !isLoading ? <div className="muted">No connectors configured.</div> : null}
     </section>
   );
 }
