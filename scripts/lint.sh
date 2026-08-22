@@ -12,13 +12,13 @@ echo "==> ESLint"
 cd frontend
 npm install --no-save --no-package-lock \
   eslint@9 \
-  @eslint/js \
-  typescript-eslint \
-  eslint-plugin-react-hooks \
-  eslint-config-prettier \
-  globals \
+  @eslint/js@9 \
+  typescript-eslint@8 \
+  eslint-plugin-react-hooks@5 \
+  eslint-config-prettier@10 \
+  globals@15 \
   prettier@3 \
-  typescript
+  typescript@5
 npx eslint . --max-warnings=0
 
 echo "==> Prettier"

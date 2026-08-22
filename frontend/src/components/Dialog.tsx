@@ -1,12 +1,9 @@
 import { ReactNode, useCallback, useEffect, useRef } from 'react';
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function focusableIn(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (element) => element.getAttribute('aria-hidden') !== 'true'
-  );
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => element.getAttribute('aria-hidden') !== 'true');
 }
 
 function useModalFocus(open: boolean, panelRef: React.RefObject<HTMLElement | null>, onClose: () => void) {
@@ -79,14 +76,7 @@ export function Dialog({ open, onClose, labelledBy, variant, children }: DialogP
     return (
       <>
         <div className="drawer-backdrop" onClick={onClose} />
-        <aside
-          ref={setPanelRef}
-          className="drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={labelledBy}
-          tabIndex={-1}
-        >
+        <aside ref={setPanelRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1}>
           {children}
         </aside>
       </>

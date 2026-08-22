@@ -157,20 +157,10 @@ export function CardDrawer({ card, onClose }: Props) {
         ) : null}
         {waiting ? (
           <>
-            <button
-              type="button"
-              className="btn btn-gate"
-              onClick={() => approvalMutation.mutate(true)}
-              disabled={approvalMutation.isPending}
-            >
+            <button type="button" className="btn btn-gate" onClick={() => approvalMutation.mutate(true)} disabled={approvalMutation.isPending}>
               Approve · next stage
             </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={() => approvalMutation.mutate(false)}
-              disabled={approvalMutation.isPending}
-            >
+            <button type="button" className="btn btn-danger" onClick={() => approvalMutation.mutate(false)} disabled={approvalMutation.isPending}>
               Reject
             </button>
           </>

@@ -18,9 +18,7 @@ export function ConnectorHealth() {
           <span>
             {connector.name} · {connector.connector_type}
           </span>
-          <span className={connector.is_active ? 'is-active-text' : 'is-inactive-text'}>
-            {connector.is_active ? 'active' : 'inactive'}
-          </span>
+          <span className={connector.is_active ? 'is-active-text' : 'is-inactive-text'}>{connector.is_active ? 'active' : 'inactive'}</span>
         </div>
       ))}
       {!data.length && !isLoading ? <div className="muted">No connectors configured.</div> : null}
