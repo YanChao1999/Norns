@@ -476,6 +476,11 @@ a {
   grid-template-rows: auto 1fr auto;
 }
 
+.drawer:focus,
+.modal:focus {
+  outline: none;
+}
+
 .drawer-head,
 .drawer-foot {
   padding: 16px 18px;
