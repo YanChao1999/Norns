@@ -8,10 +8,26 @@ from arq.connections import RedisSettings
 from ..config import get_settings
 
 
+class EnqueueError(Exception):
+    """Raised when a stage run cannot be queued."""
+
+
+_pool = None
+
+
+async def _get_pool():
+    global _pool
+    if _pool is None:
+        settings = get_settings()
+        _pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+    return _pool
+
+
 async def enqueue_stage_run(card_id: str, stage_id: str, run_id: str | None = None) -> str:
-    settings = get_settings()
     resolved_run_id = run_id or str(uuid4())
-    redis = await create_pool(RedisSettings.from_dsn(settings.redis_url))
-    await redis.enqueue_job("run_stage_task", card_id=card_id, stage_id=stage_id, run_id=resolved_run_id)
-    await redis.close()
+    try:
+        redis = await _get_pool()
+        await redis.enqueue_job("run_stage_task", card_id=card_id, stage_id=stage_id, run_id=resolved_run_id)
+    except Exception as exc:
+        raise EnqueueError("Failed to enqueue stage run") from exc
     return resolved_run_id

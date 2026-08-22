@@ -20,3 +20,12 @@ def test_settings_require_valid_encryption_key(monkeypatch):
     settings = Settings()
     assert settings.resolved_encryption_key == key
     get_settings.cache_clear()
+
+
+def test_settings_reject_default_secret_key(monkeypatch):
+    monkeypatch.setenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("SECRET_KEY", "changeme")
+    get_settings.cache_clear()
+    with pytest.raises(ValidationError):
+        Settings()
+    get_settings.cache_clear()

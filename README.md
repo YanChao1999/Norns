@@ -58,11 +58,12 @@ Backend -> Frontend : waiting_approval state
 
 ## Quick Start
 1. Copy `.env.example` to `.env` and set real secrets.
-2. Generate a unique encryption key (do not keep the example value):
+2. Generate unique secrets (do not keep the example values):
    ```bash
    python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
    ```
-   Put the result in `ENCRYPTION_KEY`. The API and worker must share the same key.
+   Put them in `ENCRYPTION_KEY` and `SECRET_KEY`. The API and worker must share the same encryption key.
 3. Start the stack:
    ```bash
    docker compose up
@@ -83,6 +84,7 @@ cd frontend && npm install && npm run dev
 ## Notes
 - Use PostgreSQL in normal deployments via `DATABASE_URL`.
 - Redis backs ARQ worker execution.
-- PlantUML diagrams are rendered through Kroki with a graceful SVG fallback.
+- PlantUML/Kroki rendering is opt-in via `PLANTUML_URL` / `KROKI_URL` (unset means no public egress).
 - An empty per-stage tool allowlist grants **no** tools. Enable GitHub, Jira, or Polarion explicitly on the stage.
-- `PUT /api/cards/{id}` updates title/body only; stage movement goes through run + approval (or auto-advance).
+- `PUT /api/cards/{id}` updates title/body only; new cards always start on the first stage.
+- Change `SECRET_KEY` and `ADMIN_PASSWORD` before any shared deployment. Sessions expire after 8 hours.

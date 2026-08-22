@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_session
-from ..models import AgentRun, Approval, Board, Card, Stage
-from ..orchestrator.enqueue import enqueue_stage_run
+from ..models import AgentRun, Approval, Board, Card
+from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.gates import approve_card, reject_card
 from ..orchestrator.state_machine import CardStatus, start_card_run
 from .auth import SessionUser, get_current_user
@@ -22,7 +22,6 @@ class CardCreate(BaseModel):
     title: str = Field(min_length=1)
     body: str = ""
     external_id: str | None = None
-    current_stage_id: str | None = None
 
 
 class CardUpdate(BaseModel):
@@ -94,8 +93,16 @@ async def create_card(board_id: str, payload: CardCreate, session: Annotated[Asy
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
 
-    stage_id = payload.current_stage_id or (board.stages[0].id if board.stages else None)
-    card = Card(board_id=board_id, title=payload.title, body=payload.body, external_id=payload.external_id, current_stage_id=stage_id)
+    stages = sorted(board.stages, key=lambda stage: stage.order)
+    if not stages:
+        raise HTTPException(status_code=400, detail="Board has no stages")
+    card = Card(
+        board_id=board_id,
+        title=payload.title,
+        body=payload.body,
+        external_id=payload.external_id,
+        current_stage_id=stages[0].id,
+    )
     session.add(card)
     await session.commit()
     await session.refresh(card)
@@ -137,6 +144,8 @@ async def approve_or_reject_card(
             return await approve_card(session, card_id, current_user.username, payload.comment)
         except ValueError as exc:
             raise _gate_http_exception(exc) from exc
+        except EnqueueError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     try:
         return await reject_card(session, card_id, current_user.username, payload.comment)
     except ValueError as exc:
@@ -164,7 +173,12 @@ async def trigger_card_run(card_id: str, session: Annotated[AsyncSession, Depend
         raise HTTPException(status_code=409, detail="Card can only be run when idle or blocked")
     start_card_run(card)
     await session.commit()
-    run_id = await enqueue_stage_run(card.id, card.current_stage_id)
+    try:
+        run_id = await enqueue_stage_run(card.id, card.current_stage_id)
+    except EnqueueError as exc:
+        card.status = CardStatus.BLOCKED
+        await session.commit()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     return {"run_id": run_id}
 
 

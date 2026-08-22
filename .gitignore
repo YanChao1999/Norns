@@ -221,3 +221,6 @@ __marimo__/
 *.db
 *.db-journal
 norns.db
+
+# Node
+node_modules/

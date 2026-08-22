@@ -30,12 +30,13 @@ async def test_enqueue_stage_run_uses_arq(monkeypatch):
         return FakeRedis()
 
     monkeypatch.setattr(enqueue, "create_pool", fake_create_pool)
+    monkeypatch.setattr(enqueue, "_pool", None)
 
     run_id = await enqueue.enqueue_stage_run("card-1", "stage-1", "run-1")
     assert run_id == "run-1"
     assert captured["name"] == "run_stage_task"
     assert captured["kwargs"] == {"card_id": "card-1", "stage_id": "stage-1", "run_id": "run-1"}
-    assert captured["closed"] is True
+    assert captured["pool"] is True
 
 
 @pytest.mark.asyncio

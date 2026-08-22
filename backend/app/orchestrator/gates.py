@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..models import AgentRun, Approval, Board, Card, Stage
-from .enqueue import enqueue_stage_run
+from .enqueue import EnqueueError, enqueue_stage_run
 from .progression import next_stage_after
 from .state_machine import CardStatus, advance_card, reject_card_state
 
@@ -60,7 +60,12 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
     await session.refresh(approval)
 
     if next_stage:
-        await enqueue_stage_run(card.id, next_stage.id)
+        try:
+            await enqueue_stage_run(card.id, next_stage.id)
+        except EnqueueError:
+            card.status = CardStatus.BLOCKED
+            await session.commit()
+            raise
     return approval
 
 

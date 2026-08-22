@@ -13,6 +13,25 @@ except Exception:  # pragma: no cover - optional dependency
     polarion_module = None
 
 
+WRITABLE_FIELDS = frozenset(
+    {
+        "title",
+        "description",
+        "status",
+        "severity",
+        "priority",
+        "assignee",
+        "resolution",
+    }
+)
+
+
+def assert_writable_field(field: str) -> str:
+    if field not in WRITABLE_FIELDS:
+        raise ValueError(f"Polarion field {field!r} is not writable")
+    return field
+
+
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "default"
 
@@ -137,10 +156,11 @@ def _make_add_comment(connector: Connector):
 def _make_update_field(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
+            field = assert_writable_field(arguments["field"])
             workitem = _polarion_client(connector).getWorkitem(arguments["workitem_id"])
-            setattr(workitem, arguments["field"], arguments["value"])
+            setattr(workitem, field, arguments["value"])
             workitem.update()
-            return {"id": arguments["workitem_id"], "field": arguments["field"], "updated": True}
+            return {"id": arguments["workitem_id"], "field": field, "updated": True}
 
         return await asyncio.to_thread(_call)
 

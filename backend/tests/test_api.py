@@ -60,6 +60,13 @@ def test_card_update_cannot_bypass_gates():
         stage_id = board["stages"][0]["id"]
         card = client.post(f"/api/boards/{board['id']}/cards", json={"title": "Work", "body": "Do it"}).json()
 
+        skipped = client.post(
+            f"/api/boards/{board['id']}/cards",
+            json={"title": "Skip ahead", "current_stage_id": board["stages"][2]["id"]},
+        )
+        assert skipped.status_code == 201
+        assert skipped.json()["current_stage_id"] == stage_id
+
         updated = client.put(
             f"/api/cards/{card['id']}",
             json={"title": "Work updated", "status": "done", "current_stage_id": board["stages"][1]["id"]},

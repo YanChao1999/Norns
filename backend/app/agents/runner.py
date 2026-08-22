@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from ..config import get_settings
 from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
-from ..orchestrator.enqueue import enqueue_stage_run
+from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.progression import next_stage_after
 from ..orchestrator.state_machine import CardStatus, auto_advance_card, start_card_run, wait_for_approval
 from ..plantuml.renderer import render_plantuml
@@ -44,18 +44,24 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     connectors = list(connectors_result.scalars().all())
     if not card or not stage:
         raise ValueError("Card or stage not found")
+    if stage.board_id != card.board_id:
+        raise ValueError("Stage does not belong to this card's board")
 
     start_card_run(card)
     card.current_stage_id = stage.id
 
+    prior_handoff = _latest_handoff(card)
     run = AgentRun(id=run_id, card_id=card.id, stage_id=stage.id, status="running")
+    run.inputs = {
+        "card": {"id": card.id, "title": card.title, "body": card.body, "external_id": card.external_id},
+        "prior_handoff": prior_handoff,
+    }
     session.add(run)
     await session.commit()
 
     registry = create_default_registry()
     allowlist = stage.agent_config.tool_allowlist if stage.agent_config else []
     runtime_tools = registry.get_runtime_tools(allowlist, connectors)
-    run.inputs = _build_inputs(card)
 
     next_stage = None
     try:
@@ -86,16 +92,24 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         raise
 
     if next_stage:
-        await enqueue_stage_run(card.id, next_stage.id)
+        try:
+            await enqueue_stage_run(card.id, next_stage.id)
+        except EnqueueError:
+            card.status = CardStatus.BLOCKED
+            await session.commit()
+            raise
 
 
-def _build_inputs(card: Card) -> dict[str, Any]:
-    previous = sorted(card.runs, key=lambda item: item.created_at or datetime.min)
-    prior_handoff = previous[-1].handoff if previous else None
-    return {
-        "card": {"id": card.id, "title": card.title, "body": card.body, "external_id": card.external_id},
-        "prior_handoff": prior_handoff,
-    }
+def _latest_handoff(card: Card) -> dict[str, Any] | None:
+    completed = [
+        run
+        for run in card.runs
+        if run.status == "completed"
+    ]
+    if not completed:
+        return None
+    previous_runs = sorted(completed, key=lambda item: item.created_at or datetime.min)
+    return previous_runs[-1].handoff
 
 
 async def _execute_agent(
@@ -174,13 +188,6 @@ async def _build_handoff(model_output: str) -> dict[str, Any]:
     if plantuml_source:
         payload["plantuml"] = {"source": plantuml_source, "svg": await render_plantuml(plantuml_source)}
     return payload
-
-
-def _latest_handoff(card: Card) -> dict[str, Any] | None:
-    if not card.runs:
-        return None
-    previous_runs = sorted(card.runs, key=lambda item: item.created_at or datetime.min)
-    return previous_runs[-1].handoff
 
 
 def _extract_plantuml(text: str) -> str | None:
