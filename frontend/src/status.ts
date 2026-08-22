@@ -1,4 +1,4 @@
-import { CardStatus } from '../types';
+import { CardStatus } from './types';
 
 export const STATUS_LABEL: Record<CardStatus, string> = {
   idle: 'idle',
