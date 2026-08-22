@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { BoardDetail, Card, Stage } from '../types';
@@ -12,23 +12,13 @@ interface Props {
 }
 
 export function Board({ boardId }: Props) {
-  const queryClient = useQueryClient();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
-  const [newCard, setNewCard] = useState({ title: '', body: '' });
 
   const { data: board, isLoading } = useQuery({
     queryKey: ['board', boardId],
     queryFn: () => apiClient.get<BoardDetail>(`/boards/${boardId}`),
     refetchInterval: (query) => (query.state.data?.cards.some((card) => card.status === 'running') ? 2000 : false)
-  });
-
-  const createCard = useMutation({
-    mutationFn: async () => apiClient.post(`/boards/${boardId}/cards`, newCard),
-    onSuccess: () => {
-      setNewCard({ title: '', body: '' });
-      queryClient.invalidateQueries({ queryKey: ['board', boardId] });
-    }
   });
 
   const cardsByStage = useMemo(() => {
@@ -43,54 +33,35 @@ export function Board({ boardId }: Props) {
   }, [board]);
 
   if (isLoading || !board) {
-    return <div>Loading board…</div>;
+    return <div className="muted">Loading board…</div>;
   }
 
+  const stages = [...board.stages].sort((left, right) => left.order - right.order);
+  const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
+
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ margin: 0 }}>{board.name}</h2>
-          <p style={{ margin: '4px 0 0', color: '#6b7280' }}>{board.description || 'No description yet.'}</p>
-        </div>
+    <div>
+      <div className="board-head">
+        <h1>{board.name}</h1>
+        <p>{board.description || 'Isolated stage agents. Human gate between columns.'}</p>
       </div>
 
-      <section style={{ background: 'white', borderRadius: 12, padding: 16, border: '1px solid #e5e7eb' }}>
-        <h3 style={{ marginTop: 0 }}>Add card</h3>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <input
-            placeholder="Card title"
-            value={newCard.title}
-            onChange={(event) => setNewCard((current) => ({ ...current, title: event.target.value }))}
-          />
-          <textarea
-            placeholder="Markdown body"
-            rows={4}
-            value={newCard.body}
-            onChange={(event) => setNewCard((current) => ({ ...current, body: event.target.value }))}
-          />
-          <button onClick={() => createCard.mutate()} disabled={!newCard.title || createCard.isPending}>
-            {createCard.isPending ? 'Adding…' : 'Add card'}
-          </button>
-        </div>
-      </section>
-
-      <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
-        {board.stages.map((stage) => (
+      <div className="board-columns">
+        {stages.map((stage, index) => (
           <Column
             key={stage.id}
+            boardId={boardId}
             stage={stage}
             cards={cardsByStage.get(stage.id) ?? []}
+            isFirst={index === 0}
+            openCardId={liveCard?.id ?? null}
             onOpenCard={setSelectedCard}
             onOpenConfig={setSelectedStage}
           />
         ))}
       </div>
 
-      <CardDrawer
-        card={selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null}
-        onClose={() => setSelectedCard(null)}
-      />
+      <CardDrawer card={liveCard} onClose={() => setSelectedCard(null)} />
       <AgentConfigModal stage={selectedStage} onClose={() => setSelectedStage(null)} />
     </div>
   );

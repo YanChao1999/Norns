@@ -1,42 +1,27 @@
-import type { CSSProperties } from 'react';
-
 import { Card } from '../types';
-
-const badgeStyles: Record<Card['status'], CSSProperties> = {
-  idle: { background: '#e5e7eb', color: '#111827' },
-  running: { background: '#dbeafe', color: '#1d4ed8' },
-  waiting_approval: { background: '#fef3c7', color: '#92400e' },
-  blocked: { background: '#fee2e2', color: '#b91c1c' },
-  done: { background: '#dcfce7', color: '#166534' }
-};
+import { STATUS_LABEL } from '../status';
 
 interface Props {
   card: Card;
+  isOpen: boolean;
   onOpen: (card: Card) => void;
 }
 
-export function CardItem({ card, onOpen }: Props) {
+export function CardItem({ card, isOpen, onOpen }: Props) {
   return (
-    <div
+    <button
+      type="button"
+      className={`card status-${card.status}${isOpen ? ' is-open' : ''}`}
       onClick={() => onOpen(card)}
-      style={{
-        border: '1px solid #d1d5db',
-        borderRadius: 8,
-        padding: 12,
-        background: 'white',
-        cursor: 'pointer',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-      }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+      <div className="card-top">
         <strong>{card.title}</strong>
-        <span style={{ ...badgeStyles[card.status], borderRadius: 999, padding: '2px 8px', fontSize: 12 }}>
-          {card.status === 'running' ? 'running ⟳' : card.status.replace('_', ' ')}
-        </span>
+        <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
       </div>
-      {card.external_id ? (
-        <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>{card.external_id}</div>
-      ) : null}
-    </div>
+      {card.external_id ? <div className="card-ext">{card.external_id}</div> : null}
+      {card.status === 'running' ? <div className="card-live">Agent running this stage</div> : null}
+      {card.status === 'waiting_approval' ? <div className="card-live">Your turn — review the handoff</div> : null}
+      {card.status === 'blocked' ? <div className="card-live">Blocked — run again when ready</div> : null}
+    </button>
   );
 }
