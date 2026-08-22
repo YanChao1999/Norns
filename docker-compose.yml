@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: public.ecr.aws/docker/library/postgres:16
+    pull_policy: missing
+    environment:
+      POSTGRES_DB: norns
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d norns"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:7
+    pull_policy: missing
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    image: public.ecr.aws/docker/library/python:3.12-slim
+    pull_policy: missing
+    working_dir: /app
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/norns"
+      REDIS_URL: redis://redis:6379
+    command: >
+      sh -c "pip install -e . && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    image: public.ecr.aws/docker/library/python:3.12-slim
+    pull_policy: missing
+    working_dir: /app
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/norns"
+      REDIS_URL: redis://redis:6379
+    command: >
+      sh -c "pip install -e . && arq worker.main.WorkerSettings"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: public.ecr.aws/docker/library/node:20
+    pull_policy: missing
+    working_dir: /app/frontend
+    volumes:
+      - ./:/app
+    environment:
+      VITE_API_PROXY: http://backend:8000
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres-data:
