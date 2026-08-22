@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 
 import pytest
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 import backend.app.orchestrator.enqueue as enqueue
+from backend.app.config import get_settings
 from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
 from backend.app.orchestrator.gates import approve_card, reject_card
@@ -37,6 +39,25 @@ async def test_enqueue_stage_run_uses_arq(monkeypatch):
     assert captured["name"] == "run_stage_task"
     assert captured["kwargs"] == {"card_id": "card-1", "stage_id": "stage-1", "run_id": "run-1"}
     assert captured["pool"] is True
+
+
+@pytest.mark.asyncio
+async def test_enqueue_stage_run_inline(monkeypatch):
+    captured: dict[str, object] = {}
+
+    async def fake_run_stage(card_id, stage_id, run_id):
+        captured["args"] = (card_id, stage_id, run_id)
+
+    monkeypatch.setenv("QUEUE_BACKEND", "inline")
+    get_settings.cache_clear()
+    monkeypatch.setattr("backend.app.agents.runner.run_stage", fake_run_stage)
+    try:
+        run_id = await enqueue.enqueue_stage_run("card-1", "stage-1", "run-inline")
+        await asyncio.sleep(0)
+        assert run_id == "run-inline"
+        assert captured["args"] == ("card-1", "stage-1", "run-inline")
+    finally:
+        get_settings.cache_clear()
 
 
 @pytest.mark.asyncio

@@ -32,10 +32,17 @@ dev = [
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
   "ruff>=0.8.0",
+  "build>=1.2.0",
 ]
 
+[project.scripts]
+norns = "norns.cli:main"
+
 [tool.setuptools.packages.find]
-include = ["backend*", "worker*"]
+include = ["backend*", "worker*", "norns*"]
+
+[tool.setuptools.package-data]
+norns = ["web/**/*", "electron/main.js", "electron/package.json", "electron/package-lock.json"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -43,7 +50,7 @@ asyncio_mode = "auto"
 [tool.ruff]
 target-version = "py312"
 line-length = 120
-src = ["backend", "worker"]
+src = ["backend", "worker", "norns"]
 
 [tool.ruff.lint]
 select = [
@@ -60,4 +67,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend", "worker"]
+known-first-party = ["backend", "worker", "norns"]
