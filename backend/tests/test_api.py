@@ -95,6 +95,7 @@ def test_stage_machine_crud_and_guards():
         assert machine.status_code == 200
         body = machine.json()
         assert "idle" in body["states"]
+        assert "waiting_join" in body["states"]
         assert "running" in body["transitions"]["idle"]
 
         created = client.post(
@@ -188,6 +189,21 @@ def test_transition_lines_can_go_back_and_branch_on_if():
 
         deleted = client.delete(f"/api/transitions/{back.json()['id']}")
         assert deleted.status_code == 204
+
+        parallel = client.post(
+            f"/api/boards/{board['id']}/stages",
+            json={"name": "Unit tests", "parallel": True, "from_stage_id": urd["id"]},
+        )
+        assert parallel.status_code == 201
+        assert parallel.json()["order"] == verdandi["order"]
+        assert parallel.json()["lane"] >= 1
+        refreshed = client.get(f"/api/boards/{board['id']}").json()
+        split_lines = [
+            edge
+            for edge in refreshed["transitions"]
+            if edge["from_stage_id"] == urd["id"] and edge["event"] == "approve" and not edge["condition_key"]
+        ]
+        assert len(split_lines) >= 2
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())

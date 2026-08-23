@@ -7,14 +7,22 @@ class CardStatus(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
+    WAITING_JOIN = "waiting_join"
     BLOCKED = "blocked"
     DONE = "done"
 
 
 TRANSITIONS: dict[CardStatus, set[CardStatus]] = {
     CardStatus.IDLE: {CardStatus.RUNNING, CardStatus.BLOCKED},
-    CardStatus.RUNNING: {CardStatus.WAITING_APPROVAL, CardStatus.BLOCKED, CardStatus.DONE},
-    CardStatus.WAITING_APPROVAL: {CardStatus.RUNNING, CardStatus.BLOCKED, CardStatus.DONE, CardStatus.IDLE},
+    CardStatus.RUNNING: {CardStatus.WAITING_APPROVAL, CardStatus.WAITING_JOIN, CardStatus.BLOCKED, CardStatus.DONE},
+    CardStatus.WAITING_APPROVAL: {
+        CardStatus.RUNNING,
+        CardStatus.WAITING_JOIN,
+        CardStatus.BLOCKED,
+        CardStatus.DONE,
+        CardStatus.IDLE,
+    },
+    CardStatus.WAITING_JOIN: {CardStatus.RUNNING, CardStatus.BLOCKED, CardStatus.DONE},
     CardStatus.BLOCKED: {CardStatus.RUNNING},
     CardStatus.DONE: set(),
 }

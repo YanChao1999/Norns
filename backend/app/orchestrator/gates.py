@@ -8,8 +8,9 @@ from sqlalchemy.orm import selectinload
 
 from ..models import Approval, Board, Card, Stage
 from .enqueue import EnqueueError, enqueue_stage_run
-from .progression import resolve_route
-from .state_machine import CardStatus, advance_card, reject_card_state, return_card_to_stage
+from .progression import resolve_route, resolve_routes
+from .split import apply_forward_routes
+from .state_machine import CardStatus, reject_card_state, return_card_to_stage
 
 
 async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
@@ -19,6 +20,7 @@ async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
         .options(
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.stages),
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.transitions),
+            selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.cards).selectinload(Card.runs),
             selectinload(Card.runs),
         )
     )
@@ -60,23 +62,29 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
     session.add(approval)
 
     board = card.current_stage.board
-    route = resolve_route(
-        board.stages,
-        board.transitions,
-        card.current_stage_id,
-        "approve",
-        latest_run.handoff if isinstance(latest_run.handoff, dict) else {},
+    handoff = latest_run.handoff if isinstance(latest_run.handoff, dict) else {}
+    routes = resolve_routes(board.stages, board.transitions, card.current_stage_id, "approve", handoff)
+    queued = apply_forward_routes(
+        session,
+        card,
+        list(board.stages),
+        routes,
+        handoff,
+        auto=False,
+        transitions=list(board.transitions),
+        board_cards=list(board.cards),
     )
-    advance_card(card, route.stage_id)
     await session.commit()
     await session.refresh(approval)
 
-    if route.stage_id:
+    for card_id, stage_id in queued:
         try:
-            await enqueue_stage_run(card.id, route.stage_id)
+            await enqueue_stage_run(card_id, stage_id)
         except EnqueueError:
-            card.status = CardStatus.BLOCKED
-            await session.commit()
+            stuck = await session.get(Card, card_id)
+            if stuck:
+                stuck.status = CardStatus.BLOCKED
+                await session.commit()
             raise
     return approval
 

@@ -10,18 +10,24 @@ interface Props {
   stage: Stage;
   cards: Card[];
   isFirst: boolean;
+  row?: number;
+  parallel?: boolean;
   openCardId: string | null;
   onOpenCard: (card: Card) => void;
   onOpenConfig: (stage: Stage) => void;
 }
 
-export function Column({ boardId, stage, cards, isFirst, openCardId, onOpenCard, onOpenConfig }: Props) {
+export function Column({ boardId, stage, cards, isFirst, row = 1, parallel = false, openCardId, onOpenCard, onOpenConfig }: Props) {
   return (
-    <section className="column">
+    <section className={`column${parallel ? ' is-parallel-row' : ''}`}>
       <header className="column-head">
         <div>
           <h2>{stage.name}</h2>
-          <p>{stage.require_approval ? 'Human gate · agent may recommend' : 'Auto-advance'}</p>
+          <p>
+            {parallel ? `Row ${row} · parallel` : `Row ${row}`}
+            {' · '}
+            {stage.require_approval ? 'Human gate' : 'Auto-advance'}
+          </p>
         </div>
         <div className="column-actions">
           <span className="column-count">{cards.length}</span>

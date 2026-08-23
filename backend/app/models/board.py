@@ -37,6 +37,7 @@ class Stage(Base):
     board_id: Mapped[str] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     order: Mapped[int] = mapped_column(Integer, nullable=False)
+    lane: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     require_approval: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     board: Mapped[Board] = relationship(back_populates="stages")

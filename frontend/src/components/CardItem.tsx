@@ -20,6 +20,8 @@ export function CardItem({ card, isOpen, onOpen }: Props) {
         <div className="card-live">Your turn — confirm the agent&apos;s approve or reject</div>
       ) : null}
       {card.status === 'blocked' ? <div className="card-live">Blocked — run again when ready</div> : null}
+      {card.status === 'waiting_join' ? <div className="card-live">Waiting for other parallel tracks</div> : null}
+      {card.parent_card_id ? <div className="card-live">Parallel track</div> : null}
     </button>
   );
 }

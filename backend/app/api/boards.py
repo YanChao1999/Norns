@@ -33,6 +33,7 @@ class StageRead(BaseModel):
     board_id: str
     name: str
     order: int
+    lane: int = 0
     require_approval: bool
     agent_config: AgentConfigRead | None = None
 
@@ -46,6 +47,7 @@ class CardRead(BaseModel):
     body: str
     external_id: str | None = None
     current_stage_id: str | None = None
+    parent_card_id: str | None = None
     status: str
 
 
@@ -112,6 +114,9 @@ class BoardUpdate(BaseModel):
 class StageCreate(BaseModel):
     name: str = Field(min_length=1)
     order: int | None = None
+    lane: int | None = None
+    parallel: bool = False
+    from_stage_id: str | None = None
     require_approval: bool = True
     system_prompt: str = (
         "You are the stage agent. Produce a concise handoff. "
@@ -125,6 +130,7 @@ class StageCreate(BaseModel):
 class StageUpdate(BaseModel):
     name: str | None = None
     order: int | None = None
+    lane: int | None = None
     require_approval: bool | None = None
     system_prompt: str | None = None
     model: str | None = None
@@ -245,13 +251,28 @@ async def list_stages(board_id: str, session: Annotated[AsyncSession, Depends(ge
 async def create_stage(
     board_id: str, payload: StageCreate, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> Stage:
-    await _get_board_or_404(session, board_id)
-    order = payload.order
-    if order is None:
-        result = await session.execute(select(func.max(Stage.order)).where(Stage.board_id == board_id))
-        order = (result.scalar() or 0) + 1
+    board = await _get_board_or_404(session, board_id)
+    if payload.parallel:
+        if not payload.from_stage_id:
+            raise HTTPException(status_code=400, detail="from_stage_id is required to add a parallel stage")
+        source = next((stage for stage in board.stages if stage.id == payload.from_stage_id), None)
+        if not source:
+            raise HTTPException(status_code=400, detail="from_stage_id is not on this board")
+        order, lane = _parallel_placement(board, source)
+    else:
+        order = payload.order
+        if order is None:
+            result = await session.execute(select(func.max(Stage.order)).where(Stage.board_id == board_id))
+            order = (result.scalar() or 0) + 1
+        lane = payload.lane if payload.lane is not None else 0
 
-    stage = Stage(board_id=board_id, name=payload.name, order=order, require_approval=payload.require_approval)
+    stage = Stage(
+        board_id=board_id,
+        name=payload.name,
+        order=order,
+        lane=lane,
+        require_approval=payload.require_approval,
+    )
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,
         model=payload.model,
@@ -260,7 +281,17 @@ async def create_stage(
     )
     session.add(stage)
     await session.flush()
-    await _attach_new_stage_transition(session, board_id, stage)
+    if payload.parallel and payload.from_stage_id:
+        session.add(
+            StageTransition(
+                board_id=board_id,
+                from_stage_id=payload.from_stage_id,
+                to_stage_id=stage.id,
+                event="approve" if source.require_approval else "auto",
+            )
+        )
+    else:
+        await _attach_new_stage_transition(session, board_id, stage)
     await session.commit()
     result = await session.execute(select(Stage).where(Stage.id == stage.id).options(selectinload(Stage.agent_config)))
     return result.scalar_one()
@@ -408,6 +439,26 @@ async def _get_board_or_404(session: AsyncSession, board_id: str) -> Board:
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     return board
+
+
+def _parallel_placement(board: Board, source: Stage) -> tuple[int, int]:
+    outgoing_ids = {
+        edge.to_stage_id
+        for edge in board.transitions
+        if edge.from_stage_id == source.id
+        and edge.to_stage_id
+        and not edge.condition_key.strip()
+        and edge.event in {"approve", "auto"}
+    }
+    targets = [stage for stage in board.stages if stage.id in outgoing_ids]
+    forward = [stage for stage in targets if stage.order > source.order]
+    if forward:
+        order = min(stage.order for stage in forward)
+    else:
+        order = source.order + 1
+    lanes = [stage.lane for stage in board.stages if stage.order == order]
+    lane = (max(lanes) + 1) if lanes else 0
+    return order, lane
 
 
 def _seed_linear_transitions(session: AsyncSession, board: Board) -> None:

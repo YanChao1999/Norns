@@ -93,9 +93,7 @@ export default function App() {
               className={`chip${board.id === selectedBoardId && view !== 'settings' ? ' is-active' : ''}`}
               onClick={() => {
                 setSelectedBoardId(board.id);
-                if (view === 'settings') {
-                  setView('board');
-                }
+                setView('board');
               }}
             >
               {board.name}

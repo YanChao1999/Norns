@@ -12,6 +12,20 @@ interface Props {
   onEditMachine?: () => void;
 }
 
+function groupStages(stages: Stage[]): Stage[][] {
+  const sorted = [...stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
+  const groups: Stage[][] = [];
+  for (const stage of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last[0].order === stage.order) {
+      last.push(stage);
+    } else {
+      groups.push([stage]);
+    }
+  }
+  return groups;
+}
+
 export function Board({ boardId, onEditMachine }: Props) {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
@@ -19,7 +33,8 @@ export function Board({ boardId, onEditMachine }: Props) {
   const { data: board, isLoading } = useQuery({
     queryKey: ['board', boardId],
     queryFn: () => apiClient.get<BoardDetail>(`/boards/${boardId}`),
-    refetchInterval: (query) => (query.state.data?.cards.some((card) => card.status === 'running') ? 2000 : false)
+    refetchInterval: (query) =>
+      query.state.data?.cards.some((card) => card.status === 'running' || card.status === 'waiting_join') ? 2000 : false
   });
 
   const cardsByStage = useMemo(() => {
@@ -37,7 +52,8 @@ export function Board({ boardId, onEditMachine }: Props) {
     return <div className="muted">Loading board…</div>;
   }
 
-  const stages = [...board.stages].sort((left, right) => left.order - right.order);
+  const stages = [...board.stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
+  const columns = groupStages(stages);
   const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
 
   return (
@@ -45,7 +61,9 @@ export function Board({ boardId, onEditMachine }: Props) {
       <div className="board-head">
         <div>
           <h1>{board.name}</h1>
-          <p>{board.description || 'Isolated stage agents. Human gate between columns.'}</p>
+          <p>
+            {board.description || 'Each column is a workflow step. Same column, different row means those stages run in parallel.'}
+          </p>
         </div>
         {onEditMachine ? (
           <button type="button" className="btn" onClick={onEditMachine}>
@@ -55,18 +73,31 @@ export function Board({ boardId, onEditMachine }: Props) {
       </div>
 
       <div className="board-columns">
-        {stages.map((stage, index) => (
-          <Column
-            key={stage.id}
-            boardId={boardId}
-            stage={stage}
-            cards={cardsByStage.get(stage.id) ?? []}
-            isFirst={index === 0}
-            openCardId={liveCard?.id ?? null}
-            onOpenCard={setSelectedCard}
-            onOpenConfig={setSelectedStage}
-          />
-        ))}
+        {columns.map((group, columnIndex) => {
+          const parallel = group.length > 1;
+          return (
+            <div key={group[0].id} className={`board-column-stack${parallel ? ' is-parallel' : ''}`}>
+              <header className="board-column-banner">
+                <span>Column {group[0].order}</span>
+                {parallel ? <span className="board-column-parallel">{group.length} rows in parallel</span> : <span>Row 1</span>}
+              </header>
+              {group.map((stage, laneIndex) => (
+                <Column
+                  key={stage.id}
+                  boardId={boardId}
+                  stage={stage}
+                  cards={cardsByStage.get(stage.id) ?? []}
+                  isFirst={columnIndex === 0 && laneIndex === 0}
+                  row={(stage.lane ?? 0) + 1}
+                  parallel={parallel}
+                  openCardId={liveCard?.id ?? null}
+                  onOpenCard={setSelectedCard}
+                  onOpenConfig={setSelectedStage}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       <CardDrawer card={liveCard} board={board} onClose={() => setSelectedCard(null)} />

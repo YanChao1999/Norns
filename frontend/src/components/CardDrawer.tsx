@@ -83,6 +83,7 @@ export function CardDrawer({ card, board, onClose }: Props) {
   const plantuml = handoff.plantuml?.svg;
   const canRun = card.status === 'idle' || card.status === 'blocked';
   const waiting = card.status === 'waiting_approval';
+  const joining = card.status === 'waiting_join';
   const summary = handoff.summary || handoffRun?.model_output;
   const links = Array.isArray(handoff.links) ? handoff.links : [];
   const recommendation = agentRecommendation(handoff.recommendation);
@@ -204,7 +205,8 @@ export function CardDrawer({ card, board, onClose }: Props) {
             </button>
           </>
         ) : null}
-        {!canRun && !waiting ? <span className="muted">No gate action on this card.</span> : null}
+        {joining ? <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span> : null}
+        {!canRun && !waiting && !joining ? <span className="muted">No gate action on this card.</span> : null}
       </footer>
     </Dialog>
   );
@@ -218,7 +220,11 @@ function targetName(board: BoardDetail | undefined, stageId: string | null): str
 }
 
 function approveLabel(lines: StageTransition[], board?: BoardDetail): string {
-  const fallback = lines.find((edge) => !edge.condition_key.trim()) ?? lines[0];
+  const defaults = lines.filter((edge) => !edge.condition_key.trim());
+  if (defaults.length > 1) {
+    return `Approve · ${defaults.map((edge) => targetName(board, edge.to_stage_id)).join(' + ')}`;
+  }
+  const fallback = defaults[0] ?? lines[0];
   if (!fallback) {
     return 'Approve · next stage';
   }

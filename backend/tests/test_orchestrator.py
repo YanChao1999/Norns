@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -177,5 +178,162 @@ async def test_reject_line_returns_card_to_previous_stage():
         await session.refresh(card)
         assert card.current_stage_id == stage_a.id
         assert card.status == CardStatus.IDLE
+
+    await engine.dispose()
+
+
+def _agent_stage(name: str, order: int, lane: int = 0) -> Stage:
+    stage = Stage(name=name, order=order, lane=lane, require_approval=True)
+    stage.agent_config = AgentConfig(system_prompt=name, model="gpt-4o", temperature=0.7, tool_allowlist=[])
+    return stage
+
+
+def _completed_run(card: Card, stage: Stage, summary: str) -> AgentRun:
+    return AgentRun(
+        card=card,
+        stage=stage,
+        inputs={},
+        tool_calls=[],
+        model_output=summary,
+        handoff={"summary": summary},
+        status="completed",
+        completed_at=datetime.utcnow(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_approve_forks_parallel_tracks(monkeypatch):
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    queued: list[tuple[str, str]] = []
+
+    async def fake_enqueue(card_id: str, stage_id: str, run_id: str | None = None):
+        queued.append((card_id, stage_id))
+        return run_id or "generated-run"
+
+    monkeypatch.setattr("backend.app.orchestrator.gates.enqueue_stage_run", fake_enqueue)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        interface = _agent_stage("Interface", 1)
+        tests = _agent_stage("Unit tests", 2, 0)
+        software = _agent_stage("Software", 2, 1)
+        board.stages = [interface, tests, software]
+        card = Card(title="API", body="Ship it", status=CardStatus.WAITING_APPROVAL, current_stage=interface)
+        board.cards = [card]
+        session.add_all([board, _completed_run(card, interface, "interface ready")])
+        await session.flush()
+        session.add_all(
+            [
+                StageTransition(
+                    board_id=board.id,
+                    from_stage_id=interface.id,
+                    to_stage_id=tests.id,
+                    event="approve",
+                    order=0,
+                ),
+                StageTransition(
+                    board_id=board.id,
+                    from_stage_id=interface.id,
+                    to_stage_id=software.id,
+                    event="approve",
+                    order=1,
+                ),
+            ]
+        )
+        await session.commit()
+
+        await approve_card(session, card.id, "admin", "split")
+        await session.refresh(card)
+        children = list(
+            (await session.execute(select(Card).where(Card.parent_card_id == card.id))).scalars().all()
+        )
+        assert card.current_stage_id == tests.id
+        assert card.status == CardStatus.RUNNING
+        assert len(children) == 1
+        assert children[0].current_stage_id == software.id
+        assert children[0].status == CardStatus.RUNNING
+        assert children[0].title == "API · Software"
+        assert {(item[0], item[1]) for item in queued} == {(card.id, tests.id), (children[0].id, software.id)}
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_join_waits_then_merges_parallel_tracks(monkeypatch):
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    queued: list[tuple[str, str]] = []
+
+    async def fake_enqueue(card_id: str, stage_id: str, run_id: str | None = None):
+        queued.append((card_id, stage_id))
+        return run_id or "generated-run"
+
+    monkeypatch.setattr("backend.app.orchestrator.gates.enqueue_stage_run", fake_enqueue)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        interface = _agent_stage("Interface", 1)
+        tests = _agent_stage("Unit tests", 2, 0)
+        software = _agent_stage("Software", 2, 1)
+        integration = _agent_stage("Integration", 3)
+        board.stages = [interface, tests, software, integration]
+        parent = Card(title="API", body="Ship it", status=CardStatus.WAITING_APPROVAL, current_stage=tests)
+        child = Card(
+            title="API · Software",
+            body="Ship it",
+            status=CardStatus.WAITING_APPROVAL,
+            current_stage=software,
+            parent_card_id="pending",
+        )
+        board.cards = [parent, child]
+        session.add(board)
+        await session.flush()
+        child.parent_card_id = parent.id
+        session.add_all(
+            [
+                _completed_run(parent, tests, "tests green"),
+                _completed_run(child, software, "software ready"),
+                StageTransition(
+                    board_id=board.id, from_stage_id=tests.id, to_stage_id=integration.id, event="approve"
+                ),
+                StageTransition(
+                    board_id=board.id, from_stage_id=software.id, to_stage_id=integration.id, event="approve"
+                ),
+            ]
+        )
+        await session.commit()
+
+        queued.clear()
+        await approve_card(session, parent.id, "admin", "tests done")
+        await session.refresh(parent)
+        await session.refresh(child)
+        assert parent.current_stage_id == integration.id
+        assert parent.status == CardStatus.WAITING_JOIN
+        assert child.current_stage_id == software.id
+        assert queued == []
+
+        await approve_card(session, child.id, "admin", "software done")
+        await session.refresh(parent)
+        await session.refresh(child)
+        assert parent.current_stage_id == integration.id
+        assert parent.status == CardStatus.RUNNING
+        assert child.current_stage_id == integration.id
+        assert child.status == CardStatus.DONE
+        assert queued == [(parent.id, integration.id)]
 
     await engine.dispose()

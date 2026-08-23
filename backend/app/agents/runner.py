@@ -14,8 +14,9 @@ from ..config import get_settings
 from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
-from ..orchestrator.progression import resolve_route
-from ..orchestrator.state_machine import CardStatus, auto_advance_card, start_card_run, wait_for_approval
+from ..orchestrator.progression import resolve_routes
+from ..orchestrator.split import apply_forward_routes
+from ..orchestrator.state_machine import CardStatus, start_card_run, wait_for_approval
 from ..plantuml.renderer import render_plantuml
 from ..tools.registry import RuntimeTool, create_default_registry
 
@@ -42,6 +43,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             selectinload(Card.runs),
             selectinload(Card.board).selectinload(Board.stages).selectinload(Stage.agent_config),
             selectinload(Card.board).selectinload(Board.transitions),
+            selectinload(Card.board).selectinload(Board.cards).selectinload(Card.runs),
             selectinload(Card.current_stage),
         )
     )
@@ -74,7 +76,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     allowlist = stage.agent_config.tool_allowlist if stage.agent_config else []
     runtime_tools = registry.get_runtime_tools(allowlist, connectors)
 
-    next_stage_id = None
+    next_jobs: list[tuple[str, str]] = []
     try:
         model_output, tool_calls, handoff = await _execute_agent(
             settings=settings,
@@ -91,15 +93,23 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             # Agent recommendation is advisory only; never skip the human gate.
             wait_for_approval(card)
         else:
-            route = resolve_route(
+            routes = resolve_routes(
                 card.board.stages,
                 card.board.transitions,
                 stage.id,
                 "auto",
                 handoff if isinstance(handoff, dict) else {},
             )
-            next_stage_id = route.stage_id
-            auto_advance_card(card, next_stage_id)
+            next_jobs = apply_forward_routes(
+                session,
+                card,
+                list(card.board.stages),
+                routes,
+                handoff if isinstance(handoff, dict) else {},
+                auto=True,
+                transitions=list(card.board.transitions),
+                board_cards=list(card.board.cards),
+            )
         await session.commit()
     except Exception as exc:
         run.status = "failed"
@@ -110,12 +120,14 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         await session.commit()
         raise
 
-    if next_stage_id:
+    for card_id, next_stage_id in next_jobs:
         try:
-            await enqueue_stage_run(card.id, next_stage_id)
+            await enqueue_stage_run(card_id, next_stage_id)
         except EnqueueError:
-            card.status = CardStatus.BLOCKED
-            await session.commit()
+            stuck = await session.get(Card, card_id)
+            if stuck:
+                stuck.status = CardStatus.BLOCKED
+                await session.commit()
             raise
 
 

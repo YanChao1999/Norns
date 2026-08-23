@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from backend.app.orchestrator.progression import next_stage_after, resolve_route
+from backend.app.orchestrator.progression import is_join_stage, next_stage_after, resolve_route, resolve_routes
 from backend.app.orchestrator.state_machine import CardStatus, auto_advance_card, return_card_to_stage
 
 
@@ -69,6 +69,48 @@ def test_resolve_route_reject_without_line_is_not_found():
     stages = [SimpleNamespace(id="a", order=1), SimpleNamespace(id="b", order=2)]
     route = resolve_route(stages, [], "b", "reject", {})
     assert route.found is False
+
+
+def test_resolve_routes_returns_all_default_targets():
+    stages = [
+        SimpleNamespace(id="interface", order=1),
+        SimpleNamespace(id="tests", order=2, lane=0),
+        SimpleNamespace(id="software", order=2, lane=1),
+        SimpleNamespace(id="integration", order=3),
+    ]
+    edges = [
+        _edge(from_stage_id="interface", to_stage_id="tests", order=0),
+        _edge(from_stage_id="interface", to_stage_id="software", order=1),
+    ]
+    routes = resolve_routes(stages, edges, "interface", "approve", {})
+    assert [route.stage_id for route in routes] == ["tests", "software"]
+    assert all(route.found for route in routes)
+
+
+def test_matching_if_skips_parallel_defaults():
+    stages = [
+        SimpleNamespace(id="a", order=1),
+        SimpleNamespace(id="b", order=2),
+        SimpleNamespace(id="c", order=2),
+    ]
+    edges = [
+        _edge(to_stage_id="b", condition_key="risk", condition_value="high", order=0),
+        _edge(to_stage_id="b", order=1),
+        _edge(to_stage_id="c", order=2),
+    ]
+    exclusive = resolve_routes(stages, edges, "a", "approve", {"risk": "high"})
+    assert [route.stage_id for route in exclusive] == ["b"]
+    split = resolve_routes(stages, edges, "a", "approve", {"risk": "low"})
+    assert [route.stage_id for route in split] == ["b", "c"]
+
+
+def test_join_stage_has_two_incoming_default_lines():
+    edges = [
+        _edge(from_stage_id="tests", to_stage_id="integration"),
+        _edge(from_stage_id="software", to_stage_id="integration"),
+    ]
+    assert is_join_stage(edges, "integration") is True
+    assert is_join_stage(edges, "tests") is False
 
 
 def test_return_card_to_previous_stage():
