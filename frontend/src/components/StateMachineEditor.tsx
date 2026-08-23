@@ -617,7 +617,7 @@ function StageInspector({
   useEffect(() => {
     setName(stage.name);
     setColumn(stage.order);
-    setRow(stageRow(stage));
+    setRow((stage.lane ?? 0) + 1);
     setParallelName('');
   }, [stage.id, stage.name, stage.order, stage.lane]);
 
