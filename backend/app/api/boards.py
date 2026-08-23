@@ -452,10 +452,7 @@ def _parallel_placement(board: Board, source: Stage) -> tuple[int, int]:
     }
     targets = [stage for stage in board.stages if stage.id in outgoing_ids]
     forward = [stage for stage in targets if stage.order > source.order]
-    if forward:
-        order = min(stage.order for stage in forward)
-    else:
-        order = source.order + 1
+    order = min(stage.order for stage in forward) if forward else source.order + 1
     lanes = [stage.lane for stage in board.stages if stage.order == order]
     lane = (max(lanes) + 1) if lanes else 0
     return order, lane

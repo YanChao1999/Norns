@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import AgentRun, Card, Stage, StageTransition
 from .progression import Route, incoming_join_sources, is_join_stage, target_stage_ids
-from .state_machine import CardStatus, auto_advance_card, advance_card
+from .state_machine import CardStatus, advance_card, auto_advance_card
 
 
 def apply_forward_routes(
