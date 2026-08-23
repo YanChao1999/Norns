@@ -100,7 +100,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
                 "auto",
                 handoff if isinstance(handoff, dict) else {},
             )
-            next_jobs = apply_forward_routes(
+            next_jobs = await apply_forward_routes(
                 session,
                 card,
                 list(card.board.stages),

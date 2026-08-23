@@ -376,7 +376,15 @@ async def create_transition(
     board_id: str, payload: TransitionCreate, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> StageTransition:
     board = await _get_board_or_404(session, board_id)
-    _validate_transition_payload(board, payload.from_stage_id, payload.to_stage_id, payload.event, payload.condition_op)
+    _validate_transition_payload(
+        board,
+        payload.from_stage_id,
+        payload.to_stage_id,
+        payload.event,
+        payload.condition_op,
+        payload.condition_key,
+        payload.condition_value,
+    )
     edge = StageTransition(
         board_id=board_id,
         from_stage_id=payload.from_stage_id,
@@ -407,7 +415,9 @@ async def update_transition(
     to_id = updates.get("to_stage_id", edge.to_stage_id)
     event = updates.get("event", edge.event)
     op = updates.get("condition_op", edge.condition_op)
-    _validate_transition_payload(board, from_id, to_id, event, op)
+    key = updates.get("condition_key", edge.condition_key)
+    value = updates.get("condition_value", edge.condition_value)
+    _validate_transition_payload(board, from_id, to_id, event, op, key, value)
     for field, value in updates.items():
         setattr(edge, field, value)
     await session.commit()
@@ -426,6 +436,20 @@ async def delete_transition(transition_id: str, session: Annotated[AsyncSession,
 
 
 async def _get_board_or_404(session: AsyncSession, board_id: str) -> Board:
+    board = await _load_board(session, board_id)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    if board.stages and not board.transitions:
+        _seed_linear_transitions(session, board)
+        await session.commit()
+        session.expire(board, ["transitions"])
+        board = await _load_board(session, board_id)
+        if not board:
+            raise HTTPException(status_code=404, detail="Board not found")
+    return board
+
+
+async def _load_board(session: AsyncSession, board_id: str) -> Board | None:
     result = await session.execute(
         select(Board)
         .where(Board.id == board_id)
@@ -435,10 +459,7 @@ async def _get_board_or_404(session: AsyncSession, board_id: str) -> Board:
             selectinload(Board.transitions),
         )
     )
-    board = result.scalar_one_or_none()
-    if not board:
-        raise HTTPException(status_code=404, detail="Board not found")
-    return board
+    return result.scalar_one_or_none()
 
 
 def _parallel_placement(board: Board, source: Stage) -> tuple[int, int]:
@@ -517,7 +538,13 @@ async def _attach_new_stage_transition(session: AsyncSession, board_id: str, sta
 
 
 def _validate_transition_payload(
-    board: Board, from_stage_id: str, to_stage_id: str | None, event: str, condition_op: str
+    board: Board,
+    from_stage_id: str,
+    to_stage_id: str | None,
+    event: str,
+    condition_op: str,
+    condition_key: str = "",
+    condition_value: str = "",
 ) -> None:
     stage_ids = {stage.id for stage in board.stages}
     if from_stage_id not in stage_ids:
@@ -528,3 +555,5 @@ def _validate_transition_payload(
         raise HTTPException(status_code=400, detail="event must be approve, reject, or auto")
     if condition_op not in VALID_OPS:
         raise HTTPException(status_code=400, detail="condition_op must be eq, contains, or exists")
+    if condition_op == "contains" and condition_key.strip() and not condition_value.strip():
+        raise HTTPException(status_code=400, detail="contains conditions need a non-empty value")

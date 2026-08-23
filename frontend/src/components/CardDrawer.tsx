@@ -190,7 +190,7 @@ export function CardDrawer({ card, board, onClose }: Props) {
               disabled={approvalMutation.isPending}
               title={recommendation === 'approve' ? 'Agent recommended approve' : 'Confirm approve'}
             >
-              {approveLabel(approveLines, board)}
+              {approveLabel(approveLines, board, handoff)}
               {recommendation === 'approve' ? ' · agent' : ''}
             </button>
             <button
@@ -200,7 +200,7 @@ export function CardDrawer({ card, board, onClose }: Props) {
               disabled={approvalMutation.isPending}
               title={recommendation === 'reject' ? 'Agent recommended reject' : 'Confirm reject'}
             >
-              {rejectLabel(rejectLines, board)}
+              {rejectLabel(rejectLines, board, handoff)}
               {recommendation === 'reject' ? ' · agent' : ''}
             </button>
           </>
@@ -219,10 +219,48 @@ function targetName(board: BoardDetail | undefined, stageId: string | null): str
   return board?.stages.find((stage) => stage.id === stageId)?.name ?? 'stage';
 }
 
-function approveLabel(lines: StageTransition[], board?: BoardDetail): string {
-  const defaults = lines.filter((edge) => !edge.condition_key.trim());
+function conditionMatches(handoff: Handoff, edge: StageTransition): boolean {
+  let current: unknown = handoff;
+  for (const part of edge.condition_key.split('.')) {
+    if (!current || typeof current !== 'object' || !(part in current)) {
+      current = undefined;
+      break;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  const op = edge.condition_op || 'eq';
+  if (op === 'exists') {
+    return current !== undefined && current !== null;
+  }
+  const text = current == null ? '' : String(current);
+  const value = edge.condition_value;
+  if (op === 'contains') {
+    if (!value) {
+      return false;
+    }
+    return text.toLowerCase().includes(value.toLowerCase());
+  }
+  return text === value;
+}
+
+function resolvedLines(lines: StageTransition[], board: BoardDetail | undefined, handoff: Handoff, event: 'approve' | 'reject'): StageTransition[] {
+  const matching = [...lines].sort((left, right) => left.order - right.order);
+  const conditioned = matching.filter((edge) => edge.condition_key.trim());
+  const defaults = matching.filter((edge) => !edge.condition_key.trim());
+  const matchedIfs = conditioned.filter((edge) => conditionMatches(handoff, edge));
+  if (event === 'reject') {
+    const chosen = matchedIfs[0] ?? defaults[0] ?? matching[0];
+    return chosen ? [chosen] : [];
+  }
+  if (matchedIfs.length) {
+    return matchedIfs;
+  }
   const forward = defaults.filter((edge) => isForwardLine(board, edge));
-  const shown = forward.length ? forward : defaults;
+  return forward.length ? forward : defaults;
+}
+
+function approveLabel(lines: StageTransition[], board: BoardDetail | undefined, handoff: Handoff): string {
+  const shown = resolvedLines(lines, board, handoff, 'approve');
   if (shown.length > 1) {
     return `Approve · ${shown.map((edge) => targetName(board, edge.to_stage_id)).join(' + ')}`;
   }
@@ -245,8 +283,9 @@ function isForwardLine(board: BoardDetail | undefined, edge: StageTransition): b
   return to.order > from.order;
 }
 
-function rejectLabel(lines: StageTransition[], board?: BoardDetail): string {
-  const fallback = lines.find((edge) => !edge.condition_key.trim()) ?? lines[0];
+function rejectLabel(lines: StageTransition[], board: BoardDetail | undefined, handoff: Handoff): string {
+  const shown = resolvedLines(lines, board, handoff, 'reject');
+  const fallback = shown[0];
   if (!fallback) {
     return 'Reject';
   }

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import AgentRun, Card, Stage, StageTransition
@@ -11,7 +12,7 @@ from .progression import Route, incoming_join_sources, is_join_stage, target_sta
 from .state_machine import CardStatus, advance_card, auto_advance_card
 
 
-def apply_forward_routes(
+async def apply_forward_routes(
     session: AsyncSession,
     card: Card,
     stages: list[Stage],
@@ -34,9 +35,10 @@ def apply_forward_routes(
     names = {stage.id: stage.name for stage in stages}
     first, *rest = targets
     spawned = [_fork_card(session, card, stage_id, names.get(stage_id, "track"), handoff) for stage_id in rest]
-    placements = [(card, first), *zip(spawned, rest, strict=True)]
-    family = _family(card, list(board_cards or []) + spawned)
+    await session.flush()
+    family = await _locked_family(session, card, list(board_cards or []) + spawned)
     edges = list(transitions or [])
+    placements = [(card, first), *zip(spawned, rest, strict=True)]
 
     queued: list[tuple[str, str]] = []
     for item, stage_id in placements:
@@ -47,6 +49,7 @@ def apply_forward_routes(
         survivor = _finalize_join(session, item, stage_id, family, handoff, edges, stages)
         survivor.status = CardStatus.RUNNING
         queued.append((survivor.id, stage_id))
+    queued.extend(_finalize_ready_joins(session, family, handoff, edges, stages, queued))
     return queued
 
 
@@ -66,7 +69,7 @@ def _fork_card(
         body=parent.body,
         external_id=parent.external_id,
         current_stage_id=stage_id,
-        parent_card_id=parent.id,
+        parent_card_id=_root_id(parent),
         status=CardStatus.RUNNING,
     )
     session.add(child)
@@ -85,13 +88,69 @@ def _fork_card(
     return child
 
 
+def _root_id(card: Card) -> str:
+    return card.parent_card_id or card.id
+
+
 def _family(card: Card, extras: list[Card]) -> list[Card]:
-    root = card.parent_card_id or card.id
-    found: dict[str, Card] = {card.id: card}
-    for item in extras:
-        if item.id == root or item.parent_card_id == root:
-            found[item.id] = item
-    return list(found.values())
+    by_id = {item.id: item for item in extras}
+    by_id[card.id] = card
+    root = _walk_root(card, by_id)
+    return [item for item in by_id.values() if item.id == root or _walk_root(item, by_id) == root]
+
+
+def _walk_root(card: Card, by_id: dict[str, Card]) -> str:
+    seen: set[str] = set()
+    current = card
+    while current.parent_card_id and current.parent_card_id not in seen:
+        seen.add(current.id)
+        parent = by_id.get(current.parent_card_id)
+        if parent is None:
+            return current.parent_card_id
+        current = parent
+    return current.id
+
+
+async def _locked_family(session: AsyncSession, card: Card, extras: list[Card]) -> list[Card]:
+    family = _family(card, extras)
+    ids = [item.id for item in family if item.id]
+    if not ids:
+        return family
+    await session.execute(select(Card.id).where(Card.id.in_(ids)).with_for_update())
+    for item in family:
+        if inspect(item).persistent:
+            await session.refresh(item, attribute_names=["current_stage_id", "status", "parent_card_id"])
+    return family
+
+
+def _finalize_ready_joins(
+    session: AsyncSession,
+    family: list[Card],
+    handoff: dict[str, Any],
+    transitions: list[StageTransition],
+    stages: list[Stage],
+    already_queued: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    queued: list[tuple[str, str]] = []
+    queued_ids = {card_id for card_id, _ in already_queued}
+    join_ids = {item.current_stage_id for item in family if item.current_stage_id}
+    for stage_id in join_ids:
+        if not is_join_stage(transitions, stage_id, stages):
+            continue
+        if _sources_open(family, stage_id, transitions, stages):
+            continue
+        at_join = [item for item in family if item.current_stage_id == stage_id]
+        if len(at_join) < 2:
+            continue
+        if not any(item.status == CardStatus.WAITING_JOIN for item in at_join):
+            continue
+        survivor = _finalize_join(session, at_join[0], stage_id, family, handoff, transitions, stages)
+        if survivor.id in queued_ids:
+            continue
+        survivor.status = CardStatus.RUNNING
+        queued.append((survivor.id, stage_id))
+        queued_ids.add(survivor.id)
+    return queued
 
 
 def _wait_for_join(
@@ -105,8 +164,17 @@ def _wait_for_join(
         return False
     if len({item.id for item in family}) < 2:
         return False
+    return _sources_open(family, target_id, transitions, stages)
+
+
+def _sources_open(
+    family: list[Card],
+    target_id: str,
+    transitions: list[StageTransition],
+    stages: list[Stage],
+) -> bool:
     sources = set(incoming_join_sources(transitions, target_id, stages))
-    return any(item.id != card.id and item.current_stage_id in sources for item in family)
+    return any(item.current_stage_id in sources for item in family)
 
 
 def _finalize_join(

@@ -151,6 +151,16 @@ def test_join_stage_has_two_incoming_default_lines():
     assert is_join_stage(edges, "tests", stages) is False
 
 
+def test_empty_contains_does_not_match():
+    stages = [SimpleNamespace(id="a", order=1), SimpleNamespace(id="b", order=2), SimpleNamespace(id="c", order=3)]
+    edges = [
+        _edge(to_stage_id="b", condition_key="summary", condition_op="contains", condition_value="", order=0),
+        _edge(to_stage_id="c", order=1),
+    ]
+    route = resolve_route(stages, edges, "a", "approve", {"summary": "anything"})
+    assert route.stage_id == "c"
+
+
 def test_return_card_to_previous_stage():
     card = SimpleNamespace(status=CardStatus.WAITING_APPROVAL, current_stage_id="stage-b")
     return_card_to_stage(card, "stage-a")

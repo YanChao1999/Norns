@@ -125,5 +125,7 @@ def _condition_matches(handoff: dict[str, Any], edge: StageTransition) -> bool:
     text = "" if current is None else str(current)
     value = edge.condition_value
     if op == "contains":
+        if not value:
+            return False
         return value.lower() in text.lower()
     return text == value

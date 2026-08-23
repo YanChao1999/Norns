@@ -67,7 +67,7 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
     board = card.current_stage.board
     handoff = latest_run.handoff if isinstance(latest_run.handoff, dict) else {}
     routes = resolve_routes(board.stages, board.transitions, card.current_stage_id, "approve", handoff)
-    queued = apply_forward_routes(
+    queued = await apply_forward_routes(
         session,
         card,
         list(board.stages),

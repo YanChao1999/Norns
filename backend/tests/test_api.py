@@ -187,6 +187,19 @@ def test_transition_lines_can_go_back_and_branch_on_if():
         assert updated.status_code == 200
         assert updated.json()["condition_op"] == "contains"
 
+        empty_contains = client.post(
+            f"/api/boards/{board['id']}/transitions",
+            json={
+                "from_stage_id": skuld["id"],
+                "to_stage_id": urd["id"],
+                "event": "approve",
+                "condition_key": "summary",
+                "condition_op": "contains",
+                "condition_value": "",
+            },
+        )
+        assert empty_contains.status_code == 400
+
         deleted = client.delete(f"/api/transitions/{back.json()['id']}")
         assert deleted.status_code == 204
 
@@ -204,6 +217,11 @@ def test_transition_lines_can_go_back_and_branch_on_if():
             if edge["from_stage_id"] == urd["id"] and edge["event"] == "approve" and not edge["condition_key"]
         ]
         assert len(split_lines) >= 2
+
+        for edge in refreshed["transitions"]:
+            assert client.delete(f"/api/transitions/{edge['id']}").status_code == 204
+        restored = client.get(f"/api/boards/{board['id']}").json()
+        assert len(restored["transitions"]) == len(restored["stages"])
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())

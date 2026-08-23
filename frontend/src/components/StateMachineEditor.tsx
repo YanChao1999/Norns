@@ -317,7 +317,7 @@ export function StateMachineEditor({ boardId }: Props) {
       <div className="board-head">
         <div>
           <h1>State machine · {board.name}</h1>
-          <p>Draw lines between stages. Columns go left to right. Same column, different row means those stages run in parallel.</p>
+          <p>Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage.</p>
         </div>
       </div>
 
@@ -503,7 +503,8 @@ export function StateMachineEditor({ boardId }: Props) {
             />
           ) : (
             <p className="muted">
-              Select a stage, then Draw line and click another stage. Put two stages in the same column and different rows to run them in parallel.
+              Select a stage, then Draw line and click another stage. Place only moves the stage on the grid. Add parallel row or a second default line to run
+              tracks at the same time.
             </p>
           )}
         </aside>
@@ -637,7 +638,7 @@ function StageInspector({
           Place
         </button>
       </div>
-      <p className="muted">Same column, different row = parallel. Later columns run after earlier ones.</p>
+      <p className="muted">Place only sets column and row on the board. Cards still follow the lines below.</p>
       <div className="field">
         <span>Progression</span>
         <label className="tool-row">
@@ -676,8 +677,7 @@ function StageInspector({
         />
       </label>
       <p className="muted">
-        Adds a new row in the next column and a second default line. Stages that share a column and differ by row run at the same time. To join later, draw a
-        line from each row into the same later column.
+        Adds a new row in the next column and a second default line so both tracks run. To join later, draw a line from each row into the same later column.
       </p>
       <div className="machine-inspector-actions">
         <button
@@ -741,11 +741,16 @@ function LineInspector({
     setValue(edge.condition_value);
   }, [edge]);
 
+  const containsNeedsValue = op === 'contains' && key.trim().length > 0 && !value.trim();
+
   return (
     <form
       className="machine-inspector-form"
       onSubmit={(eventSubmit) => {
         eventSubmit.preventDefault();
+        if (containsNeedsValue) {
+          return;
+        }
         onSave({
           event,
           to_stage_id: toId === DONE_ID ? null : toId,
@@ -799,8 +804,9 @@ function LineInspector({
         Empty If is the default line. Several default lines from the same stage split into the next column&apos;s rows. Lines from two or more stages into one
         stage wait for every track, then merge. A matching If is exclusive and skips the defaults.
       </p>
+      {containsNeedsValue ? <p className="error">Contains needs a non-empty value, or it would match every handoff.</p> : null}
       <div className="machine-inspector-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+        <button type="submit" className="btn btn-primary" disabled={busy || containsNeedsValue}>
           Save line
         </button>
         <button type="button" className="btn btn-danger" onClick={onDelete} disabled={busy}>

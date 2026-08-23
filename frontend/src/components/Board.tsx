@@ -61,7 +61,7 @@ export function Board({ boardId, onEditMachine }: Props) {
       <div className="board-head">
         <div>
           <h1>{board.name}</h1>
-          <p>{board.description || 'Each column is a workflow step. Same column, different row means those stages run in parallel.'}</p>
+          <p>{board.description || 'Each column is a workflow step. Cards follow the lines you draw. Column and row only place stages on the board.'}</p>
         </div>
         {onEditMachine ? (
           <button type="button" className="btn" onClick={onEditMachine}>
@@ -116,7 +116,7 @@ export function Board({ boardId, onEditMachine }: Props) {
                   boardId={boardId}
                   stage={stage}
                   cards={cardsByStage.get(stage.id) ?? []}
-                  isFirst={columnIndex === 0 && row === 1}
+                  isFirst={columnIndex === 0 && stage.id === group[0].id}
                   row={row}
                   parallel={parallel}
                   openCardId={liveCard?.id ?? null}
