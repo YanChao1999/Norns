@@ -221,14 +221,28 @@ function targetName(board: BoardDetail | undefined, stageId: string | null): str
 
 function approveLabel(lines: StageTransition[], board?: BoardDetail): string {
   const defaults = lines.filter((edge) => !edge.condition_key.trim());
-  if (defaults.length > 1) {
-    return `Approve · ${defaults.map((edge) => targetName(board, edge.to_stage_id)).join(' + ')}`;
+  const forward = defaults.filter((edge) => isForwardLine(board, edge));
+  const shown = forward.length ? forward : defaults;
+  if (shown.length > 1) {
+    return `Approve · ${shown.map((edge) => targetName(board, edge.to_stage_id)).join(' + ')}`;
   }
-  const fallback = defaults[0] ?? lines[0];
+  const fallback = shown[0] ?? lines[0];
   if (!fallback) {
     return 'Approve · next stage';
   }
   return `Approve · ${targetName(board, fallback.to_stage_id)}`;
+}
+
+function isForwardLine(board: BoardDetail | undefined, edge: StageTransition): boolean {
+  if (!edge.to_stage_id) {
+    return true;
+  }
+  const from = board?.stages.find((stage) => stage.id === edge.from_stage_id);
+  const to = board?.stages.find((stage) => stage.id === edge.to_stage_id);
+  if (!from || !to) {
+    return true;
+  }
+  return to.order > from.order;
 }
 
 function rejectLabel(lines: StageTransition[], board?: BoardDetail): string {

@@ -41,10 +41,10 @@ def apply_forward_routes(
     queued: list[tuple[str, str]] = []
     for item, stage_id in placements:
         item.current_stage_id = stage_id
-        if _wait_for_join(item, stage_id, family, edges):
+        if _wait_for_join(item, stage_id, family, edges, stages):
             item.status = CardStatus.WAITING_JOIN
             continue
-        survivor = _finalize_join(session, item, stage_id, family, handoff, edges)
+        survivor = _finalize_join(session, item, stage_id, family, handoff, edges, stages)
         survivor.status = CardStatus.RUNNING
         queued.append((survivor.id, stage_id))
     return queued
@@ -99,12 +99,13 @@ def _wait_for_join(
     target_id: str,
     family: list[Card],
     transitions: list[StageTransition],
+    stages: list[Stage],
 ) -> bool:
-    if not is_join_stage(transitions, target_id):
+    if not is_join_stage(transitions, target_id, stages):
         return False
     if len({item.id for item in family}) < 2:
         return False
-    sources = set(incoming_join_sources(transitions, target_id))
+    sources = set(incoming_join_sources(transitions, target_id, stages))
     return any(item.id != card.id and item.current_stage_id in sources for item in family)
 
 
@@ -115,8 +116,9 @@ def _finalize_join(
     family: list[Card],
     handoff: dict[str, Any],
     transitions: list[StageTransition],
+    stages: list[Stage],
 ) -> Card:
-    if not is_join_stage(transitions, stage_id) or len({item.id for item in family}) < 2:
+    if not is_join_stage(transitions, stage_id, stages) or len({item.id for item in family}) < 2:
         return arriving
 
     at_join = [item for item in family if item.current_stage_id == stage_id]

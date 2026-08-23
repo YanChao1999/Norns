@@ -54,6 +54,7 @@ export function Board({ boardId, onEditMachine }: Props) {
 
   const stages = [...board.stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
   const columns = groupStages(stages);
+  const rowCount = Math.max(1, ...stages.map((stage) => (stage.lane ?? 0) + 1));
   const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
 
   return (
@@ -72,31 +73,66 @@ export function Board({ boardId, onEditMachine }: Props) {
         ) : null}
       </div>
 
-      <div className="board-columns">
+      <div
+        className="board-grid"
+        style={{
+          gridTemplateColumns: `64px repeat(${columns.length}, minmax(280px, 1fr))`,
+          gridTemplateRows: `28px repeat(${rowCount}, minmax(240px, 1fr))`
+        }}
+      >
+        <div className="board-grid-corner" />
         {columns.map((group, columnIndex) => {
           const parallel = group.length > 1;
           return (
-            <div key={group[0].id} className={`board-column-stack${parallel ? ' is-parallel' : ''}`}>
-              <header className="board-column-banner">
-                <span>Column {group[0].order}</span>
-                {parallel ? <span className="board-column-parallel">{group.length} rows in parallel</span> : <span>Row 1</span>}
-              </header>
-              {group.map((stage, laneIndex) => (
+            <header
+              key={`col-${group[0].id}`}
+              className={`board-column-banner${parallel ? ' is-parallel' : ''}`}
+              style={{ gridColumn: columnIndex + 2, gridRow: 1 }}
+            >
+              <span>Column {group[0].order}</span>
+              {parallel ? <span className="board-column-parallel">{group.length} rows in parallel</span> : null}
+            </header>
+          );
+        })}
+        {Array.from({ length: rowCount }, (_, index) => (
+          <div key={`row-${index}`} className="board-row-label" style={{ gridColumn: 1, gridRow: index + 2 }}>
+            Row {index + 1}
+          </div>
+        ))}
+        {columns.flatMap((group, columnIndex) => {
+          const parallel = group.length > 1;
+          return Array.from({ length: rowCount }, (_, index) => {
+            const row = index + 1;
+            const stage = group.find((item) => (item.lane ?? 0) + 1 === row);
+            if (!stage) {
+              return (
+                <div
+                  key={`${group[0].id}-empty-${row}`}
+                  className={`board-empty-cell${parallel ? ' is-parallel' : ''}`}
+                  style={{ gridColumn: columnIndex + 2, gridRow: row + 1 }}
+                />
+              );
+            }
+            return (
+              <div
+                key={stage.id}
+                className={`board-cell${parallel ? ' is-parallel' : ''}`}
+                style={{ gridColumn: columnIndex + 2, gridRow: row + 1 }}
+              >
                 <Column
-                  key={stage.id}
                   boardId={boardId}
                   stage={stage}
                   cards={cardsByStage.get(stage.id) ?? []}
-                  isFirst={columnIndex === 0 && laneIndex === 0}
-                  row={(stage.lane ?? 0) + 1}
+                  isFirst={columnIndex === 0 && row === 1}
+                  row={row}
                   parallel={parallel}
                   openCardId={liveCard?.id ?? null}
                   onOpenCard={setSelectedCard}
                   onOpenConfig={setSelectedStage}
                 />
-              ))}
-            </div>
-          );
+              </div>
+            );
+          });
         })}
       </div>
 

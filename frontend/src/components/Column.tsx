@@ -24,8 +24,7 @@ export function Column({ boardId, stage, cards, isFirst, row = 1, parallel = fal
         <div>
           <h2>{stage.name}</h2>
           <p>
-            {parallel ? `Row ${row} · parallel` : `Row ${row}`}
-            {' · '}
+            {parallel ? `Row ${row} · parallel · ` : ''}
             {stage.require_approval ? 'Human gate' : 'Auto-advance'}
           </p>
         </div>
@@ -38,7 +37,7 @@ export function Column({ boardId, stage, cards, isFirst, row = 1, parallel = fal
       </header>
       {isFirst ? <AddCard boardId={boardId} /> : null}
       {cards.map((card) => (
-        <CardItem key={card.id} card={card} isOpen={openCardId === card.id} onOpen={onOpenCard} />
+        <CardItem key={card.id} card={card} isOpen={openCardId === card.id} isParallelLane={parallel} onOpen={onOpenCard} />
       ))}
       {!cards.length ? <div className="empty-col">No cards in this station.</div> : null}
     </section>

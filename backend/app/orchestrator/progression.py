@@ -37,13 +37,16 @@ def resolve_routes(
     conditioned = [edge for edge in matching if edge.condition_key.strip()]
     defaults = [edge for edge in matching if not edge.condition_key.strip()]
     matched_ifs = [edge for edge in conditioned if _condition_matches(payload, edge)]
-    chosen = matched_ifs or defaults
     if event == "reject":
         if matched_ifs:
             return [Route(matched_ifs[0].to_stage_id, True)]
         if defaults:
             return [Route(defaults[0].to_stage_id, True)]
         return [Route(None, False)]
+    if matched_ifs:
+        return [Route(edge.to_stage_id, True) for edge in matched_ifs]
+    forward = [edge for edge in defaults if _is_forward(stages, from_stage_id, edge.to_stage_id)]
+    chosen = forward or defaults
     if chosen:
         return [Route(edge.to_stage_id, True) for edge in chosen]
     nxt = next_stage_after(stages, from_stage_id)
@@ -68,18 +71,45 @@ def target_stage_ids(routes: Sequence[Route]) -> list[str]:
     return seen
 
 
-def incoming_join_sources(transitions: Sequence[StageTransition], stage_id: str) -> list[str]:
+def incoming_join_sources(
+    transitions: Sequence[StageTransition],
+    stage_id: str,
+    stages: Sequence[Stage] | None = None,
+) -> list[str]:
     sources: list[str] = []
     for edge in transitions:
         if edge.to_stage_id != stage_id or edge.condition_key.strip() or edge.event not in {"approve", "auto"}:
+            continue
+        if stages is not None and not _is_forward(stages, edge.from_stage_id, stage_id):
             continue
         if edge.from_stage_id not in sources:
             sources.append(edge.from_stage_id)
     return sources
 
 
-def is_join_stage(transitions: Sequence[StageTransition], stage_id: str) -> bool:
-    return len(incoming_join_sources(transitions, stage_id)) >= 2
+def is_join_stage(
+    transitions: Sequence[StageTransition],
+    stage_id: str,
+    stages: Sequence[Stage] | None = None,
+) -> bool:
+    return len(incoming_join_sources(transitions, stage_id, stages)) >= 2
+
+
+def _stage_order(stages: Sequence[Stage], stage_id: str | None) -> int | None:
+    if not stage_id:
+        return None
+    stage = next((item for item in stages if item.id == stage_id), None)
+    return None if stage is None else stage.order
+
+
+def _is_forward(stages: Sequence[Stage], from_stage_id: str, to_stage_id: str | None) -> bool:
+    if to_stage_id is None:
+        return True
+    current = _stage_order(stages, from_stage_id)
+    target = _stage_order(stages, to_stage_id)
+    if current is None or target is None:
+        return True
+    return target > current
 
 
 def _condition_matches(handoff: dict[str, Any], edge: StageTransition) -> bool:

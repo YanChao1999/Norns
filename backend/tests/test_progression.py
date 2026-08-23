@@ -104,13 +104,51 @@ def test_matching_if_skips_parallel_defaults():
     assert [route.stage_id for route in split] == ["b", "c"]
 
 
+def test_resolve_routes_ignores_back_edges_when_splitting():
+    stages = [
+        SimpleNamespace(id="urd", order=1, lane=0),
+        SimpleNamespace(id="arch", order=2, lane=0),
+        SimpleNamespace(id="software", order=3, lane=0),
+        SimpleNamespace(id="test", order=3, lane=1),
+    ]
+    edges = [
+        _edge(from_stage_id="arch", to_stage_id="urd", order=0),
+        _edge(from_stage_id="arch", to_stage_id="software", order=1),
+        _edge(from_stage_id="arch", to_stage_id="test", order=2),
+    ]
+    routes = resolve_routes(stages, edges, "arch", "approve", {})
+    assert [route.stage_id for route in routes] == ["software", "test"]
+
+
+def test_join_stage_ignores_back_edges_to_earlier_columns():
+    stages = [
+        SimpleNamespace(id="urd", order=1, lane=0),
+        SimpleNamespace(id="software", order=3, lane=0),
+        SimpleNamespace(id="test", order=3, lane=1),
+        SimpleNamespace(id="qa", order=4, lane=0),
+    ]
+    edges = [
+        _edge(from_stage_id="software", to_stage_id="urd"),
+        _edge(from_stage_id="test", to_stage_id="urd"),
+        _edge(from_stage_id="software", to_stage_id="qa"),
+        _edge(from_stage_id="test", to_stage_id="qa"),
+    ]
+    assert is_join_stage(edges, "urd", stages) is False
+    assert is_join_stage(edges, "qa", stages) is True
+
+
 def test_join_stage_has_two_incoming_default_lines():
+    stages = [
+        SimpleNamespace(id="tests", order=2, lane=0),
+        SimpleNamespace(id="software", order=2, lane=1),
+        SimpleNamespace(id="integration", order=3, lane=0),
+    ]
     edges = [
         _edge(from_stage_id="tests", to_stage_id="integration"),
         _edge(from_stage_id="software", to_stage_id="integration"),
     ]
-    assert is_join_stage(edges, "integration") is True
-    assert is_join_stage(edges, "tests") is False
+    assert is_join_stage(edges, "integration", stages) is True
+    assert is_join_stage(edges, "tests", stages) is False
 
 
 def test_return_card_to_previous_stage():

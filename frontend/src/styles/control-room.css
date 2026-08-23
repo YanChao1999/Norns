@@ -190,30 +190,30 @@ a {
   font-size: 13px;
 }
 
-.board-columns {
-  display: flex;
+.board-grid {
+  display: grid;
   gap: 12px;
-  overflow-x: auto;
+  overflow: auto;
   padding-bottom: 12px;
   min-height: calc(100vh - 140px);
   align-items: stretch;
 }
 
-.board-column-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 300px;
-  max-width: 340px;
-  flex: 1;
+.board-grid-corner {
+  min-width: 0;
 }
 
-.board-column-stack.is-parallel {
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
-  border-radius: var(--radius);
-  padding: 8px;
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-  gap: 8px;
+.board-row-label {
+  display: flex;
+  align-items: start;
+  justify-content: end;
+  padding-top: 14px;
+  padding-right: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .board-column-banner {
@@ -228,14 +228,32 @@ a {
   text-transform: uppercase;
 }
 
+.board-column-banner.is-parallel,
 .board-column-parallel {
   color: var(--accent);
 }
 
-.board-column-stack .column {
+.board-cell {
+  min-width: 0;
+  display: flex;
+}
+
+.board-cell .column {
   min-width: 0;
   max-width: none;
   width: 100%;
+  flex: 1;
+}
+
+.board-cell.is-parallel .column,
+.board-empty-cell.is-parallel {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.board-empty-cell {
+  min-height: 0;
+  border: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: var(--radius);
 }
 
 .column {

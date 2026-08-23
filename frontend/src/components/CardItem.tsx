@@ -4,10 +4,11 @@ import { STATUS_LABEL } from '../status';
 interface Props {
   card: Card;
   isOpen: boolean;
+  isParallelLane?: boolean;
   onOpen: (card: Card) => void;
 }
 
-export function CardItem({ card, isOpen, onOpen }: Props) {
+export function CardItem({ card, isOpen, isParallelLane = false, onOpen }: Props) {
   return (
     <button type="button" className={`card status-${card.status}${isOpen ? ' is-open' : ''}`} onClick={() => onOpen(card)}>
       <div className="card-top">
@@ -21,7 +22,7 @@ export function CardItem({ card, isOpen, onOpen }: Props) {
       ) : null}
       {card.status === 'blocked' ? <div className="card-live">Blocked — run again when ready</div> : null}
       {card.status === 'waiting_join' ? <div className="card-live">Waiting for other parallel tracks</div> : null}
-      {card.parent_card_id ? <div className="card-live">Parallel track</div> : null}
+      {isParallelLane && card.parent_card_id ? <div className="card-live">Parallel track</div> : null}
     </button>
   );
 }
