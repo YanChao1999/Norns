@@ -14,7 +14,7 @@ class CardStatus(str, Enum):
 TRANSITIONS: dict[CardStatus, set[CardStatus]] = {
     CardStatus.IDLE: {CardStatus.RUNNING, CardStatus.BLOCKED},
     CardStatus.RUNNING: {CardStatus.WAITING_APPROVAL, CardStatus.BLOCKED, CardStatus.DONE},
-    CardStatus.WAITING_APPROVAL: {CardStatus.RUNNING, CardStatus.BLOCKED, CardStatus.DONE},
+    CardStatus.WAITING_APPROVAL: {CardStatus.RUNNING, CardStatus.BLOCKED, CardStatus.DONE, CardStatus.IDLE},
     CardStatus.BLOCKED: {CardStatus.RUNNING},
     CardStatus.DONE: set(),
 }
@@ -65,3 +65,11 @@ def auto_advance_card(card: object, next_stage_id: str | None = None) -> None:
 
 def reject_card_state(card: object) -> None:
     transition_card(card, CardStatus.BLOCKED)
+
+
+def return_card_to_stage(card: object, stage_id: str) -> None:
+    current = _current_status(card)
+    if current not in {CardStatus.WAITING_APPROVAL, CardStatus.BLOCKED}:
+        raise ValueError(f"Cannot return a card to a previous stage from {current.value}")
+    card.current_stage_id = stage_id
+    card.status = CardStatus.IDLE

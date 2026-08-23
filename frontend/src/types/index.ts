@@ -39,8 +39,21 @@ export interface BoardSummary {
   stages: Stage[];
 }
 
+export interface StageTransition {
+  id: string;
+  board_id: string;
+  from_stage_id: string;
+  to_stage_id: string | null;
+  event: 'approve' | 'reject' | 'auto';
+  condition_key: string;
+  condition_op: 'eq' | 'contains' | 'exists';
+  condition_value: string;
+  order: number;
+}
+
 export interface BoardDetail extends BoardSummary {
   cards: Card[];
+  transitions?: StageTransition[];
 }
 
 export interface AgentRun {

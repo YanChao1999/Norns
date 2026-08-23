@@ -69,7 +69,7 @@ export function Board({ boardId, onEditMachine }: Props) {
         ))}
       </div>
 
-      <CardDrawer card={liveCard} onClose={() => setSelectedCard(null)} />
+      <CardDrawer card={liveCard} board={board} onClose={() => setSelectedCard(null)} />
       <AgentConfigModal stage={selectedStage} onClose={() => setSelectedStage(null)} />
     </div>
   );

@@ -379,6 +379,25 @@ a {
   color: var(--danger);
 }
 
+.btn.is-recommended {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--waiting) 70%, transparent);
+}
+
+.agent-decision {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--elevated);
+}
+
+.agent-decision.is-approve {
+  border-color: color-mix(in srgb, var(--waiting) 55%, var(--line));
+}
+
+.agent-decision.is-reject {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+}
+
 .btn-ghost {
   background: transparent;
 }
@@ -709,13 +728,90 @@ details.disclosure summary {
   overflow: auto;
 }
 
+.machine-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.machine-toolbar h2 {
+  margin: 0;
+}
+
+.machine-graph {
+  position: relative;
+  min-height: 180px;
+}
+
+.machine-graph.is-drawing .machine-node,
+.machine-graph.is-drawing .machine-terminal.is-done {
+  outline: 1px dashed var(--accent);
+}
+
+.machine-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.machine-line,
+.machine-line-hit {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.machine-line-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.machine-line.is-reject {
+  stroke: var(--blocked);
+}
+
+.machine-line.is-if {
+  stroke-dasharray: 6 4;
+}
+
+.machine-line.is-selected {
+  stroke-width: 3;
+}
+
+.machine-node.is-drawing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .machine-flow {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 28px;
   overflow-x: auto;
-  padding: 8px 0 12px;
-  min-height: 140px;
+  padding: 28px 8px 48px;
+  min-height: 160px;
+  position: relative;
+  z-index: 1;
+}
+
+.machine-line-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.machine-line-list .btn {
+  width: 100%;
+  text-align: left;
 }
 
 .machine-step {

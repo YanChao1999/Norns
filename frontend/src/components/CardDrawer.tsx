@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { STATUS_LABEL } from '../status';
-import { AgentRun, Card } from '../types';
+import { AgentRun, BoardDetail, Card, StageTransition } from '../types';
 import { Dialog } from './Dialog';
 
 interface Props {
   card: Card | null;
+  board?: BoardDetail;
   onClose: () => void;
 }
 
@@ -15,6 +16,12 @@ interface Handoff {
   summary?: string;
   links?: string[];
   plantuml?: { svg?: string; source?: string };
+  recommendation?: string;
+  recommendation_reason?: string;
+}
+
+function agentRecommendation(value: unknown): 'approve' | 'reject' | null {
+  return value === 'approve' || value === 'reject' ? value : null;
 }
 
 function isFinalizedRun(run: AgentRun): boolean {
@@ -25,7 +32,7 @@ function isFinalizedRun(run: AgentRun): boolean {
   return Boolean(handoff.summary || handoff.plantuml?.svg || (Array.isArray(handoff.links) && handoff.links.length));
 }
 
-export function CardDrawer({ card, onClose }: Props) {
+export function CardDrawer({ card, board, onClose }: Props) {
   const queryClient = useQueryClient();
   const previousStatus = useRef<{ id?: string; status?: string }>({});
   const { data: runs = [] } = useQuery({
@@ -44,11 +51,13 @@ export function CardDrawer({ card, onClose }: Props) {
   }, [card?.id, card?.status, queryClient]);
 
   const approvalMutation = useMutation({
-    mutationFn: async (approved: boolean) =>
-      apiClient.post(`/cards/${card?.id}/approve`, {
+    mutationFn: async (approved: boolean) => {
+      const latestHandoff = (runs.find(isFinalizedRun)?.handoff ?? {}) as Handoff;
+      return apiClient.post(`/cards/${card?.id}/approve`, {
         approved,
-        comment: approved ? 'Approved in UI' : 'Rejected in UI'
-      }),
+        comment: gateComment(approved, agentRecommendation(latestHandoff.recommendation))
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
@@ -76,6 +85,11 @@ export function CardDrawer({ card, onClose }: Props) {
   const waiting = card.status === 'waiting_approval';
   const summary = handoff.summary || handoffRun?.model_output;
   const links = Array.isArray(handoff.links) ? handoff.links : [];
+  const recommendation = agentRecommendation(handoff.recommendation);
+  const recommendationReason = typeof handoff.recommendation_reason === 'string' ? handoff.recommendation_reason.trim() : '';
+  const outgoing = (board?.transitions ?? []).filter((edge) => edge.from_stage_id === card.current_stage_id);
+  const approveLines = outgoing.filter((edge) => edge.event === 'approve');
+  const rejectLines = outgoing.filter((edge) => edge.event === 'reject');
 
   return (
     <Dialog open onClose={onClose} labelledBy="card-drawer-title" variant="drawer">
@@ -108,6 +122,17 @@ export function CardDrawer({ card, onClose }: Props) {
             <p className="muted">No stage run yet. Run this station to produce a handoff.</p>
           </section>
         )}
+
+        {waiting && recommendation ? (
+          <section className={`agent-decision is-${recommendation}`}>
+            <h3>Agent recommendation</h3>
+            <p className="handoff">
+              {recommendation === 'approve' ? 'Approve' : 'Reject'}
+              {recommendationReason ? ` — ${recommendationReason}` : ''}
+            </p>
+            <p className="muted">Advisory only. A human still has to confirm before the card moves.</p>
+          </section>
+        ) : null}
 
         {links.length ? (
           <section>
@@ -157,11 +182,25 @@ export function CardDrawer({ card, onClose }: Props) {
         ) : null}
         {waiting ? (
           <>
-            <button type="button" className="btn btn-gate" onClick={() => approvalMutation.mutate(true)} disabled={approvalMutation.isPending}>
-              Approve · next stage
+            <button
+              type="button"
+              className={`btn btn-gate${recommendation === 'approve' ? ' is-recommended' : ''}`}
+              onClick={() => approvalMutation.mutate(true)}
+              disabled={approvalMutation.isPending}
+              title={recommendation === 'approve' ? 'Agent recommended approve' : 'Confirm approve'}
+            >
+              {approveLabel(approveLines, board)}
+              {recommendation === 'approve' ? ' · agent' : ''}
             </button>
-            <button type="button" className="btn btn-danger" onClick={() => approvalMutation.mutate(false)} disabled={approvalMutation.isPending}>
-              Reject
+            <button
+              type="button"
+              className={`btn btn-danger${recommendation === 'reject' ? ' is-recommended' : ''}`}
+              onClick={() => approvalMutation.mutate(false)}
+              disabled={approvalMutation.isPending}
+              title={recommendation === 'reject' ? 'Agent recommended reject' : 'Confirm reject'}
+            >
+              {rejectLabel(rejectLines, board)}
+              {recommendation === 'reject' ? ' · agent' : ''}
             </button>
           </>
         ) : null}
@@ -169,4 +208,36 @@ export function CardDrawer({ card, onClose }: Props) {
       </footer>
     </Dialog>
   );
+}
+
+function targetName(board: BoardDetail | undefined, stageId: string | null): string {
+  if (!stageId) {
+    return 'Done';
+  }
+  return board?.stages.find((stage) => stage.id === stageId)?.name ?? 'stage';
+}
+
+function approveLabel(lines: StageTransition[], board?: BoardDetail): string {
+  const fallback = lines.find((edge) => !edge.condition_key.trim()) ?? lines[0];
+  if (!fallback) {
+    return 'Approve · next stage';
+  }
+  return `Approve · ${targetName(board, fallback.to_stage_id)}`;
+}
+
+function rejectLabel(lines: StageTransition[], board?: BoardDetail): string {
+  const fallback = lines.find((edge) => !edge.condition_key.trim()) ?? lines[0];
+  if (!fallback) {
+    return 'Reject';
+  }
+  return `Reject · ${targetName(board, fallback.to_stage_id)}`;
+}
+
+function gateComment(approved: boolean, recommendation: 'approve' | 'reject' | null): string {
+  const action = approved ? 'Approved' : 'Rejected';
+  if (!recommendation) {
+    return `${action} in UI`;
+  }
+  const agreed = (approved && recommendation === 'approve') || (!approved && recommendation === 'reject');
+  return agreed ? `${action} in UI (confirmed agent ${recommendation})` : `${action} in UI (overrode agent ${recommendation})`;
 }

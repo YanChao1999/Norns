@@ -8,8 +8,8 @@ from sqlalchemy.orm import selectinload
 
 from ..models import Approval, Board, Card, Stage
 from .enqueue import EnqueueError, enqueue_stage_run
-from .progression import next_stage_after
-from .state_machine import CardStatus, advance_card, reject_card_state
+from .progression import resolve_route
+from .state_machine import CardStatus, advance_card, reject_card_state, return_card_to_stage
 
 
 async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
@@ -18,6 +18,7 @@ async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
         .where(Card.id == card_id)
         .options(
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.stages),
+            selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.transitions),
             selectinload(Card.runs),
         )
     )
@@ -31,9 +32,8 @@ async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
     return card
 
 
-async def approve_card(session: AsyncSession, card_id: str, actor: str, comment: str | None = None) -> Approval:
-    card = await _load_card_for_gate(session, card_id)
-    latest_run = next(
+def _latest_stage_run(card: Card):
+    return next(
         (
             run
             for run in sorted(card.runs, key=lambda item: (item.created_at or datetime.min, item.id), reverse=True)
@@ -41,6 +41,11 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
         ),
         None,
     )
+
+
+async def approve_card(session: AsyncSession, card_id: str, actor: str, comment: str | None = None) -> Approval:
+    card = await _load_card_for_gate(session, card_id)
+    latest_run = _latest_stage_run(card)
     if not latest_run:
         raise ValueError("No agent run available for approval")
 
@@ -54,14 +59,21 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
     )
     session.add(approval)
 
-    next_stage = next_stage_after(card.current_stage.board.stages, card.current_stage_id)
-    advance_card(card, next_stage.id if next_stage else None)
+    board = card.current_stage.board
+    route = resolve_route(
+        board.stages,
+        board.transitions,
+        card.current_stage_id,
+        "approve",
+        latest_run.handoff if isinstance(latest_run.handoff, dict) else {},
+    )
+    advance_card(card, route.stage_id)
     await session.commit()
     await session.refresh(approval)
 
-    if next_stage:
+    if route.stage_id:
         try:
-            await enqueue_stage_run(card.id, next_stage.id)
+            await enqueue_stage_run(card.id, route.stage_id)
         except EnqueueError:
             card.status = CardStatus.BLOCKED
             await session.commit()
@@ -71,14 +83,7 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
 
 async def reject_card(session: AsyncSession, card_id: str, actor: str, comment: str | None = None) -> Approval:
     card = await _load_card_for_gate(session, card_id)
-    latest_run = next(
-        (
-            run
-            for run in sorted(card.runs, key=lambda item: (item.created_at or datetime.min, item.id), reverse=True)
-            if run.stage_id == card.current_stage_id
-        ),
-        None,
-    )
+    latest_run = _latest_stage_run(card)
     if not latest_run:
         raise ValueError("No agent run available for approval")
 
@@ -91,7 +96,20 @@ async def reject_card(session: AsyncSession, card_id: str, actor: str, comment: 
         comment=comment,
     )
     session.add(approval)
-    reject_card_state(card)
+    board = card.current_stage.board
+    route = resolve_route(
+        board.stages,
+        board.transitions,
+        card.current_stage_id,
+        "reject",
+        latest_run.handoff if isinstance(latest_run.handoff, dict) else {},
+    )
+    if route.found and route.stage_id:
+        return_card_to_stage(card, route.stage_id)
+    elif route.found:
+        card.status = CardStatus.DONE
+    else:
+        reject_card_state(card)
     await session.commit()
     await session.refresh(approval)
     return approval

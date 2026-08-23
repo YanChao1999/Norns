@@ -147,6 +147,52 @@ def test_stage_machine_crud_and_guards():
     asyncio.run(engine.dispose())
 
 
+def test_transition_lines_can_go_back_and_branch_on_if():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post("/api/boards", json={"name": "Platform"}).json()
+        urd, verdandi, skuld = board["stages"]
+        lines = board["transitions"]
+        assert len(lines) == 3
+        assert lines[0]["from_stage_id"] == urd["id"]
+        assert lines[0]["to_stage_id"] == verdandi["id"]
+
+        back = client.post(
+            f"/api/boards/{board['id']}/transitions",
+            json={"from_stage_id": verdandi["id"], "to_stage_id": urd["id"], "event": "reject"},
+        )
+        assert back.status_code == 201
+        assert back.json()["event"] == "reject"
+        assert back.json()["to_stage_id"] == urd["id"]
+
+        branched = client.post(
+            f"/api/boards/{board['id']}/transitions",
+            json={
+                "from_stage_id": skuld["id"],
+                "to_stage_id": verdandi["id"],
+                "event": "approve",
+                "condition_key": "risk",
+                "condition_op": "eq",
+                "condition_value": "high",
+                "order": 0,
+            },
+        )
+        assert branched.status_code == 201
+        updated = client.put(
+            f"/api/transitions/{branched.json()['id']}",
+            json={"condition_op": "contains", "condition_value": "high"},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["condition_op"] == "contains"
+
+        deleted = client.delete(f"/api/transitions/{back.json()['id']}")
+        assert deleted.status_code == 204
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 async def _create_tables(engine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

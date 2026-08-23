@@ -60,6 +60,11 @@ export function AgentConfigModal({ stage, onClose }: Props) {
           onChange={(event) => setForm((current) => ({ ...current, system_prompt: event.target.value }))}
         />
       </label>
+      {stage.require_approval ? (
+        <p className="muted">
+          Human gate is on. The runner asks this agent for DECISION: approve or reject. A human still confirms in the card drawer.
+        </p>
+      ) : null}
 
       <label className="field">
         Model

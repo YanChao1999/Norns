@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 import backend.app.orchestrator.enqueue as enqueue
 from backend.app.config import get_settings
 from backend.app.database import Base
-from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
+from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage, StageTransition
 from backend.app.orchestrator.gates import approve_card, reject_card
 from backend.app.orchestrator.state_machine import CardStatus
 
@@ -127,5 +127,55 @@ async def test_gate_logic_creates_approval_and_moves_card(monkeypatch):
         assert rejection.approved is False
         assert card.current_stage_id == stage_b.id
         assert card.status == CardStatus.BLOCKED
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reject_line_returns_card_to_previous_stage():
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        stage_a = Stage(name="Todo", order=1, require_approval=True)
+        stage_a.agent_config = AgentConfig(system_prompt="todo", model="gpt-4o", temperature=0.7, tool_allowlist=[])
+        stage_b = Stage(name="Doing", order=2, require_approval=True)
+        stage_b.agent_config = AgentConfig(system_prompt="doing", model="gpt-4o", temperature=0.7, tool_allowlist=[])
+        board.stages = [stage_a, stage_b]
+        card = Card(title="Card", body="Body", status=CardStatus.WAITING_APPROVAL, current_stage=stage_b)
+        board.cards = [card]
+        run = AgentRun(
+            card=card,
+            stage=stage_b,
+            inputs={},
+            tool_calls=[],
+            model_output="done",
+            handoff={"summary": "handoff"},
+            status="completed",
+            completed_at=datetime.utcnow(),
+        )
+        session.add_all([board, run])
+        await session.flush()
+        session.add(
+            StageTransition(
+                board_id=board.id,
+                from_stage_id=stage_b.id,
+                to_stage_id=stage_a.id,
+                event="reject",
+            )
+        )
+        await session.commit()
+
+        await reject_card(session, card.id, "admin", "send back")
+        await session.refresh(card)
+        assert card.current_stage_id == stage_a.id
+        assert card.status == CardStatus.IDLE
 
     await engine.dispose()

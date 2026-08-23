@@ -7,6 +7,7 @@ from backend.app.orchestrator.state_machine import (
     advance_card,
     auto_advance_card,
     reject_card_state,
+    return_card_to_stage,
     start_card_run,
     wait_for_approval,
 )
@@ -43,6 +44,13 @@ def test_reject_keeps_stage_and_blocks_card():
     reject_card_state(card)
     assert card.current_stage_id == "stage-a"
     assert card.status == CardStatus.BLOCKED
+
+
+def test_return_from_gate_sets_idle_on_previous_stage():
+    card = SimpleNamespace(status=CardStatus.WAITING_APPROVAL, current_stage_id="stage-b")
+    return_card_to_stage(card, "stage-a")
+    assert card.current_stage_id == "stage-a"
+    assert card.status == CardStatus.IDLE
 
 
 def test_invalid_transition_raises():

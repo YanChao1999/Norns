@@ -14,10 +14,18 @@ from ..config import get_settings
 from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
-from ..orchestrator.progression import next_stage_after
+from ..orchestrator.progression import resolve_route
 from ..orchestrator.state_machine import CardStatus, auto_advance_card, start_card_run, wait_for_approval
 from ..plantuml.renderer import render_plantuml
 from ..tools.registry import RuntimeTool, create_default_registry
+
+DECISION_INSTRUCTION = (
+    "This stage has a human gate. You may recommend approve or reject, but you cannot move the card. "
+    "A human must confirm before any line fires. End your response with exactly two lines:\n"
+    "DECISION: approve\n"
+    "REASON: <one sentence>\n"
+    "Use DECISION: reject when the work should go back or stop."
+)
 
 
 async def run_stage(card_id: str, stage_id: str, run_id: str) -> None:
@@ -33,6 +41,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         .options(
             selectinload(Card.runs),
             selectinload(Card.board).selectinload(Board.stages).selectinload(Stage.agent_config),
+            selectinload(Card.board).selectinload(Board.transitions),
             selectinload(Card.current_stage),
         )
     )
@@ -65,7 +74,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     allowlist = stage.agent_config.tool_allowlist if stage.agent_config else []
     runtime_tools = registry.get_runtime_tools(allowlist, connectors)
 
-    next_stage = None
+    next_stage_id = None
     try:
         model_output, tool_calls, handoff = await _execute_agent(
             settings=settings,
@@ -79,10 +88,18 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         run.status = "completed"
         run.completed_at = datetime.utcnow()
         if stage.require_approval:
+            # Agent recommendation is advisory only; never skip the human gate.
             wait_for_approval(card)
         else:
-            next_stage = next_stage_after(card.board.stages, stage.id)
-            auto_advance_card(card, next_stage.id if next_stage else None)
+            route = resolve_route(
+                card.board.stages,
+                card.board.transitions,
+                stage.id,
+                "auto",
+                handoff if isinstance(handoff, dict) else {},
+            )
+            next_stage_id = route.stage_id
+            auto_advance_card(card, next_stage_id)
         await session.commit()
     except Exception as exc:
         run.status = "failed"
@@ -93,9 +110,9 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         await session.commit()
         raise
 
-    if next_stage:
+    if next_stage_id:
         try:
-            await enqueue_stage_run(card.id, next_stage.id)
+            await enqueue_stage_run(card.id, next_stage_id)
         except EnqueueError:
             card.status = CardStatus.BLOCKED
             await session.commit()
@@ -129,16 +146,16 @@ async def _execute_agent(
     tool_map = {tool.name: tool for tool in runtime_tools}
 
     client = AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+    user_content = (
+        f"Card title: {card.title}\n\n"
+        f"Card body:\n{card.body}\n\n"
+        f"Previous handoff:\n{json.dumps(_latest_handoff(card), indent=2)}"
+    )
+    if stage.require_approval:
+        user_content = f"{user_content}\n\n{DECISION_INSTRUCTION}"
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": (
-                f"Card title: {card.title}\n\n"
-                f"Card body:\n{card.body}\n\n"
-                f"Previous handoff:\n{json.dumps(_latest_handoff(card), indent=2)}"
-            ),
-        },
+        {"role": "user", "content": user_content},
     ]
 
     response = await client.chat.completions.create(
@@ -176,13 +193,53 @@ async def _execute_agent(
     return content, executed_tool_calls, handoff
 
 
+def parse_agent_recommendation(model_output: str) -> tuple[str | None, str | None]:
+    text = model_output or ""
+    decision: str | None = None
+    reason: str | None = None
+
+    marked = re.search(
+        r"(?im)^\s*(?:decision|recommendation|recommend)\s*[:=]\s*(approve|reject)\b",
+        text,
+    )
+    if marked:
+        decision = marked.group(1).lower()
+
+    reason_match = re.search(r"(?im)^\s*(?:reason|because)\s*[:=]\s*(.+)$", text)
+    if reason_match:
+        reason = reason_match.group(1).strip().strip("*").strip() or None
+
+    if decision is None:
+        for blob in re.finditer(r"\{[^{}]+\}", text):
+            try:
+                data = json.loads(blob.group(0))
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            value = data.get("recommendation") or data.get("decision")
+            if isinstance(value, str) and value.lower() in {"approve", "reject"}:
+                decision = value.lower()
+                json_reason = data.get("recommendation_reason") or data.get("reason")
+                if isinstance(json_reason, str) and json_reason.strip():
+                    reason = json_reason.strip()
+                break
+
+    return decision, reason
+
+
 async def _build_handoff(model_output: str) -> dict[str, Any]:
     plantuml_source = _extract_plantuml(model_output)
-    payload = {
+    payload: dict[str, Any] = {
         "summary": model_output[:1200],
         "links": re.findall(r"https?://\S+", model_output),
         "attachment_metadata": [],
     }
+    decision, reason = parse_agent_recommendation(model_output)
+    if decision:
+        payload["recommendation"] = decision
+        if reason:
+            payload["recommendation_reason"] = reason
     if plantuml_source:
         payload["plantuml"] = {"source": plantuml_source, "svg": await render_plantuml(plantuml_source)}
     return payload

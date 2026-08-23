@@ -21,7 +21,7 @@ export function Column({ boardId, stage, cards, isFirst, openCardId, onOpenCard,
       <header className="column-head">
         <div>
           <h2>{stage.name}</h2>
-          <p>{stage.require_approval ? 'Human gate' : 'Auto-advance'}</p>
+          <p>{stage.require_approval ? 'Human gate · agent may recommend' : 'Auto-advance'}</p>
         </div>
         <div className="column-actions">
           <span className="column-count">{cards.length}</span>
