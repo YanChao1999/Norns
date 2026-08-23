@@ -252,9 +252,7 @@ async def test_approve_forks_parallel_tracks(monkeypatch):
 
         await approve_card(session, card.id, "admin", "split")
         await session.refresh(card)
-        children = list(
-            (await session.execute(select(Card).where(Card.parent_card_id == card.id))).scalars().all()
-        )
+        children = list((await session.execute(select(Card).where(Card.parent_card_id == card.id))).scalars().all())
         assert card.current_stage_id == tests.id
         assert card.status == CardStatus.RUNNING
         assert len(children) == 1
@@ -308,9 +306,7 @@ async def test_join_waits_then_merges_parallel_tracks(monkeypatch):
             [
                 _completed_run(parent, tests, "tests green"),
                 _completed_run(child, software, "software ready"),
-                StageTransition(
-                    board_id=board.id, from_stage_id=tests.id, to_stage_id=integration.id, event="approve"
-                ),
+                StageTransition(board_id=board.id, from_stage_id=tests.id, to_stage_id=integration.id, event="approve"),
                 StageTransition(
                     board_id=board.id, from_stage_id=software.id, to_stage_id=integration.id, event="approve"
                 ),

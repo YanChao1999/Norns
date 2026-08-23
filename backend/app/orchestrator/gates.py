@@ -20,7 +20,10 @@ async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
         .options(
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.stages),
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.transitions),
-            selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.cards).selectinload(Card.runs),
+            selectinload(Card.current_stage)
+            .selectinload(Stage.board)
+            .selectinload(Board.cards)
+            .selectinload(Card.runs),
             selectinload(Card.runs),
         )
     )
