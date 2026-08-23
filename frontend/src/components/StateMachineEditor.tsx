@@ -137,10 +137,7 @@ function lineCaption(edge: StageTransition, stages: Stage[]): string {
   if (!edge.condition_key.trim()) {
     return `${when} → ${target}`;
   }
-  const clause =
-    edge.condition_op === 'exists'
-      ? `if ${edge.condition_key} exists`
-      : `if ${edge.condition_key} ${edge.condition_op} ${edge.condition_value}`;
+  const clause = edge.condition_op === 'exists' ? `if ${edge.condition_key} exists` : `if ${edge.condition_key} ${edge.condition_op} ${edge.condition_value}`;
   return `${when} · ${clause} → ${target}`;
 }
 
@@ -312,13 +309,7 @@ export function StateMachineEditor({ boardId }: Props) {
     return <div className="muted">Loading state machine…</div>;
   }
 
-  const busy =
-    createStage.isPending ||
-    updateStage.isPending ||
-    deleteStage.isPending ||
-    createLine.isPending ||
-    updateLine.isPending ||
-    deleteLine.isPending;
+  const busy = createStage.isPending || updateStage.isPending || deleteStage.isPending || createLine.isPending || updateLine.isPending || deleteLine.isPending;
   const error = createStage.error || updateStage.error || deleteStage.error || createLine.error || updateLine.error || deleteLine.error;
 
   return (
@@ -326,9 +317,7 @@ export function StateMachineEditor({ boardId }: Props) {
       <div className="board-head">
         <div>
           <h1>State machine · {board.name}</h1>
-          <p>
-            Draw lines between stages. Columns go left to right. Same column, different row means those stages run in parallel.
-          </p>
+          <p>Draw lines between stages. Columns go left to right. Same column, different row means those stages run in parallel.</p>
         </div>
       </div>
 
@@ -428,11 +417,7 @@ export function StateMachineEditor({ boardId }: Props) {
               ))}
               {columnRanks.map((order, index) =>
                 parallelColumns.has(order) ? (
-                  <div
-                    key={`col-band-${order}`}
-                    className="machine-col-band"
-                    style={{ gridColumn: index + 3, gridRow: `2 / ${rowCount + 2}` }}
-                  />
+                  <div key={`col-band-${order}`} className="machine-col-band" style={{ gridColumn: index + 3, gridRow: `2 / ${rowCount + 2}` }} />
                 ) : null
               )}
               <div className="machine-terminal" style={{ gridColumn: 2, gridRow: 2 }}>
@@ -518,8 +503,7 @@ export function StateMachineEditor({ boardId }: Props) {
             />
           ) : (
             <p className="muted">
-              Select a stage, then Draw line and click another stage. Put two stages in the same column and different rows to
-              run them in parallel.
+              Select a stage, then Draw line and click another stage. Put two stages in the same column and different rows to run them in parallel.
             </p>
           )}
         </aside>
@@ -643,32 +627,13 @@ function StageInspector({
       <div className="machine-place">
         <label className="field">
           Column
-          <input
-            className="input"
-            type="number"
-            min={1}
-            value={column}
-            disabled={busy}
-            onChange={(event) => setColumn(Number(event.target.value) || 1)}
-          />
+          <input className="input" type="number" min={1} value={column} disabled={busy} onChange={(event) => setColumn(Number(event.target.value) || 1)} />
         </label>
         <label className="field">
           Row
-          <input
-            className="input"
-            type="number"
-            min={1}
-            value={row}
-            disabled={busy}
-            onChange={(event) => setRow(Number(event.target.value) || 1)}
-          />
+          <input className="input" type="number" min={1} value={row} disabled={busy} onChange={(event) => setRow(Number(event.target.value) || 1)} />
         </label>
-        <button
-          type="button"
-          className="btn"
-          disabled={busy || (column === stage.order && row === stageRow(stage))}
-          onClick={() => onPlace(column, row)}
-        >
+        <button type="button" className="btn" disabled={busy || (column === stage.order && row === stageRow(stage))} onClick={() => onPlace(column, row)}>
           Place
         </button>
       </div>
@@ -711,8 +676,8 @@ function StageInspector({
         />
       </label>
       <p className="muted">
-        Adds a new row in the next column and a second default line. Stages that share a column and differ by row run at the
-        same time. To join later, draw a line from each row into the same later column.
+        Adds a new row in the next column and a second default line. Stages that share a column and differ by row run at the same time. To join later, draw a
+        line from each row into the same later column.
       </p>
       <div className="machine-inspector-actions">
         <button
@@ -816,13 +781,7 @@ function LineInspector({
       </label>
       <label className="field">
         If (handoff field, optional)
-        <input
-          className="input"
-          value={key}
-          onChange={(change) => setKey(change.target.value)}
-          placeholder="recommendation or risk"
-          disabled={busy}
-        />
+        <input className="input" value={key} onChange={(change) => setKey(change.target.value)} placeholder="recommendation or risk" disabled={busy} />
       </label>
       <label className="field">
         Operator
@@ -837,9 +796,8 @@ function LineInspector({
         <input className="input" value={value} onChange={(change) => setValue(change.target.value)} placeholder="high" disabled={busy || op === 'exists'} />
       </label>
       <p className="muted">
-        Empty If is the default line. Several default lines from the same stage split into the next column&apos;s rows. Lines
-        from two or more stages into one stage wait for every track, then merge. A matching If is exclusive and skips the
-        defaults.
+        Empty If is the default line. Several default lines from the same stage split into the next column&apos;s rows. Lines from two or more stages into one
+        stage wait for every track, then merge. A matching If is exclusive and skips the defaults.
       </p>
       <div className="machine-inspector-actions">
         <button type="submit" className="btn btn-primary" disabled={busy}>

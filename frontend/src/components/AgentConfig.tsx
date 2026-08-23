@@ -61,9 +61,7 @@ export function AgentConfigModal({ stage, onClose }: Props) {
         />
       </label>
       {stage.require_approval ? (
-        <p className="muted">
-          Human gate is on. The runner asks this agent for DECISION: approve or reject. A human still confirms in the card drawer.
-        </p>
+        <p className="muted">Human gate is on. The runner asks this agent for DECISION: approve or reject. A human still confirms in the card drawer.</p>
       ) : null}
 
       <label className="field">

@@ -33,8 +33,7 @@ export function Board({ boardId, onEditMachine }: Props) {
   const { data: board, isLoading } = useQuery({
     queryKey: ['board', boardId],
     queryFn: () => apiClient.get<BoardDetail>(`/boards/${boardId}`),
-    refetchInterval: (query) =>
-      query.state.data?.cards.some((card) => card.status === 'running' || card.status === 'waiting_join') ? 2000 : false
+    refetchInterval: (query) => (query.state.data?.cards.some((card) => card.status === 'running' || card.status === 'waiting_join') ? 2000 : false)
   });
 
   const cardsByStage = useMemo(() => {
@@ -62,9 +61,7 @@ export function Board({ boardId, onEditMachine }: Props) {
       <div className="board-head">
         <div>
           <h1>{board.name}</h1>
-          <p>
-            {board.description || 'Each column is a workflow step. Same column, different row means those stages run in parallel.'}
-          </p>
+          <p>{board.description || 'Each column is a workflow step. Same column, different row means those stages run in parallel.'}</p>
         </div>
         {onEditMachine ? (
           <button type="button" className="btn" onClick={onEditMachine}>
@@ -114,11 +111,7 @@ export function Board({ boardId, onEditMachine }: Props) {
               );
             }
             return (
-              <div
-                key={stage.id}
-                className={`board-cell${parallel ? ' is-parallel' : ''}`}
-                style={{ gridColumn: columnIndex + 2, gridRow: row + 1 }}
-              >
+              <div key={stage.id} className={`board-cell${parallel ? ' is-parallel' : ''}`} style={{ gridColumn: columnIndex + 2, gridRow: row + 1 }}>
                 <Column
                   boardId={boardId}
                   stage={stage}
