@@ -66,18 +66,22 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Build wheel and sdist
         run: |
-          pip install build
+          pip install build twine
           python -m build
+          python -m twine check dist/*
+          python scripts/check-dist.py
       - name: Install package
         run: pip install dist/*.whl
       - name: Check CLI and local server
         run: |
           norns --help
+          norns --version
+          python -c "import norns, pathlib; root = pathlib.Path(norns.__file__).with_name('web'); assert (root / 'index.html').is_file(), root"
           norns init --home "$RUNNER_TEMP/norns-home"
           norns run --home "$RUNNER_TEMP/norns-home" --no-window &
           server_pid=$!
           for _ in $(seq 1 50); do
-            if curl -fsS "http://127.0.0.1:8765/api/health"; then
+            if curl -fsS "http://127.0.0.1:8765/api/health" && curl -fsS "http://127.0.0.1:8765/" | grep -q 'id="root"'; then
               kill "$server_pid"
               wait "$server_pid" || true
               exit 0

@@ -76,6 +76,16 @@ norns init          # prints an admin password; also stored in ~/.norns/config.t
 norns run           # http://127.0.0.1:8765
 ```
 
+After this is published (see [PUBLISH.md](PUBLISH.md)):
+
+```bash
+uv tool install norns-ide
+# or
+python3 -m pip install norns-ide
+```
+
+The PyPI name is `norns-ide` because [`norns`](https://pypi.org/project/norns/) is already taken. The command is still `norns`.
+
 From GitHub after this branch is merged:
 
 ```bash
@@ -83,8 +93,6 @@ uv tool install git+https://github.com/YanChao1999/Norns.git
 # or
 python3 -m pip install git+https://github.com/YanChao1999/Norns.git
 ```
-
-PyPI (`pip install norns` / `uv tool install norns`) is not published yet. See [ROADMAP.md](ROADMAP.md).
 
 `norns run --no-window` starts the server without opening a browser (used by CI). Data lives under `~/.norns` unless you pass `--home` or set `NORNS_HOME`. Use `norns init --force` to replace config and delete `norns.db` (no schema back-compat before a published 0.0.1). Set `openai.api_key` in `~/.norns/config.toml` when you want a real model instead of a placeholder handoff.
 

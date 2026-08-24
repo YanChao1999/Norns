@@ -6,8 +6,8 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 ## Now
 
-- [ ] **pip / uv install** — `uv tool install .` / `pip install .` (and later `pip install norns`) so first run is not uv + two npm trees. In progress on `feat/pip-uv-install`.
-- [ ] **Publish 0.0.1 to PyPI** — so `uv tool install norns` and `pip install norns` work without a git checkout. Needs a PyPI token / trusted publisher.
+- [x] **pip / uv install** — `uv tool install .` / `pip install .` on `feat/pip-uv-install`. CI checks the wheel, sdist, `twine`, packaged UI, and `/api/health` plus the Control Room HTML.
+- [ ] **Publish 0.0.1 to PyPI as `norns-ide`** — `norns` is taken on PyPI. Follow [PUBLISH.md](PUBLISH.md): TestPyPI first (`workflow_dispatch`), then PyPI (trusted publisher / GitHub Release). Install with `pip install norns-ide` or `uv tool install norns-ide`.
 
 ## First-use Settings (users cannot finish setup in the UI)
 
