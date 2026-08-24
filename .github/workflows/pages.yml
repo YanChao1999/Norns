@@ -2,7 +2,7 @@ name: GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, cursor/v0.0.1-first-production]
     paths:
       - "docs/**"
       - ".github/workflows/pages.yml"
