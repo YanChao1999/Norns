@@ -6,6 +6,7 @@ export interface Handoff {
   plantuml?: { svg?: string; source?: string };
   recommendation?: string;
   recommendation_reason?: string;
+  [key: string]: unknown;
 }
 
 export function approveLabel(lines: StageTransition[], board: BoardDetail | undefined, handoff: Handoff): string {
