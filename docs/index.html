@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="./control-room.css" />
     <style>
       .site-wrap {
-        max-width: 1180px;
+        max-width: 1280px;
         margin: 0 auto;
         padding: 0 20px;
       }
@@ -105,20 +105,28 @@
         border-radius: var(--radius);
         overflow: hidden;
         background: var(--bg);
-        min-height: 620px;
+        min-height: 680px;
+      }
+
+      .app-frame .topbar {
+        flex-wrap: nowrap;
       }
 
       .app-frame .workspace {
-        min-height: 540px;
+        min-height: 600px;
       }
 
       .app-frame .board-grid {
-        min-height: 460px;
+        min-height: 520px;
       }
 
       .app-frame .drawer-backdrop,
       .app-frame .drawer {
         position: absolute;
+      }
+
+      .app-frame .drawer {
+        height: 100%;
       }
 
       .app-frame [hidden] {
@@ -261,9 +269,6 @@
                 <span class="wait-count" id="wait-count">1 waiting</span>
                 <button type="button" class="chip is-active" data-view="board">Board</button>
                 <button type="button" class="chip" data-view="machine">Machine</button>
-                <button type="button" class="chip" disabled>Settings</button>
-                <span class="user-name">admin</span>
-                <button type="button" class="btn btn-ghost" disabled>Log out</button>
               </div>
             </header>
 
@@ -293,7 +298,7 @@
                       </div>
                       <div class="column-actions">
                         <span class="column-count" id="count-urd">1</span>
-                        <button type="button" class="btn btn-icon" disabled>Agent</button>
+                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
                       </div>
                     </header>
                     <button type="button" class="add-toggle" id="add-toggle">Add card to this station</button>
@@ -318,7 +323,7 @@
                       </div>
                       <div class="column-actions">
                         <span class="column-count">1</span>
-                        <button type="button" class="btn btn-icon" disabled>Agent</button>
+                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
                       </div>
                     </header>
                     <div id="verdandi-cards">
@@ -341,7 +346,7 @@
                       </div>
                       <div class="column-actions">
                         <span class="column-count">0</span>
-                        <button type="button" class="btn btn-icon" disabled>Agent</button>
+                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
                       </div>
                     </header>
                     <div class="empty-col">No cards in this station.</div>
