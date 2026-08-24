@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Norns · v0.0.1 coming</title>
+    <meta
+      name="description"
+      content="Norns is a Control Room where each board column runs an isolated LLM agent and a human gate. First production-ready cut: v0.0.1."
+    />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1117;
+        --surface: #161b22;
+        --elevated: #1c2330;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --line: #30363d;
+        --accent: #3dd6c6;
+        --waiting: #f0b429;
+        --done: #3fb950;
+        --focus: #58a6ff;
+        --radius: 8px;
+        --font: 'IBM Plex Sans', system-ui, sans-serif;
+        --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 52px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand {
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      nav {
+        display: flex;
+        gap: 16px;
+        font-size: 14px;
+      }
+
+      nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        color: var(--text);
+      }
+
+      .pill {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--waiting);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+
+      h1 {
+        font-size: 40px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        margin: 12px 0 16px;
+      }
+
+      h2 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 12px;
+      }
+
+      p.lede {
+        font-size: 18px;
+        color: var(--muted);
+        max-width: 42rem;
+        margin: 0 0 28px;
+      }
+
+      .hero {
+        padding: 56px 0 40px;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        background: var(--elevated);
+        color: var(--text);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #042f2e;
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 40px 0 8px;
+      }
+
+      .col {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        min-height: 168px;
+      }
+
+      .col p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .col h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+
+      .tag {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 8px;
+      }
+
+      .tag.wait {
+        color: var(--waiting);
+      }
+
+      .tag.done {
+        color: var(--done);
+      }
+
+      section {
+        padding: 8px 0 40px;
+        border-top: 1px solid var(--line);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      pre {
+        margin: 0;
+        overflow: auto;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 20px 0 40px;
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      @media (max-width: 720px) {
+        h1 {
+          font-size: 30px;
+        }
+
+        .board,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        nav {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <a class="brand" href="#top">Norns</a>
+        <nav>
+          <a href="#in">In 0.0.1</a>
+          <a href="#install">Install</a>
+          <a href="https://github.com/YanChao1999/Norns">GitHub</a>
+        </nav>
+      </header>
+
+      <main id="top">
+        <div class="hero">
+          <span class="pill">Coming · v0.0.1</span>
+          <h1>Control Room for staged agent work.</h1>
+          <p class="lede">
+            Each board column is an isolated LLM agent. Cards move only after a human gate, unless you mark a stage auto-advance. First production-ready cut is 0.0.1 — not published yet.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="#install">Install from source</a>
+            <a class="btn" href="https://github.com/YanChao1999/Norns/tree/cursor/v0.0.1-first-production">View 0.0.1 branch</a>
+          </div>
+          <div class="board" aria-hidden="true">
+            <article class="col">
+              <div class="tag">Urd</div>
+              <h3>Analyze</h3>
+              <p>Human gate. Agent writes a handoff and may recommend approve or reject. A person still confirms.</p>
+            </article>
+            <article class="col">
+              <div class="tag wait">Verdandi</div>
+              <h3>Refine</h3>
+              <p>Next stage sees only the approved handoff. Parallel lines split a card into tracks, then join.</p>
+            </article>
+            <article class="col">
+              <div class="tag done">Skuld</div>
+              <h3>Deliver</h3>
+              <p>Final station. Draw the machine in the Control Room: stages, If lines, human gate or auto-advance.</p>
+            </article>
+          </div>
+        </div>
+
+        <section id="in">
+          <div class="grid">
+            <div>
+              <h2>Shipping in v0.0.1</h2>
+              <ul>
+                <li>Local Electron IDE: <code>norns init</code> / <code>norns run</code></li>
+                <li>Visual state machine, including parallel split and join</li>
+                <li>Human approve/reject gates; agent recommendation is advisory</li>
+                <li>Fresh schema only — <code>norns init --force</code> wipes the local database</li>
+                <li>Production refuses <code>admin</code>/<code>admin</code> and requires secure cookies</li>
+                <li>Compose backend/worker image is baked at build time</li>
+              </ul>
+            </div>
+            <div>
+              <h2>Not in this cut</h2>
+              <ul>
+                <li>Schema migrations — Alembic starts when 0.0.1 is published</li>
+                <li>Multi-user accounts, teams, or RBAC</li>
+                <li>A hosted Control Room. This is a local IDE, not SaaS</li>
+                <li>Polarion field writes still need hardening if you use that connector</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="install">
+          <h2>Try the coming cut</h2>
+          <p class="lede">From the 0.0.1 branch. Init prints a generated admin password. Existing <code>~/.norns</code> does not upgrade in place.</p>
+          <pre>git clone https://github.com/YanChao1999/Norns.git
+cd Norns
+git checkout cursor/v0.0.1-first-production
+uv sync
+cd frontend && npm install && npm run build && cd ..
+bash scripts/stage-ui.sh
+npm install --prefix norns/electron
+uv run norns init --force
+uv run norns run</pre>
+        </section>
+      </main>
+
+      <footer>
+        <span>Norns · Urd, Verdandi, Skuld</span>
+        <a href="https://github.com/YanChao1999/Norns">github.com/YanChao1999/Norns</a>
+      </footer>
+    </div>
+  </body>
+</html>

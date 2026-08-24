@@ -2,6 +2,8 @@
 
 Norns is a Kanban orchestration system where each board column runs an isolated LLM agent and a human approval gate controls progression to the next stage. The name comes from the Norse Norns: Urd, Verdandi, and Skuld.
 
+Coming **v0.0.1** site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/)
+
 ## Features
 - Local Electron IDE (`norns init` / `norns run`) — TypeScript UI in Chromium, config under `~/.norns`
 - Visual state machine editor for board stages, order, parallel tracks, and human-gate vs auto-advance
