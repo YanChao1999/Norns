@@ -5,9 +5,10 @@ import { apiClient } from './api/client';
 import { Board } from './components/Board';
 import { LoginForm } from './components/LoginForm';
 import { Settings } from './components/Settings';
+import { StateMachineEditor } from './components/StateMachineEditor';
 import { BoardDetail, BoardSummary } from './types';
 
-type View = 'board' | 'settings';
+type View = 'board' | 'machine' | 'settings';
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -89,7 +90,7 @@ export default function App() {
             <button
               key={board.id}
               type="button"
-              className={`chip${board.id === selectedBoardId && view === 'board' ? ' is-active' : ''}`}
+              className={`chip${board.id === selectedBoardId && view !== 'settings' ? ' is-active' : ''}`}
               onClick={() => {
                 setSelectedBoardId(board.id);
                 setView('board');
@@ -101,6 +102,9 @@ export default function App() {
         </nav>
         <div className="topbar-meta">
           <span className={`wait-count${waitingCount ? '' : ' is-clear'}`}>{waitingCount} waiting</span>
+          <button type="button" className={`chip${view === 'machine' ? ' is-active' : ''}`} onClick={() => setView('machine')} disabled={!selectedBoardId}>
+            Machine
+          </button>
           <button type="button" className={`chip${view === 'settings' ? ' is-active' : ''}`} onClick={() => setView('settings')}>
             Settings
           </button>
@@ -119,11 +123,17 @@ export default function App() {
               setView('board');
             }}
           />
+        ) : view === 'machine' ? (
+          selectedBoardId ? (
+            <StateMachineEditor boardId={selectedBoardId} />
+          ) : (
+            <div className="empty-board">Create a board in Settings before editing the state machine.</div>
+          )
         ) : (
           <>
             {isLoading ? <div className="muted">Loading boards…</div> : null}
             {!boards.length && !isLoading ? <div className="empty-board">Create a board in Settings to start orchestration.</div> : null}
-            {selectedBoardId ? <Board boardId={selectedBoardId} /> : null}
+            {selectedBoardId ? <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} /> : null}
           </>
         )}
       </main>

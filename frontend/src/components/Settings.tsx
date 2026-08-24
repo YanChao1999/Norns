@@ -36,8 +36,10 @@ export function Settings({ onCreated }: Props) {
   return (
     <div className="settings">
       <div className="board-head">
-        <h1>Settings</h1>
-        <p>Boards and connector health live here so the board canvas stays clear.</p>
+        <div>
+          <h1>Settings</h1>
+          <p>Boards and connector health live here so the board canvas stays clear.</p>
+        </div>
       </div>
 
       <form className="panel" onSubmit={onSubmit}>

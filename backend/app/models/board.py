@@ -23,6 +23,10 @@ class Board(Base):
         cascade="all, delete-orphan",
         order_by="Stage.order",
     )
+    transitions: Mapped[list[StageTransition]] = relationship(
+        back_populates="board",
+        cascade="all, delete-orphan",
+    )
     cards: Mapped[list[Card]] = relationship(back_populates="board", cascade="all, delete-orphan")
 
 
@@ -33,6 +37,7 @@ class Stage(Base):
     board_id: Mapped[str] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     order: Mapped[int] = mapped_column(Integer, nullable=False)
+    lane: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     require_approval: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     board: Mapped[Board] = relationship(back_populates="stages")
@@ -55,6 +60,24 @@ class AgentConfig(Base):
     tool_allowlist: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
 
     stage: Mapped[Stage] = relationship(back_populates="agent_config")
+
+
+class StageTransition(Base):
+    __tablename__ = "stage_transitions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    board_id: Mapped[str] = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    from_stage_id: Mapped[str] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"), nullable=False)
+    to_stage_id: Mapped[str | None] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"), nullable=True)
+    event: Mapped[str] = mapped_column(String(32), default="approve", nullable=False)
+    condition_key: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    condition_op: Mapped[str] = mapped_column(String(32), default="eq", nullable=False)
+    condition_value: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    board: Mapped[Board] = relationship(back_populates="transitions")
+    from_stage: Mapped[Stage] = relationship(foreign_keys=[from_stage_id])
+    to_stage: Mapped[Stage | None] = relationship(foreign_keys=[to_stage_id])
 
 
 from .card import Card  # noqa: E402

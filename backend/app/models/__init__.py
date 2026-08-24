@@ -1,4 +1,4 @@
-from .board import AgentConfig, Board, Stage
+from .board import AgentConfig, Board, Stage, StageTransition
 from .card import AgentRun, Approval, Card
 from .connector import Connector, ConnectorType
 
@@ -11,4 +11,5 @@ __all__ = [
     "Connector",
     "ConnectorType",
     "Stage",
+    "StageTransition",
 ]

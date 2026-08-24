@@ -72,6 +72,7 @@ class CardRead(BaseModel):
     body: str
     external_id: str | None = None
     current_stage_id: str | None = None
+    parent_card_id: str | None = None
     status: CardStatus
     created_at: Any
     updated_at: Any

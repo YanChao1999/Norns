@@ -4,9 +4,11 @@ Norns is a Kanban orchestration system where each board column runs an isolated 
 
 ## Features
 - Local Electron IDE (`norns init` / `norns run`) — TypeScript UI in Chromium, config under `~/.norns`
+- Visual state machine editor for board stages, order, parallel tracks, and human-gate vs auto-advance
 - FastAPI + async SQLAlchemy backend with PostgreSQL-ready configuration
 - ARQ/Redis queue for isolated stage execution (optional; local IDE runs stages in-process)
 - React + TypeScript Kanban UI with approval-aware movement
+- Stage agents may recommend **approve** or **reject**; a human still confirms at the gate
 - Encrypted connector secrets at rest with Fernet
 - OpenAI-compatible stage agents with explicit per-stage tool allowlists
 - PlantUML-first documentation and handoff previews
@@ -22,10 +24,10 @@ rectangle Board {
   rectangle "Stage 3\n(Skuld agent)" as S3
 }
 Human --> S1 : create / approve
-S1 --> Human : handoff
-Human --> S2 : approve advance
-S2 --> Human : handoff
-Human --> S3 : approve advance
+S1 --> Human : handoff + recommend approve/reject
+Human --> S2 : confirm approve or reject
+S2 --> Human : handoff + recommend approve/reject
+Human --> S3 : confirm approve or reject
 @enduml
 ```
 
@@ -45,16 +47,17 @@ Frontend -> Backend : POST /api/cards/{id}/approve
 Backend -> Redis : enqueue next stage
 Redis -> Worker : run_stage_task
 Worker -> Agent : run_stage(card, stage, run)
-Agent -> Backend : persist AgentRun + handoff
+Agent -> Backend : persist AgentRun + handoff (recommendation is advisory)
 Backend -> Frontend : waiting_approval state
+Human -> Frontend : confirm approve or reject
 @enduml
 ```
 
 ## Architecture Overview
-- **Boards / Stages** define the workflow and per-column agent configuration.
+- **Boards / Stages** define the workflow and per-column agent configuration. Edit stages and **transition lines** in the Control Room **Machine** view. Two default lines from one stage **split** the card into parallel tracks (for example unit tests and software). Lines from two or more stages into one stage **join** those tracks when every track has finished.
 - **Cards** carry the work item body and current stage pointer.
 - **Agent runs** are isolated; no chat memory is shared between stages.
-- **Handoffs** from stage _N_ are the only structured context for stage _N+1_.
+- **Handoffs** from stage _N_ are the only structured context for stage _N+1_. On a human gate, the agent may set `recommendation` to `approve` or `reject`; the card still waits until a person confirms. Draw an If on `recommendation` if that suggestion should choose the next stage after confirmation.
 - **Connectors** are Python-library backed only (PyGithub, jira, polarion); raw credentials are never exposed to agents.
 
 ## Install and run (local IDE)

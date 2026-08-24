@@ -1,4 +1,4 @@
-export type CardStatus = 'idle' | 'running' | 'waiting_approval' | 'blocked' | 'done';
+export type CardStatus = 'idle' | 'running' | 'waiting_approval' | 'waiting_join' | 'blocked' | 'done';
 export type ConnectorType = 'github' | 'jira' | 'polarion';
 
 export interface AgentConfig {
@@ -14,6 +14,7 @@ export interface Stage {
   board_id: string;
   name: string;
   order: number;
+  lane?: number;
   require_approval: boolean;
   agent_config?: AgentConfig | null;
 }
@@ -25,6 +26,7 @@ export interface Card {
   body: string;
   external_id?: string | null;
   current_stage_id?: string | null;
+  parent_card_id?: string | null;
   status: CardStatus;
   created_at?: string;
   updated_at?: string;
@@ -39,8 +41,21 @@ export interface BoardSummary {
   stages: Stage[];
 }
 
+export interface StageTransition {
+  id: string;
+  board_id: string;
+  from_stage_id: string;
+  to_stage_id: string | null;
+  event: 'approve' | 'reject' | 'auto';
+  condition_key: string;
+  condition_op: 'eq' | 'contains' | 'exists';
+  condition_value: string;
+  order: number;
+}
+
 export interface BoardDetail extends BoardSummary {
   cards: Card[];
+  transitions?: StageTransition[];
 }
 
 export interface AgentRun {
@@ -62,4 +77,9 @@ export interface Connector {
   connector_type: ConnectorType;
   is_active: boolean;
   config_keys: string[];
+}
+
+export interface CardStatusMachine {
+  states: CardStatus[];
+  transitions: Partial<Record<CardStatus, CardStatus[]>>;
 }

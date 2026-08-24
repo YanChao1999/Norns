@@ -10,18 +10,23 @@ interface Props {
   stage: Stage;
   cards: Card[];
   isFirst: boolean;
+  row?: number;
+  parallel?: boolean;
   openCardId: string | null;
   onOpenCard: (card: Card) => void;
   onOpenConfig: (stage: Stage) => void;
 }
 
-export function Column({ boardId, stage, cards, isFirst, openCardId, onOpenCard, onOpenConfig }: Props) {
+export function Column({ boardId, stage, cards, isFirst, row = 1, parallel = false, openCardId, onOpenCard, onOpenConfig }: Props) {
   return (
-    <section className="column">
+    <section className={`column${parallel ? ' is-parallel-row' : ''}`}>
       <header className="column-head">
         <div>
           <h2>{stage.name}</h2>
-          <p>{stage.require_approval ? 'Human gate' : 'Auto-advance'}</p>
+          <p>
+            {parallel ? `Row ${row} · parallel · ` : ''}
+            {stage.require_approval ? 'Human gate' : 'Auto-advance'}
+          </p>
         </div>
         <div className="column-actions">
           <span className="column-count">{cards.length}</span>
@@ -32,7 +37,7 @@ export function Column({ boardId, stage, cards, isFirst, openCardId, onOpenCard,
       </header>
       {isFirst ? <AddCard boardId={boardId} /> : null}
       {cards.map((card) => (
-        <CardItem key={card.id} card={card} isOpen={openCardId === card.id} onOpen={onOpenCard} />
+        <CardItem key={card.id} card={card} isOpen={openCardId === card.id} isParallelLane={parallel} onOpen={onOpenCard} />
       ))}
       {!cards.length ? <div className="empty-col">No cards in this station.</div> : null}
     </section>

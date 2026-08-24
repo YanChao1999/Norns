@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..database import get_session
-from ..models import AgentConfig, Board, Stage
+from ..models import AgentConfig, Board, Card, Stage, StageTransition
+from ..orchestrator.state_machine import TRANSITIONS, CardStatus
 from .auth import get_current_user
 
 router = APIRouter(tags=["boards"], dependencies=[Depends(get_current_user)])
@@ -32,6 +33,7 @@ class StageRead(BaseModel):
     board_id: str
     name: str
     order: int
+    lane: int = 0
     require_approval: bool
     agent_config: AgentConfigRead | None = None
 
@@ -45,7 +47,42 @@ class CardRead(BaseModel):
     body: str
     external_id: str | None = None
     current_stage_id: str | None = None
+    parent_card_id: str | None = None
     status: str
+
+
+class TransitionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    board_id: str
+    from_stage_id: str
+    to_stage_id: str | None = None
+    event: str
+    condition_key: str
+    condition_op: str
+    condition_value: str
+    order: int
+
+
+class TransitionCreate(BaseModel):
+    from_stage_id: str
+    to_stage_id: str | None = None
+    event: str = "approve"
+    condition_key: str = ""
+    condition_op: str = "eq"
+    condition_value: str = ""
+    order: int = 0
+
+
+class TransitionUpdate(BaseModel):
+    from_stage_id: str | None = None
+    to_stage_id: str | None = None
+    event: str | None = None
+    condition_key: str | None = None
+    condition_op: str | None = None
+    condition_value: str | None = None
+    order: int | None = None
 
 
 class BoardRead(BaseModel):
@@ -61,6 +98,7 @@ class BoardRead(BaseModel):
 
 class BoardDetail(BoardRead):
     cards: list[CardRead] = []
+    transitions: list[TransitionRead] = []
 
 
 class BoardCreate(BaseModel):
@@ -76,8 +114,14 @@ class BoardUpdate(BaseModel):
 class StageCreate(BaseModel):
     name: str = Field(min_length=1)
     order: int | None = None
+    lane: int | None = None
+    parallel: bool = False
+    from_stage_id: str | None = None
     require_approval: bool = True
-    system_prompt: str = "You are the stage agent. Produce a concise handoff for the next stage."
+    system_prompt: str = (
+        "You are the stage agent. Produce a concise handoff. "
+        "If this stage has a human gate, recommend DECISION: approve or reject; a human must confirm."
+    )
     model: str = "gpt-4o"
     temperature: float = 0.7
     tool_allowlist: list[str] = []
@@ -86,11 +130,25 @@ class StageCreate(BaseModel):
 class StageUpdate(BaseModel):
     name: str | None = None
     order: int | None = None
+    lane: int | None = None
     require_approval: bool | None = None
     system_prompt: str | None = None
     model: str | None = None
     temperature: float | None = None
     tool_allowlist: list[str] | None = None
+
+
+class StageReorder(BaseModel):
+    stage_ids: list[str] = Field(min_length=1)
+
+
+class CardStatusMachine(BaseModel):
+    states: list[str]
+    transitions: dict[str, list[str]]
+
+
+VALID_EVENTS = {"approve", "reject", "auto"}
+VALID_OPS = {"eq", "contains", "exists"}
 
 
 @router.get("/boards", response_model=list[BoardRead])
@@ -110,7 +168,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=1,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Urd. Analyze the incoming card and produce a clear structured handoff.",
+                system_prompt="You are Urd. Analyze the incoming card and produce a clear structured handoff. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -121,7 +179,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=2,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Verdandi. Refine the active work using the approved handoff only.",
+                system_prompt="You are Verdandi. Refine the active work using the approved handoff only. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -132,7 +190,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=3,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Skuld. Produce the final delivery handoff and highlight risks.",
+                system_prompt="You are Skuld. Produce the final delivery handoff and highlight risks. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -140,6 +198,8 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
         ),
     ]
     session.add(board)
+    await session.flush()
+    _seed_linear_transitions(session, board)
     await session.commit()
     await session.refresh(board)
     return await _get_board_or_404(session, board.id)
@@ -168,6 +228,16 @@ async def delete_board(board_id: str, session: Annotated[AsyncSession, Depends(g
     await session.commit()
 
 
+@router.get("/orchestration/card-status", response_model=CardStatusMachine)
+async def card_status_machine() -> CardStatusMachine:
+    return CardStatusMachine(
+        states=[status.value for status in CardStatus],
+        transitions={
+            source.value: sorted(target.value for target in targets) for source, targets in TRANSITIONS.items()
+        },
+    )
+
+
 @router.get("/boards/{board_id}/stages", response_model=list[StageRead])
 async def list_stages(board_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> list[Stage]:
     await _get_board_or_404(session, board_id)
@@ -181,13 +251,28 @@ async def list_stages(board_id: str, session: Annotated[AsyncSession, Depends(ge
 async def create_stage(
     board_id: str, payload: StageCreate, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> Stage:
-    await _get_board_or_404(session, board_id)
-    order = payload.order
-    if order is None:
-        result = await session.execute(select(func.max(Stage.order)).where(Stage.board_id == board_id))
-        order = (result.scalar() or 0) + 1
+    board = await _get_board_or_404(session, board_id)
+    if payload.parallel:
+        if not payload.from_stage_id:
+            raise HTTPException(status_code=400, detail="from_stage_id is required to add a parallel stage")
+        source = next((stage for stage in board.stages if stage.id == payload.from_stage_id), None)
+        if not source:
+            raise HTTPException(status_code=400, detail="from_stage_id is not on this board")
+        order, lane = _parallel_placement(board, source)
+    else:
+        order = payload.order
+        if order is None:
+            result = await session.execute(select(func.max(Stage.order)).where(Stage.board_id == board_id))
+            order = (result.scalar() or 0) + 1
+        lane = payload.lane if payload.lane is not None else 0
 
-    stage = Stage(board_id=board_id, name=payload.name, order=order, require_approval=payload.require_approval)
+    stage = Stage(
+        board_id=board_id,
+        name=payload.name,
+        order=order,
+        lane=lane,
+        require_approval=payload.require_approval,
+    )
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,
         model=payload.model,
@@ -195,6 +280,18 @@ async def create_stage(
         tool_allowlist=payload.tool_allowlist,
     )
     session.add(stage)
+    await session.flush()
+    if payload.parallel and payload.from_stage_id:
+        session.add(
+            StageTransition(
+                board_id=board_id,
+                from_stage_id=payload.from_stage_id,
+                to_stage_id=stage.id,
+                event="approve" if source.require_approval else "auto",
+            )
+        )
+    else:
+        await _attach_new_stage_transition(session, board_id, stage)
     await session.commit()
     result = await session.execute(select(Stage).where(Stage.id == stage.id).options(selectinload(Stage.agent_config)))
     return result.scalar_one()
@@ -235,26 +332,228 @@ async def update_stage(
     return result.scalar_one()
 
 
+@router.put("/boards/{board_id}/stages/reorder", response_model=list[StageRead])
+async def reorder_stages(
+    board_id: str, payload: StageReorder, session: Annotated[AsyncSession, Depends(get_session)]
+) -> list[Stage]:
+    await _get_board_or_404(session, board_id)
+    result = await session.execute(
+        select(Stage).where(Stage.board_id == board_id).options(selectinload(Stage.agent_config))
+    )
+    stages = list(result.scalars().unique().all())
+    existing_ids = {stage.id for stage in stages}
+    requested = payload.stage_ids
+    if len(requested) != len(set(requested)) or set(requested) != existing_ids:
+        raise HTTPException(status_code=400, detail="stage_ids must list every stage on this board exactly once")
+    order_by_id = {stage_id: index for index, stage_id in enumerate(requested, start=1)}
+    for stage in stages:
+        stage.order = order_by_id[stage.id]
+    await session.commit()
+    result = await session.execute(
+        select(Stage).where(Stage.board_id == board_id).options(selectinload(Stage.agent_config)).order_by(Stage.order)
+    )
+    return list(result.scalars().all())
+
+
 @router.delete("/stages/{stage_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_stage(stage_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> None:
     result = await session.execute(select(Stage).where(Stage.id == stage_id))
     stage = result.scalar_one_or_none()
     if not stage:
         raise HTTPException(status_code=404, detail="Stage not found")
+    remaining = await session.scalar(select(func.count()).select_from(Stage).where(Stage.board_id == stage.board_id))
+    if remaining is not None and remaining <= 1:
+        raise HTTPException(status_code=409, detail="A board must keep at least one stage")
+    cards_here = await session.scalar(select(func.count()).select_from(Card).where(Card.current_stage_id == stage_id))
+    if cards_here:
+        raise HTTPException(status_code=409, detail="Cannot delete a stage that still has cards")
     await session.delete(stage)
     await session.commit()
 
 
+@router.post("/boards/{board_id}/transitions", response_model=TransitionRead, status_code=status.HTTP_201_CREATED)
+async def create_transition(
+    board_id: str, payload: TransitionCreate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> StageTransition:
+    board = await _get_board_or_404(session, board_id)
+    _validate_transition_payload(
+        board,
+        payload.from_stage_id,
+        payload.to_stage_id,
+        payload.event,
+        payload.condition_op,
+        payload.condition_key,
+        payload.condition_value,
+    )
+    edge = StageTransition(
+        board_id=board_id,
+        from_stage_id=payload.from_stage_id,
+        to_stage_id=payload.to_stage_id,
+        event=payload.event,
+        condition_key=payload.condition_key,
+        condition_op=payload.condition_op,
+        condition_value=payload.condition_value,
+        order=payload.order,
+    )
+    session.add(edge)
+    await session.commit()
+    await session.refresh(edge)
+    return edge
+
+
+@router.put("/transitions/{transition_id}", response_model=TransitionRead)
+async def update_transition(
+    transition_id: str, payload: TransitionUpdate, session: Annotated[AsyncSession, Depends(get_session)]
+) -> StageTransition:
+    result = await session.execute(select(StageTransition).where(StageTransition.id == transition_id))
+    edge = result.scalar_one_or_none()
+    if not edge:
+        raise HTTPException(status_code=404, detail="Transition not found")
+    board = await _get_board_or_404(session, edge.board_id)
+    updates = payload.model_dump(exclude_unset=True)
+    from_id = updates.get("from_stage_id", edge.from_stage_id)
+    to_id = updates.get("to_stage_id", edge.to_stage_id)
+    event = updates.get("event", edge.event)
+    op = updates.get("condition_op", edge.condition_op)
+    key = updates.get("condition_key", edge.condition_key)
+    value = updates.get("condition_value", edge.condition_value)
+    _validate_transition_payload(board, from_id, to_id, event, op, key, value)
+    for field, value in updates.items():
+        setattr(edge, field, value)
+    await session.commit()
+    await session.refresh(edge)
+    return edge
+
+
+@router.delete("/transitions/{transition_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_transition(transition_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> None:
+    result = await session.execute(select(StageTransition).where(StageTransition.id == transition_id))
+    edge = result.scalar_one_or_none()
+    if not edge:
+        raise HTTPException(status_code=404, detail="Transition not found")
+    await session.delete(edge)
+    await session.commit()
+
+
 async def _get_board_or_404(session: AsyncSession, board_id: str) -> Board:
+    board = await _load_board(session, board_id)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    if board.stages and not board.transitions:
+        _seed_linear_transitions(session, board)
+        await session.commit()
+        session.expire(board, ["transitions"])
+        board = await _load_board(session, board_id)
+        if not board:
+            raise HTTPException(status_code=404, detail="Board not found")
+    return board
+
+
+async def _load_board(session: AsyncSession, board_id: str) -> Board | None:
     result = await session.execute(
         select(Board)
         .where(Board.id == board_id)
         .options(
             selectinload(Board.stages).selectinload(Stage.agent_config),
             selectinload(Board.cards),
+            selectinload(Board.transitions),
         )
     )
-    board = result.scalar_one_or_none()
-    if not board:
-        raise HTTPException(status_code=404, detail="Board not found")
-    return board
+    return result.scalar_one_or_none()
+
+
+def _parallel_placement(board: Board, source: Stage) -> tuple[int, int]:
+    outgoing_ids = {
+        edge.to_stage_id
+        for edge in board.transitions
+        if edge.from_stage_id == source.id
+        and edge.to_stage_id
+        and not edge.condition_key.strip()
+        and edge.event in {"approve", "auto"}
+    }
+    targets = [stage for stage in board.stages if stage.id in outgoing_ids]
+    forward = [stage for stage in targets if stage.order > source.order]
+    order = min(stage.order for stage in forward) if forward else source.order + 1
+    lanes = [stage.lane for stage in board.stages if stage.order == order]
+    lane = (max(lanes) + 1) if lanes else 0
+    return order, lane
+
+
+def _seed_linear_transitions(session: AsyncSession, board: Board) -> None:
+    ordered = sorted(board.stages, key=lambda stage: stage.order)
+    for index, stage in enumerate(ordered):
+        nxt = ordered[index + 1] if index + 1 < len(ordered) else None
+        session.add(
+            StageTransition(
+                board_id=board.id,
+                from_stage_id=stage.id,
+                to_stage_id=nxt.id if nxt else None,
+                event="approve" if stage.require_approval else "auto",
+                order=index,
+            )
+        )
+
+
+async def _attach_new_stage_transition(session: AsyncSession, board_id: str, stage: Stage) -> None:
+    previous = (
+        (
+            await session.execute(
+                select(Stage).where(Stage.board_id == board_id, Stage.id != stage.id).order_by(Stage.order.desc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    event = "approve" if stage.require_approval else "auto"
+    if previous:
+        result = await session.execute(
+            select(StageTransition).where(
+                StageTransition.board_id == board_id,
+                StageTransition.from_stage_id == previous.id,
+                StageTransition.to_stage_id.is_(None),
+                StageTransition.event.in_(("approve", "auto")),
+            )
+        )
+        retargeted = False
+        for edge in result.scalars():
+            edge.to_stage_id = stage.id
+            retargeted = True
+        if not retargeted:
+            session.add(
+                StageTransition(
+                    board_id=board_id,
+                    from_stage_id=previous.id,
+                    to_stage_id=stage.id,
+                    event="approve" if previous.require_approval else "auto",
+                )
+            )
+    session.add(
+        StageTransition(
+            board_id=board_id,
+            from_stage_id=stage.id,
+            to_stage_id=None,
+            event=event,
+        )
+    )
+
+
+def _validate_transition_payload(
+    board: Board,
+    from_stage_id: str,
+    to_stage_id: str | None,
+    event: str,
+    condition_op: str,
+    condition_key: str = "",
+    condition_value: str = "",
+) -> None:
+    stage_ids = {stage.id for stage in board.stages}
+    if from_stage_id not in stage_ids:
+        raise HTTPException(status_code=400, detail="from_stage_id is not on this board")
+    if to_stage_id is not None and to_stage_id not in stage_ids:
+        raise HTTPException(status_code=400, detail="to_stage_id is not on this board")
+    if event not in VALID_EVENTS:
+        raise HTTPException(status_code=400, detail="event must be approve, reject, or auto")
+    if condition_op not in VALID_OPS:
+        raise HTTPException(status_code=400, detail="condition_op must be eq, contains, or exists")
+    if condition_op == "contains" and condition_key.strip() and not condition_value.strip():
+        raise HTTPException(status_code=400, detail="contains conditions need a non-empty value")

@@ -19,6 +19,7 @@ class Card(Base):
     body: Mapped[str] = mapped_column(Text, default="", nullable=False)
     external_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     current_stage_id: Mapped[str | None] = mapped_column(ForeignKey("stages.id", ondelete="SET NULL"), nullable=True)
+    parent_card_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     status: Mapped[CardStatus] = mapped_column(
         Enum(CardStatus, name="card_status", native_enum=False),
         default=CardStatus.IDLE,

@@ -83,6 +83,150 @@ def test_card_update_cannot_bypass_gates():
     asyncio.run(engine.dispose())
 
 
+def test_stage_machine_crud_and_guards():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post("/api/boards", json={"name": "Platform"}).json()
+        board_id = board["id"]
+        original_ids = [stage["id"] for stage in board["stages"]]
+
+        machine = client.get("/api/orchestration/card-status")
+        assert machine.status_code == 200
+        body = machine.json()
+        assert "idle" in body["states"]
+        assert "waiting_join" in body["states"]
+        assert "running" in body["transitions"]["idle"]
+
+        created = client.post(
+            f"/api/boards/{board_id}/stages",
+            json={"name": "Review", "require_approval": False},
+        )
+        assert created.status_code == 201
+        review_id = created.json()["id"]
+        assert created.json()["require_approval"] is False
+
+        reordered = client.put(
+            f"/api/boards/{board_id}/stages/reorder",
+            json={"stage_ids": [review_id, *original_ids]},
+        )
+        assert reordered.status_code == 200
+        assert [stage["id"] for stage in reordered.json()] == [review_id, *original_ids]
+        assert [stage["order"] for stage in reordered.json()] == [1, 2, 3, 4]
+
+        bad_reorder = client.put(f"/api/boards/{board_id}/stages/reorder", json={"stage_ids": original_ids})
+        assert bad_reorder.status_code == 400
+
+        renamed = client.put(f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True})
+        assert renamed.status_code == 200
+        assert renamed.json()["name"] == "QA"
+        assert renamed.json()["require_approval"] is True
+
+        removed = client.delete(f"/api/stages/{review_id}")
+        assert removed.status_code == 204
+        leftover = client.get(f"/api/boards/{board_id}/stages").json()
+        assert [stage["id"] for stage in leftover] == original_ids
+
+        card = client.post(f"/api/boards/{board_id}/cards", json={"title": "Work"}).json()
+        blocked = client.delete(f"/api/stages/{card['current_stage_id']}")
+        assert blocked.status_code == 409
+        assert "still has cards" in blocked.json()["detail"]
+
+        empty_stages = [stage for stage in leftover if stage["id"] != card["current_stage_id"]]
+        for stage in empty_stages:
+            assert client.delete(f"/api/stages/{stage['id']}").status_code == 204
+        assert client.delete(f"/api/stages/{card['current_stage_id']}").status_code == 409
+
+        empty_board = client.post("/api/boards", json={"name": "Empty machine"}).json()
+        for stage in empty_board["stages"][1:]:
+            assert client.delete(f"/api/stages/{stage['id']}").status_code == 204
+        last_empty = client.delete(f"/api/stages/{empty_board['stages'][0]['id']}")
+        assert last_empty.status_code == 409
+        assert "at least one stage" in last_empty.json()["detail"]
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_transition_lines_can_go_back_and_branch_on_if():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post("/api/boards", json={"name": "Platform"}).json()
+        urd, verdandi, skuld = board["stages"]
+        lines = board["transitions"]
+        assert len(lines) == 3
+        assert lines[0]["from_stage_id"] == urd["id"]
+        assert lines[0]["to_stage_id"] == verdandi["id"]
+
+        back = client.post(
+            f"/api/boards/{board['id']}/transitions",
+            json={"from_stage_id": verdandi["id"], "to_stage_id": urd["id"], "event": "reject"},
+        )
+        assert back.status_code == 201
+        assert back.json()["event"] == "reject"
+        assert back.json()["to_stage_id"] == urd["id"]
+
+        branched = client.post(
+            f"/api/boards/{board['id']}/transitions",
+            json={
+                "from_stage_id": skuld["id"],
+                "to_stage_id": verdandi["id"],
+                "event": "approve",
+                "condition_key": "risk",
+                "condition_op": "eq",
+                "condition_value": "high",
+                "order": 0,
+            },
+        )
+        assert branched.status_code == 201
+        updated = client.put(
+            f"/api/transitions/{branched.json()['id']}",
+            json={"condition_op": "contains", "condition_value": "high"},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["condition_op"] == "contains"
+
+        empty_contains = client.post(
+            f"/api/boards/{board['id']}/transitions",
+            json={
+                "from_stage_id": skuld["id"],
+                "to_stage_id": urd["id"],
+                "event": "approve",
+                "condition_key": "summary",
+                "condition_op": "contains",
+                "condition_value": "",
+            },
+        )
+        assert empty_contains.status_code == 400
+
+        deleted = client.delete(f"/api/transitions/{back.json()['id']}")
+        assert deleted.status_code == 204
+
+        parallel = client.post(
+            f"/api/boards/{board['id']}/stages",
+            json={"name": "Unit tests", "parallel": True, "from_stage_id": urd["id"]},
+        )
+        assert parallel.status_code == 201
+        assert parallel.json()["order"] == verdandi["order"]
+        assert parallel.json()["lane"] >= 1
+        refreshed = client.get(f"/api/boards/{board['id']}").json()
+        split_lines = [
+            edge
+            for edge in refreshed["transitions"]
+            if edge["from_stage_id"] == urd["id"] and edge["event"] == "approve" and not edge["condition_key"]
+        ]
+        assert len(split_lines) >= 2
+
+        for edge in refreshed["transitions"]:
+            assert client.delete(f"/api/transitions/{edge['id']}").status_code == 204
+        restored = client.get(f"/api/boards/{board['id']}").json()
+        assert len(restored["transitions"]) == len(restored["stages"])
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 async def _create_tables(engine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
