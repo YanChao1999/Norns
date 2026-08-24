@@ -25,13 +25,21 @@ def sqlite_url(db_path: Path) -> str:
     return "sqlite+aiosqlite:///" + db_path.resolve().as_posix()
 
 
-def init_home(home: Path, *, force: bool = False) -> Path:
+def init_home(home: Path, *, force: bool = False) -> tuple[Path, str]:
     home.mkdir(parents=True, exist_ok=True)
     path = config_path(home)
     if path.exists() and not force:
-        raise FileExistsError(f"Norns is already initialized at {home}. Use --force to replace config.toml.")
+        raise FileExistsError(
+            f"Norns is already initialized at {home}. Use --force to replace config.toml and norns.db."
+        )
+    if force:
+        for name in ("norns.db", "norns.db-wal", "norns.db-shm"):
+            db_path = home / name
+            if db_path.exists():
+                db_path.unlink()
     secret_key = secrets.token_urlsafe(32)
     encryption_key = Fernet.generate_key().decode()
+    admin_password = secrets.token_urlsafe(12)
     path.write_text(
         "\n".join(
             [
@@ -42,7 +50,7 @@ def init_home(home: Path, *, force: bool = False) -> Path:
                 "",
                 "[auth]",
                 'admin_username = "admin"',
-                'admin_password = "admin"',
+                f'admin_password = "{admin_password}"',
                 f'secret_key = "{secret_key}"',
                 f'encryption_key = "{encryption_key}"',
                 "",
@@ -60,7 +68,7 @@ def init_home(home: Path, *, force: bool = False) -> Path:
         encoding="utf-8",
     )
     path.chmod(0o600)
-    return path
+    return path, admin_password
 
 
 def load_config(home: Path) -> dict:
@@ -90,6 +98,7 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     os.environ["OPENAI_BASE_URL"] = str(openai.get("base_url", "https://api.openai.com/v1"))
     os.environ["DEFAULT_MODEL"] = str(openai.get("default_model", "gpt-4o"))
     os.environ["SESSION_COOKIE_SECURE"] = "false"
+    os.environ["NORNS_ENV"] = "local"
     os.environ["CORS_ORIGINS"] = f"http://{resolved_host}:{resolved_port}"
     os.environ["NORNS_HOME"] = str(home)
     return {"host": resolved_host, "port": resolved_port, "home": home}

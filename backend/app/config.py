@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from cryptography.fernet import Fernet
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     kroki_url: str = Field(default="", alias="KROKI_URL")
     auto_create_tables: bool = True
     queue_backend: str = Field(default="redis", alias="QUEUE_BACKEND")
+    environment: str = Field(default="local", alias="NORNS_ENV")
+    stale_run_seconds: int = Field(default=1800, alias="STALE_RUN_SECONDS")
 
     @field_validator("encryption_key")
     @classmethod
@@ -52,6 +54,16 @@ class Settings(BaseSettings):
         if not value.strip() or value.strip() == "changeme":
             raise ValueError("SECRET_KEY is required and must not be the default 'changeme'")
         return value
+
+    @model_validator(mode="after")
+    def production_must_not_use_demo_secrets(self) -> Settings:
+        if self.environment.strip().lower() != "production":
+            return self
+        if self.admin_password == "admin":
+            raise ValueError("ADMIN_PASSWORD must not be 'admin' when NORNS_ENV=production")
+        if not self.session_cookie_secure:
+            raise ValueError("SESSION_COOKIE_SECURE must be true when NORNS_ENV=production")
+        return self
 
     @property
     def resolved_encryption_key(self) -> str:

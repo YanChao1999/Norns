@@ -218,11 +218,6 @@ def test_transition_lines_can_go_back_and_branch_on_if():
         ]
         assert len(split_lines) >= 2
 
-        for edge in refreshed["transitions"]:
-            assert client.delete(f"/api/transitions/{edge['id']}").status_code == 204
-        restored = client.get(f"/api/boards/{board['id']}").json()
-        assert len(restored["transitions"]) == len(restored["stages"])
-
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
 

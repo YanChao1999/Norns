@@ -439,13 +439,6 @@ async def _get_board_or_404(session: AsyncSession, board_id: str) -> Board:
     board = await _load_board(session, board_id)
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
-    if board.stages and not board.transitions:
-        _seed_linear_transitions(session, board)
-        await session.commit()
-        session.expire(board, ["transitions"])
-        board = await _load_board(session, board_id)
-        if not board:
-            raise HTTPException(status_code=404, detail="Board not found")
     return board
 
 

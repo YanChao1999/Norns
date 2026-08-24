@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..models import AgentRun, Card, Stage, StageTransition
 from .progression import Route, incoming_join_sources, is_join_stage, target_stage_ids
@@ -90,6 +91,20 @@ def _fork_card(
 
 def _root_id(card: Card) -> str:
     return card.parent_card_id or card.id
+
+
+async def load_family_cards(session: AsyncSession, card: Card) -> list[Card]:
+    """Load the root card and its parallel tracks, with runs, not the whole board."""
+    root = _root_id(card)
+    result = await session.execute(
+        select(Card)
+        .where(Card.board_id == card.board_id, or_(Card.id == root, Card.parent_card_id == root))
+        .options(selectinload(Card.runs))
+    )
+    found = list(result.scalars().unique().all())
+    if not any(item.id == card.id for item in found):
+        found.append(card)
+    return found
 
 
 def _family(card: Card, extras: list[Card]) -> list[Card]:

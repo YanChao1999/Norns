@@ -15,7 +15,7 @@ from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.progression import resolve_routes
-from ..orchestrator.split import apply_forward_routes
+from ..orchestrator.split import apply_forward_routes, load_family_cards
 from ..orchestrator.state_machine import CardStatus, start_card_run, wait_for_approval
 from ..plantuml.renderer import render_plantuml
 from ..tools.registry import RuntimeTool, create_default_registry
@@ -43,7 +43,6 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             selectinload(Card.runs),
             selectinload(Card.board).selectinload(Board.stages).selectinload(Stage.agent_config),
             selectinload(Card.board).selectinload(Board.transitions),
-            selectinload(Card.board).selectinload(Board.cards).selectinload(Card.runs),
             selectinload(Card.current_stage),
         )
     )
@@ -108,7 +107,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
                 handoff if isinstance(handoff, dict) else {},
                 auto=True,
                 transitions=list(card.board.transitions),
-                board_cards=list(card.board.cards),
+                board_cards=await load_family_cards(session, card),
             )
         await session.commit()
     except Exception as exc:

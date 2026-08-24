@@ -1,7 +1,7 @@
 {
   "name": "norns-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Electron shell for the Norns local IDE (Chromium, same model as VS Code)",
   "main": "main.js",
   "scripts": {

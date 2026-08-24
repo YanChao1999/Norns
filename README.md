@@ -71,7 +71,9 @@ bash scripts/stage-ui.sh
 npm install --prefix norns/electron
 
 uv run norns init
-# Edit ~/.norns/config.toml — set openai.api_key and change admin_password
+# Init prints a generated admin password and writes ~/.norns/config.toml
+# Use --force to replace config and delete norns.db (no schema back-compat before 0.0.1)
+# Edit ~/.norns/config.toml — set openai.api_key
 uv run norns run
 ```
 
@@ -105,8 +107,10 @@ Use this when you want PostgreSQL, Redis, and a browser-based Vite dev server in
 4. Open:
    - Frontend: `http://localhost:5173`
    - Backend API: `http://localhost:8000/docs`
-5. Sign in with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env` (defaults are `admin` / `admin`).
+5. Sign in with the `ADMIN_USERNAME` / `ADMIN_PASSWORD` from your `.env` (defaults are `admin` / `admin` only when `NORNS_ENV=local`). For a shared host set `NORNS_ENV=production`, a unique `ADMIN_PASSWORD`, and `SESSION_COOKIE_SECURE=true`.
 6. Create a board, add a card, open it, and click **Run this stage**. Cards only move after approval unless a stage has auto-advance enabled.
+
+`docker compose` builds a Python image once. Rebuild after dependency changes: `docker compose build`.
 
 ## Development Setup
 ```bash
@@ -120,6 +124,7 @@ Pull requests to `main` must pass the **CI** GitHub Actions check (`backend` tes
 
 ## Notes
 - Local IDE mode uses SQLite and `QUEUE_BACKEND=inline` (no Redis). Docker/production can keep Redis via `QUEUE_BACKEND=redis`.
+- Schema is created with SQLAlchemy `create_all`. There is no upgrade migration until 0.0.1 is published; `norns init --force` deletes the local database.
 - Use PostgreSQL in normal deployments via `DATABASE_URL`.
 - Redis backs ARQ worker execution.
 - PlantUML/Kroki rendering is opt-in via `PLANTUML_URL` / `KROKI_URL` (unset means no public egress).
