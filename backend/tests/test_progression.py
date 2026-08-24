@@ -69,6 +69,14 @@ def test_resolve_route_reject_without_line_is_not_found():
     stages = [SimpleNamespace(id="a", order=1), SimpleNamespace(id="b", order=2)]
     route = resolve_route(stages, [], "b", "reject", {})
     assert route.found is False
+    unmatched = resolve_route(
+        stages,
+        [_edge(to_stage_id="a", event="reject", condition_key="risk", condition_value="high")],
+        "a",
+        "reject",
+        {"risk": "low"},
+    )
+    assert unmatched.found is False
 
 
 def test_resolve_routes_returns_all_default_targets():
@@ -149,6 +157,16 @@ def test_join_stage_has_two_incoming_default_lines():
     ]
     assert is_join_stage(edges, "integration", stages) is True
     assert is_join_stage(edges, "tests", stages) is False
+
+
+def test_boolean_handoff_matches_json_true():
+    stages = [SimpleNamespace(id="a", order=1), SimpleNamespace(id="b", order=2), SimpleNamespace(id="c", order=3)]
+    edges = [
+        _edge(to_stage_id="b", condition_key="ok", condition_value="true", order=0),
+        _edge(to_stage_id="c", order=1),
+    ]
+    assert resolve_route(stages, edges, "a", "approve", {"ok": True}).stage_id == "b"
+    assert resolve_route(stages, edges, "a", "approve", {"ok": False}).stage_id == "c"
 
 
 def test_empty_contains_does_not_match():

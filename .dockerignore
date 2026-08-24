@@ -1,7 +1,7 @@
 .venv
 .git
 .github
-frontend/node_modules
+**/node_modules
 **/__pycache__
 **/*.pyc
 norns.db

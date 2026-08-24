@@ -35,7 +35,6 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/norns"
       REDIS_URL: redis://redis:6379
-      NORNS_ENV: local
     command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       postgres:
@@ -53,7 +52,6 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/norns"
       REDIS_URL: redis://redis:6379
-      NORNS_ENV: local
     command: ["arq", "worker.main.WorkerSettings"]
     depends_on:
       postgres:

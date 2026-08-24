@@ -59,8 +59,10 @@ class Settings(BaseSettings):
     def production_must_not_use_demo_secrets(self) -> Settings:
         if self.environment.strip().lower() != "production":
             return self
-        if self.admin_password == "admin":
-            raise ValueError("ADMIN_PASSWORD must not be 'admin' when NORNS_ENV=production")
+        password = self.admin_password.strip()
+        if not password or password == "admin":
+            raise ValueError("ADMIN_PASSWORD must be a non-empty unique value when NORNS_ENV=production")
+        self.admin_password = password
         if not self.session_cookie_secure:
             raise ValueError("SESSION_COOKIE_SECURE must be true when NORNS_ENV=production")
         return self

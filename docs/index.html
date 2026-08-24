@@ -322,7 +322,7 @@
                         <p>Human gate</p>
                       </div>
                       <div class="column-actions">
-                        <span class="column-count">1</span>
+                        <span class="column-count" id="count-verdandi">1</span>
                         <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
                       </div>
                     </header>
@@ -403,11 +403,11 @@
             </div>
 
             <div class="drawer-backdrop" id="backdrop" hidden></div>
-            <aside class="drawer" id="drawer" hidden>
+            <aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-title">
               <header class="drawer-head">
                 <div>
                   <p class="drawer-kicker">NOR-14</p>
-                  <h2>Checkout API</h2>
+                  <h2 id="drawer-title">Checkout API</h2>
                 </div>
                 <button type="button" class="btn btn-ghost" id="drawer-close">Close</button>
               </header>
@@ -505,7 +505,10 @@ uv run norns run</pre>
       const urdCards = document.getElementById('urd-cards');
       const verdandiCards = document.getElementById('verdandi-cards');
       const countUrd = document.getElementById('count-urd');
+      const countVerdandi = document.getElementById('count-verdandi');
+      const drawerClose = document.getElementById('drawer-close');
       let gateOpen = true;
+      let lastFocus = null;
 
       function showView(name) {
         boardView.hidden = name !== 'board';
@@ -518,16 +521,27 @@ uv run norns run</pre>
         }
       }
 
+      function drawerFocusables() {
+        return [...drawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(
+          (el) => !el.disabled && el.offsetParent !== null
+        );
+      }
+
       function openDrawer() {
+        lastFocus = document.activeElement;
         drawer.hidden = false;
         backdrop.hidden = false;
         card.classList.add('is-open');
+        drawerClose.focus();
       }
 
       function closeDrawer() {
         drawer.hidden = true;
         backdrop.hidden = true;
         card.classList.remove('is-open');
+        if (lastFocus && typeof lastFocus.focus === 'function') {
+          lastFocus.focus();
+        }
       }
 
       function toast(message) {
@@ -537,6 +551,8 @@ uv run norns run</pre>
         }
         const note = document.createElement('div');
         note.className = 'preview-toast';
+        note.setAttribute('role', 'status');
+        note.setAttribute('aria-live', 'polite');
         note.textContent = message;
         app.appendChild(note);
         setTimeout(() => note.remove(), 2400);
@@ -552,6 +568,31 @@ uv run norns run</pre>
       });
       document.getElementById('drawer-close').addEventListener('click', closeDrawer);
       backdrop.addEventListener('click', closeDrawer);
+      document.addEventListener('keydown', (event) => {
+        if (drawer.hidden) {
+          return;
+        }
+        if (event.key === 'Escape') {
+          closeDrawer();
+          return;
+        }
+        if (event.key !== 'Tab') {
+          return;
+        }
+        const nodes = drawerFocusables();
+        if (!nodes.length) {
+          return;
+        }
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
       document.getElementById('add-toggle').addEventListener('click', () => {
         toast('Preview only. Install the IDE to add real cards.');
       });
@@ -567,7 +608,8 @@ uv run norns run</pre>
           ext.remove();
         }
         verdandiCards.appendChild(card);
-        countUrd.textContent = '0';
+        countUrd.textContent = String(urdCards.querySelectorAll('.card').length);
+        countVerdandi.textContent = String(verdandiCards.querySelectorAll('.card').length);
         waitCount.textContent = '0 waiting';
         waitCount.classList.add('is-clear');
         if (!urdCards.querySelector('.card')) {

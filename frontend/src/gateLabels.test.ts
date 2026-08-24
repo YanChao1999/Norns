@@ -60,4 +60,20 @@ describe('gate labels', () => {
     expect(rejectLabel(lines, detail, { risk: 'high' })).toBe('Reject · Urd');
     expect(rejectLabel(lines, detail, { risk: 'low' })).toBe('Reject · Unit tests');
   });
+
+  it('matches JSON true/false, not Python str(True)', () => {
+    const line = edge({ to_stage_id: 'skuld', condition_key: 'ok', condition_value: 'true' });
+    expect(conditionMatches({ ok: true }, line)).toBe(true);
+    expect(conditionMatches({ ok: false }, line)).toBe(false);
+  });
+
+  it('keeps the generic approve label when only unmatched If lines exist', () => {
+    const lines = [edge({ to_stage_id: 'urd', condition_key: 'risk', condition_value: 'high', order: 0 })];
+    expect(approveLabel(lines, detail, { risk: 'low' })).toBe('Approve · next stage');
+  });
+
+  it('does not name a non-matching reject If as the destination', () => {
+    const lines = [edge({ to_stage_id: 'urd', event: 'reject', condition_key: 'risk', condition_value: 'high', order: 0 })];
+    expect(rejectLabel(lines, detail, { risk: 'low' })).toBe('Reject');
+  });
 });

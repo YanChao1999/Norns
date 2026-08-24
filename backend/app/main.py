@@ -25,10 +25,10 @@ async def lifespan(_: FastAPI):
         )
     if settings.auto_create_tables:
         await init_db()
-        async with AsyncSessionLocal() as session:
-            recovered = await recover_stale_runs(session, older_than_seconds=settings.stale_run_seconds)
-            if recovered:
-                logger.warning("Recovered %s stale stage run(s).", recovered)
+    async with AsyncSessionLocal() as session:
+        recovered = await recover_stale_runs(session, older_than_seconds=settings.stale_run_seconds)
+        if recovered:
+            logger.warning("Recovered %s stale stage run(s).", recovered)
     yield
 
 

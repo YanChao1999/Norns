@@ -14,7 +14,7 @@ export function approveLabel(lines: StageTransition[], board: BoardDetail | unde
   if (shown.length > 1) {
     return `Approve · ${shown.map((edge) => targetName(board, edge.to_stage_id)).join(' + ')}`;
   }
-  const fallback = shown[0] ?? lines[0];
+  const fallback = shown[0];
   if (!fallback) {
     return 'Approve · next stage';
   }
@@ -50,7 +50,7 @@ export function conditionMatches(handoff: Handoff, edge: StageTransition): boole
   if (op === 'exists') {
     return current !== undefined && current !== null;
   }
-  const text = current == null ? '' : String(current);
+  const text = conditionText(current);
   const value = edge.condition_value;
   if (op === 'contains') {
     if (!value) {
@@ -61,13 +61,23 @@ export function conditionMatches(handoff: Handoff, edge: StageTransition): boole
   return text === value;
 }
 
+function conditionText(current: unknown): string {
+  if (current == null) {
+    return '';
+  }
+  if (typeof current === 'boolean') {
+    return current ? 'true' : 'false';
+  }
+  return String(current);
+}
+
 function resolvedLines(lines: StageTransition[], board: BoardDetail | undefined, handoff: Handoff, event: 'approve' | 'reject'): StageTransition[] {
   const matching = [...lines].sort((left, right) => left.order - right.order);
   const conditioned = matching.filter((edge) => edge.condition_key.trim());
   const defaults = matching.filter((edge) => !edge.condition_key.trim());
   const matchedIfs = conditioned.filter((edge) => conditionMatches(handoff, edge));
   if (event === 'reject') {
-    const chosen = matchedIfs[0] ?? defaults[0] ?? matching[0];
+    const chosen = matchedIfs[0] ?? defaults[0];
     return chosen ? [chosen] : [];
   }
   if (matchedIfs.length) {
