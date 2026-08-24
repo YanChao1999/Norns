@@ -8,6 +8,7 @@ version = "0.0.1"
 description = "Kanban orchestration system with per-column LLM agents and human approval gates"
 readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "MIT" }
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
@@ -38,11 +39,20 @@ dev = [
 [project.scripts]
 norns = "norns.cli:main"
 
+[project.urls]
+Homepage = "https://yanchao1999.github.io/Norns/"
+Repository = "https://github.com/YanChao1999/Norns"
+Issues = "https://github.com/YanChao1999/Norns/issues"
+
 [tool.setuptools.packages.find]
 include = ["backend*", "worker*", "norns*"]
 
 [tool.setuptools.package-data]
 norns = ["web/**/*", "electron/main.js", "electron/package.json", "electron/package-lock.json"]
+
+[tool.setuptools.cmdclass]
+build_py = "norns_build.BuildPy"
+sdist = "norns_build.Sdist"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -67,4 +77,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend", "worker", "norns"]
+known-first-party = ["backend", "worker", "norns", "norns_build"]

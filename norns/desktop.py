@@ -8,6 +8,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 from pathlib import Path
 
 import uvicorn
@@ -25,23 +26,27 @@ def run_ide(*, host: str, port: int, open_window: bool = True) -> int:
         return 1
     if not _ui_is_reachable(host, port):
         print(
-            "Control Room UI is not packaged. From a checkout run: bash scripts/stage-ui.sh",
+            "Control Room UI is not packaged. Install Norns from a wheel, or from a git checkout with Node.js 20+: "
+            "pip install .",
             file=sys.stderr,
         )
 
+    url = f"http://{host}:{port}"
     if not open_window:
-        print(f"Norns local server listening on http://{host}:{port}")
+        print(f"Norns local server listening on {url}")
         thread.join()
         return 0
 
     command = electron_command()
     if command is None:
+        print(f"Opened Control Room at {url}")
         print(electron_install_help(), file=sys.stderr)
-        server.should_exit = True
-        return 1
+        webbrowser.open(url)
+        thread.join()
+        return 0
 
     env = os.environ.copy()
-    env["NORNS_URL"] = f"http://{host}:{port}"
+    env["NORNS_URL"] = url
     try:
         completed = subprocess.run(command, cwd=command[-1], env=env, check=False)
     except OSError as exc:
@@ -77,10 +82,8 @@ def electron_command() -> list[str] | None:
 
 def electron_install_help() -> str:
     return (
-        "Norns opens in Electron (Chromium), the same window model as VS Code.\n"
-        "Install Node.js, then from the repo root:\n"
-        "  npm install --prefix norns/electron\n"
-        "  uv run norns run\n"
+        "Electron is optional. Norns already opened in your browser.\n"
+        "For a desktop window, install Node.js then npm install in the packaged norns/electron directory.\n"
         "Or set NORNS_ELECTRON to an electron binary."
     )
 

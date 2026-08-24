@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Initialized Norns home at {home}")
         print(f"Config: {path}")
         print(f"Admin password: {password}")
-        print("Edit config.toml, then run: norns run")
+        print("Edit config.toml if you need an API key, then run: norns run")
         return 0
 
     if args.command == "run":

@@ -85,8 +85,9 @@ def test_electron_command_uses_local_binary(tmp_path, monkeypatch):
     assert electron_command() == [str(binary), str(app_dir)]
 
 
-def test_electron_install_help_mentions_npm():
+def test_electron_install_help_mentions_optional_electron():
     help_text = electron_install_help()
-    assert "Electron" in help_text
-    assert "npm install --prefix norns/electron" in help_text
+    assert "optional" in help_text.lower()
+    assert "browser" in help_text.lower()
+    assert "npm install" in help_text
     assert "Qt" not in help_text

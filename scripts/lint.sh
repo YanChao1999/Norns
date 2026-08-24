@@ -5,8 +5,8 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 echo "==> Ruff"
-ruff check backend worker norns
-ruff format --check backend worker norns
+ruff check backend worker norns norns_build.py
+ruff format --check backend worker norns norns_build.py
 
 echo "==> Electron shell"
 node --check norns/electron/main.js
