@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import { entryStageId, groupStages } from '../boardLayout';
 import { BoardDetail, Card, Stage } from '../types';
 import { AgentConfigModal } from './AgentConfig';
 import { CardDrawer } from './CardDrawer';
@@ -10,20 +11,6 @@ import { Column } from './Column';
 interface Props {
   boardId: string;
   onEditMachine?: () => void;
-}
-
-function groupStages(stages: Stage[]): Stage[][] {
-  const sorted = [...stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
-  const groups: Stage[][] = [];
-  for (const stage of sorted) {
-    const last = groups[groups.length - 1];
-    if (last && last[0].order === stage.order) {
-      last.push(stage);
-    } else {
-      groups.push([stage]);
-    }
-  }
-  return groups;
 }
 
 export function Board({ boardId, onEditMachine }: Props) {
@@ -53,6 +40,7 @@ export function Board({ boardId, onEditMachine }: Props) {
 
   const stages = [...board.stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
   const columns = groupStages(stages);
+  const entryId = entryStageId(stages);
   const rowCount = Math.max(1, ...stages.map((stage) => (stage.lane ?? 0) + 1));
   const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
 
@@ -116,7 +104,7 @@ export function Board({ boardId, onEditMachine }: Props) {
                   boardId={boardId}
                   stage={stage}
                   cards={cardsByStage.get(stage.id) ?? []}
-                  isFirst={columnIndex === 0 && stage.id === group[0].id}
+                  isFirst={stage.id === entryId}
                   row={row}
                   parallel={parallel}
                   openCardId={liveCard?.id ?? null}
