@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "norns"
-version = "0.1.0"
+version = "0.0.1"
 description = "Kanban orchestration system with per-column LLM agents and human approval gates"
 readme = "README.md"
 requires-python = ">=3.12"

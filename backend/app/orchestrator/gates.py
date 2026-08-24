@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from ..models import Approval, Board, Card, Stage
 from .enqueue import EnqueueError, enqueue_stage_run
 from .progression import resolve_route, resolve_routes
-from .split import apply_forward_routes
+from .split import apply_forward_routes, load_family_cards
 from .state_machine import CardStatus, reject_card_state, return_card_to_stage
 
 
@@ -20,10 +20,6 @@ async def _load_card_for_gate(session: AsyncSession, card_id: str) -> Card:
         .options(
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.stages),
             selectinload(Card.current_stage).selectinload(Stage.board).selectinload(Board.transitions),
-            selectinload(Card.current_stage)
-            .selectinload(Stage.board)
-            .selectinload(Board.cards)
-            .selectinload(Card.runs),
             selectinload(Card.runs),
         )
     )
@@ -67,6 +63,7 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
     board = card.current_stage.board
     handoff = latest_run.handoff if isinstance(latest_run.handoff, dict) else {}
     routes = resolve_routes(board.stages, board.transitions, card.current_stage_id, "approve", handoff)
+    family = await load_family_cards(session, card)
     queued = await apply_forward_routes(
         session,
         card,
@@ -75,7 +72,7 @@ async def approve_card(session: AsyncSession, card_id: str, actor: str, comment:
         handoff,
         auto=False,
         transitions=list(board.transitions),
-        board_cards=list(board.cards),
+        board_cards=family,
     )
     await session.commit()
     await session.refresh(approval)

@@ -112,6 +112,14 @@ def _is_forward(stages: Sequence[Stage], from_stage_id: str, to_stage_id: str | 
     return target > current
 
 
+def _condition_text(current: Any) -> str:
+    if current is None:
+        return ""
+    if isinstance(current, bool):
+        return "true" if current else "false"
+    return str(current)
+
+
 def _condition_matches(handoff: dict[str, Any], edge: StageTransition) -> bool:
     current: Any = handoff
     for part in edge.condition_key.split("."):
@@ -122,7 +130,7 @@ def _condition_matches(handoff: dict[str, Any], edge: StageTransition) -> bool:
     op = edge.condition_op or "eq"
     if op == "exists":
         return current is not None
-    text = "" if current is None else str(current)
+    text = _condition_text(current)
     value = edge.condition_value
     if op == "contains":
         if not value:

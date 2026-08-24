@@ -10,13 +10,16 @@ from norns.home import apply_config, config_path, init_home, sqlite_url
 
 def test_init_creates_config(tmp_path: Path):
     home = tmp_path / "norns-home"
-    path = init_home(home)
+    path, password = init_home(home)
     assert path == config_path(home)
     assert path.is_file()
     text = path.read_text(encoding="utf-8")
     assert "encryption_key" in text
     assert "secret_key" in text
     assert 'backend = "inline"' in text
+    assert password
+    assert 'admin_password = "admin"' not in text
+    assert f'admin_password = "{password}"' in text
 
 
 def test_init_refuses_to_overwrite(tmp_path: Path):
@@ -28,13 +31,18 @@ def test_init_refuses_to_overwrite(tmp_path: Path):
         pass
     else:
         raise AssertionError("expected FileExistsError")
+    db = home / "norns.db"
+    db.write_bytes(b"stale")
     init_home(home, force=True)
+    assert not db.exists()
 
 
 def test_cli_init(tmp_path: Path, capsys):
     home = tmp_path / "home"
     assert main(["init", "--home", str(home)]) == 0
     assert config_path(home).is_file()
+    out = capsys.readouterr().out
+    assert "Admin password:" in out
     assert main(["init", "--home", str(home)]) == 1
     err = capsys.readouterr().err
     assert "already initialized" in err
@@ -49,6 +57,7 @@ def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
     assert os.environ["QUEUE_BACKEND"] == "inline"
     assert os.environ["DATABASE_URL"] == sqlite_url(home / "norns.db")
     assert os.environ["NORNS_HOME"] == str(home.resolve())
+    assert os.environ["NORNS_ENV"] == "local"
 
 
 def test_electron_app_dir_ships_chromium_shell():

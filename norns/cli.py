@@ -18,7 +18,7 @@ def main(argv: list[str] | None = None) -> int:
 
     init_parser = sub.add_parser("init", help="Create a local Norns home and config.toml")
     init_parser.add_argument("--home", type=Path, default=None, help="Override NORNS_HOME (default ~/.norns)")
-    init_parser.add_argument("--force", action="store_true", help="Replace an existing config.toml")
+    init_parser.add_argument("--force", action="store_true", help="Replace config.toml and delete norns.db")
 
     run_parser = sub.add_parser("run", help="Start the local IDE in an Electron window")
     run_parser.add_argument("--home", type=Path, default=None)
@@ -35,12 +35,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         try:
-            path = init_home(home, force=args.force)
+            path, password = init_home(home, force=args.force)
         except FileExistsError as exc:
             print(exc, file=sys.stderr)
             return 1
         print(f"Initialized Norns home at {home}")
         print(f"Config: {path}")
+        print(f"Admin password: {password}")
         print("Edit config.toml, then run: norns run")
         return 0
 

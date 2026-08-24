@@ -28,18 +28,14 @@ services:
       retries: 10
 
   backend:
-    image: public.ecr.aws/docker/library/python:3.12-slim
+    build: .
     pull_policy: missing
-    working_dir: /app
-    volumes:
-      - ./:/app
     env_file:
       - .env
     environment:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/norns"
       REDIS_URL: redis://redis:6379
-    command: >
-      sh -c "pip install -e . && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,18 +45,14 @@ services:
       - "8000:8000"
 
   worker:
-    image: public.ecr.aws/docker/library/python:3.12-slim
+    build: .
     pull_policy: missing
-    working_dir: /app
-    volumes:
-      - ./:/app
     env_file:
       - .env
     environment:
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@postgres:5432/norns"
       REDIS_URL: redis://redis:6379
-    command: >
-      sh -c "pip install -e . && arq worker.main.WorkerSettings"
+    command: ["arq", "worker.main.WorkerSettings"]
     depends_on:
       postgres:
         condition: service_healthy

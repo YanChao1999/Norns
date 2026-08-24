@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Norns · v0.0.1 coming</title>
+    <meta
+      name="description"
+      content="Norns is a Control Room where each board column runs an isolated LLM agent and a human gate. First production-ready cut: v0.0.1."
+    />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./control-room.css" />
+    <style>
+      .site-wrap {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        height: 52px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .site-brand {
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .site-nav {
+        display: flex;
+        gap: 16px;
+        font-size: 14px;
+      }
+
+      .site-nav a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .site-nav a:hover {
+        color: var(--text);
+      }
+
+      .pill {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--waiting);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+
+      .site-hero {
+        padding: 36px 0 20px;
+      }
+
+      .site-hero h1 {
+        font-size: 36px;
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        margin: 10px 0 12px;
+      }
+
+      .site-lede {
+        font-size: 17px;
+        color: var(--muted);
+        max-width: 46rem;
+        margin: 0 0 16px;
+      }
+
+      .site-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .site-actions .btn {
+        text-decoration: none;
+      }
+
+      .demo-note {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .app-frame {
+        position: relative;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--bg);
+        min-height: 680px;
+      }
+
+      .app-frame .topbar {
+        flex-wrap: nowrap;
+      }
+
+      .app-frame .workspace {
+        min-height: 600px;
+      }
+
+      .app-frame .board-grid {
+        min-height: 520px;
+      }
+
+      .app-frame .drawer-backdrop,
+      .app-frame .drawer {
+        position: absolute;
+      }
+
+      .app-frame .drawer {
+        height: 100%;
+      }
+
+      .app-frame [hidden] {
+        display: none !important;
+      }
+
+      .caption-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 12px 0 28px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .caption-row strong {
+        display: block;
+        color: var(--text);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+
+      .site-section {
+        padding: 8px 0 36px;
+        border-top: 1px solid var(--line);
+      }
+
+      .site-section h2 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+
+      .site-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      .site-grid ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+
+      .site-grid li + li {
+        margin-top: 8px;
+      }
+
+      pre {
+        margin: 0;
+        overflow: auto;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .site-footer {
+        border-top: 1px solid var(--line);
+        padding: 20px 0 40px;
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .preview-toast {
+        position: absolute;
+        bottom: 16px;
+        left: 16px;
+        z-index: 40;
+        background: var(--elevated);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 8px 12px;
+        font-size: 13px;
+        color: var(--text);
+      }
+
+      @media (max-width: 800px) {
+        .site-hero h1 {
+          font-size: 28px;
+        }
+
+        .site-nav,
+        .caption-row {
+          display: none;
+        }
+
+        .site-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="site-wrap">
+      <header class="site-header">
+        <a class="site-brand" href="#top">Norns</a>
+        <nav class="site-nav">
+          <a href="#look">Look</a>
+          <a href="#in">In 0.0.1</a>
+          <a href="#install">Install</a>
+          <a href="https://github.com/YanChao1999/Norns">GitHub</a>
+        </nav>
+      </header>
+
+      <main id="top">
+        <div class="site-hero">
+          <span class="pill">Coming · v0.0.1</span>
+          <h1>Control Room for staged agent work.</h1>
+          <p class="site-lede">
+            Each column is an isolated LLM agent. A card only moves after a human gate, unless you mark that stage auto-advance. The board below is the real UI, as a static preview.
+          </p>
+          <div class="site-actions">
+            <a class="btn btn-primary" href="#look">See the UI</a>
+            <a class="btn" href="#install">Install from source</a>
+          </div>
+        </div>
+
+        <section id="look">
+          <p class="demo-note">Preview only — no agents run here. Click the waiting card, then Approve or Reject. Switch to Machine to see the stage graph.</p>
+          <div class="app-frame" id="app">
+            <header class="topbar">
+              <div class="brand">
+                <span class="brand-mark">Norns</span>
+                <span class="brand-sub">Control room</span>
+              </div>
+              <nav class="board-switcher" aria-label="Boards">
+                <button type="button" class="chip is-active">Delivery</button>
+              </nav>
+              <div class="topbar-meta">
+                <span class="wait-count" id="wait-count">1 waiting</span>
+                <button type="button" class="chip is-active" data-view="board">Board</button>
+                <button type="button" class="chip" data-view="machine">Machine</button>
+              </div>
+            </header>
+
+            <div class="workspace" id="view-board">
+              <div class="board-head">
+                <div>
+                  <h1>Delivery</h1>
+                  <p>Each column is a workflow step. Cards follow the lines you draw. Column and row only place stages on the board.</p>
+                </div>
+                <button type="button" class="btn" data-view="machine">Edit state machine</button>
+              </div>
+              <div
+                class="board-grid"
+                style="grid-template-columns: 64px repeat(3, minmax(280px, 1fr)); grid-template-rows: 28px minmax(240px, 1fr)"
+              >
+                <div class="board-grid-corner"></div>
+                <header class="board-column-banner" style="grid-column: 2; grid-row: 1"><span>Column 1</span></header>
+                <header class="board-column-banner" style="grid-column: 3; grid-row: 1"><span>Column 2</span></header>
+                <header class="board-column-banner" style="grid-column: 4; grid-row: 1"><span>Column 3</span></header>
+                <div class="board-row-label" style="grid-column: 1; grid-row: 2">Row 1</div>
+                <div class="board-cell" style="grid-column: 2; grid-row: 2">
+                  <section class="column">
+                    <header class="column-head">
+                      <div>
+                        <h2>Urd</h2>
+                        <p>Human gate</p>
+                      </div>
+                      <div class="column-actions">
+                        <span class="column-count" id="count-urd">1</span>
+                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
+                      </div>
+                    </header>
+                    <button type="button" class="add-toggle" id="add-toggle">Add card to this station</button>
+                    <div id="urd-cards">
+                      <button type="button" class="card status-waiting_approval" id="card-checkout" data-open="checkout">
+                        <div class="card-top">
+                          <strong>Checkout API</strong>
+                          <span class="status status-waiting_approval">waiting</span>
+                        </div>
+                        <div class="card-ext">NOR-14</div>
+                        <div class="card-live">Your turn — confirm the agent's approve or reject</div>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+                <div class="board-cell" style="grid-column: 3; grid-row: 2">
+                  <section class="column">
+                    <header class="column-head">
+                      <div>
+                        <h2>Verdandi</h2>
+                        <p>Human gate</p>
+                      </div>
+                      <div class="column-actions">
+                        <span class="column-count" id="count-verdandi">1</span>
+                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
+                      </div>
+                    </header>
+                    <div id="verdandi-cards">
+                      <button type="button" class="card status-running" disabled>
+                        <div class="card-top">
+                          <strong>Webhook retry</strong>
+                          <span class="status status-running">running</span>
+                        </div>
+                        <div class="card-live">Agent running this stage</div>
+                      </button>
+                    </div>
+                  </section>
+                </div>
+                <div class="board-cell" style="grid-column: 4; grid-row: 2">
+                  <section class="column">
+                    <header class="column-head">
+                      <div>
+                        <h2>Skuld</h2>
+                        <p>Human gate</p>
+                      </div>
+                      <div class="column-actions">
+                        <span class="column-count">0</span>
+                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
+                      </div>
+                    </header>
+                    <div class="empty-col">No cards in this station.</div>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace" id="view-machine" hidden>
+              <div class="machine">
+                <div class="machine-toolbar">
+                  <h2>State machine</h2>
+                  <span class="muted">Layout only in this preview. Draw lines in the real app.</span>
+                </div>
+                <div class="machine-layout">
+                  <div class="machine-canvas">
+                    <div
+                      class="machine-flow"
+                      style="grid-template-columns: 72px 88px repeat(3, minmax(140px, 1fr)) 88px; grid-template-rows: 24px minmax(88px, auto)"
+                    >
+                      <div class="machine-grid-corner"></div>
+                      <div></div>
+                      <div class="machine-col-head">Col 1</div>
+                      <div class="machine-col-head">Col 2</div>
+                      <div class="machine-col-head">Col 3</div>
+                      <div class="machine-col-head is-done">End</div>
+                      <div class="machine-row-label">Row 1</div>
+                      <div class="machine-terminal">Start</div>
+                      <button type="button" class="machine-node is-gated is-selected">
+                        <span class="machine-node-order">C1 R1</span>
+                        <strong>Urd</strong>
+                        <span>Human gate</span>
+                      </button>
+                      <button type="button" class="machine-node is-gated">
+                        <span class="machine-node-order">C2 R1</span>
+                        <strong>Verdandi</strong>
+                        <span>Human gate</span>
+                      </button>
+                      <button type="button" class="machine-node is-gated">
+                        <span class="machine-node-order">C3 R1</span>
+                        <strong>Skuld</strong>
+                        <span>Human gate</span>
+                      </button>
+                      <button type="button" class="machine-terminal is-done">Done</button>
+                    </div>
+                  </div>
+                  <aside class="panel machine-inspector">
+                    <h2>Urd</h2>
+                    <p class="muted">Human gate. The agent writes a handoff and may recommend approve or reject. A person still confirms. Approve moves the card to Verdandi.</p>
+                    <p class="muted">Two default lines from one stage split into parallel tracks. Lines into one stage join those tracks.</p>
+                  </aside>
+                </div>
+              </div>
+            </div>
+
+            <div class="drawer-backdrop" id="backdrop" hidden></div>
+            <aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+              <header class="drawer-head">
+                <div>
+                  <p class="drawer-kicker">NOR-14</p>
+                  <h2 id="drawer-title">Checkout API</h2>
+                </div>
+                <button type="button" class="btn btn-ghost" id="drawer-close">Close</button>
+              </header>
+              <div class="drawer-body">
+                <span class="status status-waiting_approval">waiting</span>
+                <section>
+                  <h3>Card body</h3>
+                  <p class="handoff">Add a signed session cookie on checkout so carts survive the payment redirect.</p>
+                </section>
+                <section>
+                  <h3>Handoff</h3>
+                  <p class="handoff">Urd recommends approve. Risk is low: set-cookie is scoped to checkout, HttpOnly, and SameSite=Lax. Next stage should write the cookie helper and a unit test.</p>
+                </section>
+                <section class="agent-decision is-approve">
+                  <h3>Agent recommendation</h3>
+                  <p class="handoff">Approve — cookie helper is a local change with a clear test.</p>
+                  <p class="muted">Advisory only. A human still has to confirm before the card moves.</p>
+                </section>
+              </div>
+              <footer class="drawer-foot">
+                <button type="button" class="btn btn-gate is-recommended" id="approve">Approve · Verdandi · agent</button>
+                <button type="button" class="btn btn-danger" id="reject">Reject</button>
+              </footer>
+            </aside>
+          </div>
+          <div class="caption-row">
+            <div>
+              <strong>1. Agent runs</strong>
+              Isolated per column. Verdandi only sees the approved handoff from Urd — no chat memory.
+            </div>
+            <div>
+              <strong>2. Human gate</strong>
+              The yellow card is waiting. Open it. The agent may recommend; you still confirm.
+            </div>
+            <div>
+              <strong>3. Machine</strong>
+              Stages and lines are the workflow. Parallel split/join is drawn here, not implied by the board.
+            </div>
+          </div>
+        </section>
+
+        <section class="site-section" id="in">
+          <div class="site-grid">
+            <div>
+              <h2>Shipping in v0.0.1</h2>
+              <ul>
+                <li>Local Electron IDE: <code>norns init</code> / <code>norns run</code></li>
+                <li>Visual state machine, including parallel split and join</li>
+                <li>Human approve/reject gates; agent recommendation is advisory</li>
+                <li>Fresh schema only — <code>norns init --force</code> wipes the local database</li>
+                <li>Production refuses <code>admin</code>/<code>admin</code> and requires secure cookies</li>
+                <li>Compose backend/worker image is baked at build time</li>
+              </ul>
+            </div>
+            <div>
+              <h2>Not in this cut</h2>
+              <ul>
+                <li>Schema migrations — Alembic starts when 0.0.1 is published</li>
+                <li>Multi-user accounts, teams, or RBAC</li>
+                <li>A hosted Control Room. This is a local IDE, not SaaS</li>
+                <li>Polarion field writes still need hardening if you use that connector</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="site-section" id="install">
+          <h2>Try the coming cut</h2>
+          <p class="site-lede">From the 0.0.1 branch. Init prints a generated admin password. Existing <code>~/.norns</code> does not upgrade in place.</p>
+          <pre>git clone https://github.com/YanChao1999/Norns.git
+cd Norns
+git checkout cursor/v0.0.1-first-production
+uv sync
+cd frontend && npm install && npm run build && cd ..
+bash scripts/stage-ui.sh
+npm install --prefix norns/electron
+uv run norns init --force
+uv run norns run</pre>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span>Norns · Urd, Verdandi, Skuld</span>
+        <a href="https://github.com/YanChao1999/Norns">github.com/YanChao1999/Norns</a>
+      </footer>
+    </div>
+    <script>
+      const app = document.getElementById('app');
+      const boardView = document.getElementById('view-board');
+      const machineView = document.getElementById('view-machine');
+      const drawer = document.getElementById('drawer');
+      const backdrop = document.getElementById('backdrop');
+      const card = document.getElementById('card-checkout');
+      const waitCount = document.getElementById('wait-count');
+      const urdCards = document.getElementById('urd-cards');
+      const verdandiCards = document.getElementById('verdandi-cards');
+      const countUrd = document.getElementById('count-urd');
+      const countVerdandi = document.getElementById('count-verdandi');
+      const drawerClose = document.getElementById('drawer-close');
+      let gateOpen = true;
+      let lastFocus = null;
+
+      function showView(name) {
+        boardView.hidden = name !== 'board';
+        machineView.hidden = name !== 'machine';
+        document.querySelectorAll('[data-view]').forEach((btn) => {
+          btn.classList.toggle('is-active', btn.dataset.view === name);
+        });
+        if (name === 'machine') {
+          closeDrawer();
+        }
+      }
+
+      function drawerFocusables() {
+        return [...drawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(
+          (el) => !el.disabled && el.offsetParent !== null
+        );
+      }
+
+      function openDrawer() {
+        lastFocus = document.activeElement;
+        drawer.hidden = false;
+        backdrop.hidden = false;
+        card.classList.add('is-open');
+        drawerClose.focus();
+      }
+
+      function closeDrawer() {
+        drawer.hidden = true;
+        backdrop.hidden = true;
+        card.classList.remove('is-open');
+        if (lastFocus && typeof lastFocus.focus === 'function') {
+          lastFocus.focus();
+        }
+      }
+
+      function toast(message) {
+        const existing = app.querySelector('.preview-toast');
+        if (existing) {
+          existing.remove();
+        }
+        const note = document.createElement('div');
+        note.className = 'preview-toast';
+        note.setAttribute('role', 'status');
+        note.setAttribute('aria-live', 'polite');
+        note.textContent = message;
+        app.appendChild(note);
+        setTimeout(() => note.remove(), 2400);
+      }
+
+      document.querySelectorAll('[data-view]').forEach((btn) => {
+        btn.addEventListener('click', () => showView(btn.dataset.view));
+      });
+      card.addEventListener('click', () => {
+        if (gateOpen) {
+          openDrawer();
+        }
+      });
+      document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+      backdrop.addEventListener('click', closeDrawer);
+      document.addEventListener('keydown', (event) => {
+        if (drawer.hidden) {
+          return;
+        }
+        if (event.key === 'Escape') {
+          closeDrawer();
+          return;
+        }
+        if (event.key !== 'Tab') {
+          return;
+        }
+        const nodes = drawerFocusables();
+        if (!nodes.length) {
+          return;
+        }
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
+      document.getElementById('add-toggle').addEventListener('click', () => {
+        toast('Preview only. Install the IDE to add real cards.');
+      });
+      document.getElementById('approve').addEventListener('click', () => {
+        gateOpen = false;
+        closeDrawer();
+        card.className = 'card status-running';
+        card.querySelector('.status').className = 'status status-running';
+        card.querySelector('.status').textContent = 'running';
+        card.querySelector('.card-live').textContent = 'Agent running this stage';
+        const ext = card.querySelector('.card-ext');
+        if (ext) {
+          ext.remove();
+        }
+        verdandiCards.appendChild(card);
+        countUrd.textContent = String(urdCards.querySelectorAll('.card').length);
+        countVerdandi.textContent = String(verdandiCards.querySelectorAll('.card').length);
+        waitCount.textContent = '0 waiting';
+        waitCount.classList.add('is-clear');
+        if (!urdCards.querySelector('.card')) {
+          const empty = document.createElement('div');
+          empty.className = 'empty-col';
+          empty.textContent = 'No cards in this station.';
+          urdCards.appendChild(empty);
+        }
+        toast('Preview: approved. In the real app Verdandi would run next.');
+      });
+      document.getElementById('reject').addEventListener('click', () => {
+        gateOpen = false;
+        closeDrawer();
+        card.className = 'card status-blocked';
+        card.querySelector('.status').className = 'status status-blocked';
+        card.querySelector('.status').textContent = 'blocked';
+        card.querySelector('.card-live').textContent = 'Blocked — run again when ready';
+        waitCount.textContent = '0 waiting';
+        waitCount.classList.add('is-clear');
+        toast('Preview: rejected. The card stays on Urd, blocked.');
+      });
+    </script>
+  </body>
+</html>
