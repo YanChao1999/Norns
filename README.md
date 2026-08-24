@@ -2,10 +2,10 @@
 
 Norns is a Kanban orchestration system where each board column runs an isolated LLM agent and a human approval gate controls progression to the next stage. The name comes from the Norse Norns: Urd, Verdandi, and Skuld.
 
-Coming **v0.0.1** site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/)
+**v0.0.1** site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/). First-use backlog: [ROADMAP.md](ROADMAP.md).
 
 ## Features
-- Local Electron IDE (`norns init` / `norns run`) — TypeScript UI in Chromium, config under `~/.norns`
+- Local Control Room (`norns init` / `norns run`) — UI in the browser by default, optional Electron window, config under `~/.norns`
 - Visual state machine editor for board stages, order, parallel tracks, and human-gate vs auto-advance
 - FastAPI + async SQLAlchemy backend with PostgreSQL-ready configuration
 - ARQ/Redis queue for isolated stage execution (optional; local IDE runs stages in-process)
@@ -62,35 +62,55 @@ Human -> Frontend : confirm approve or reject
 - **Handoffs** from stage _N_ are the only structured context for stage _N+1_. On a human gate, the agent may set `recommendation` to `approve` or `reject`; the card still waits until a person confirms. Draw an If on `recommendation` if that suggestion should choose the next stage after confirmation.
 - **Connectors** are Python-library backed only (PyGithub, jira, polarion); raw credentials are never exposed to agents.
 
-## Install and run (local IDE)
-Norns is a desktop IDE, not a browser app. The Control Room UI is TypeScript in Chromium, hosted by Electron — the same window model as VS Code.
+## Install (pip / uv)
+
+Python 3.12+. `norns run` opens the Control Room in your browser. Electron is optional.
 
 ```bash
-# From the repo root (not frontend/):
-uv sync
-cd frontend && npm install && npm run build && cd ..
-bash scripts/stage-ui.sh
-npm install --prefix norns/electron
+# From this checkout (needs Node.js 20+ once, to compile the UI into the package):
+uv tool install .
+# or
+python3 -m pip install .
 
-uv run norns init
-# Init prints a generated admin password and writes ~/.norns/config.toml
-# Use --force to replace config and delete norns.db (no schema back-compat before 0.0.1)
-# Edit ~/.norns/config.toml — set openai.api_key
-uv run norns run
+norns init          # prints an admin password; also stored in ~/.norns/config.toml
+norns run           # http://127.0.0.1:8765
 ```
 
-`uv install` is not a command; use `uv sync` or `uv pip install -e .`. You need Node.js 20+ for the UI build and the Electron window.
-
-From a built wheel (what CI packages):
+After this is published (see [PUBLISH.md](PUBLISH.md)):
 
 ```bash
-python3 -m pip install dist/norns-*.whl
-norns init
-npm install --prefix "$(python3 -c 'import norns, pathlib; print(pathlib.Path(norns.__file__).parent / "electron")')"
+uv tool install norns-ide
+# or
+python3 -m pip install norns-ide
+```
+
+The PyPI name is `norns-ide` because [`norns`](https://pypi.org/project/norns/) is already taken. The command is still `norns`.
+
+From GitHub after this branch is merged:
+
+```bash
+uv tool install git+https://github.com/YanChao1999/Norns.git
+# or
+python3 -m pip install git+https://github.com/YanChao1999/Norns.git
+```
+
+`norns run --no-window` starts the server without opening a browser (used by CI). Data lives under `~/.norns` unless you pass `--home` or set `NORNS_HOME`. Use `norns init --force` to replace config and delete `norns.db` (no schema back-compat before a published 0.0.1). Set `openai.api_key` in `~/.norns/config.toml` when you want a real model instead of a placeholder handoff.
+
+### Optional desktop window
+
+```bash
+npm install --prefix norns/electron   # from a git checkout
 norns run
 ```
 
-`norns run --no-window` starts the same local server without opening a window (used by CI). Data lives under `~/.norns` unless you pass `--home` or set `NORNS_HOME`.
+### Developer checkout
+
+```bash
+uv sync
+bash scripts/stage-ui.sh
+uv run norns init
+uv run norns run
+```
 
 ## Docker compose (optional)
 Use this when you want PostgreSQL, Redis, and a browser-based Vite dev server instead of the desktop IDE.

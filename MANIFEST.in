@@ -1,4 +1,10 @@
+include norns_build.py
 recursive-include norns/web *
 include norns/electron/main.js
 include norns/electron/package.json
 include norns/electron/package-lock.json
+include scripts/stage-ui.sh
+graft frontend
+prune frontend/node_modules
+global-exclude __pycache__
+global-exclude *.pyc
