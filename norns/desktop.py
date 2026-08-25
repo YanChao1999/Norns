@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -9,25 +10,45 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 
 import uvicorn
 
 
-def _stage_checkout_ui() -> None:
-    """Build norns/web from frontend/ when running from a git checkout."""
+def _load_stage_control_room() -> Callable[[], Path] | None:
+    """Load norns_build even when the `norns` console script is not on the repo sys.path."""
     try:
         from norns_build import stage_control_room
+
+        return stage_control_room
     except ImportError:
+        pass
+    helper = Path(__file__).resolve().parent.parent / "norns_build.py"
+    if not helper.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("norns_build", helper)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.stage_control_room
+
+
+def _stage_checkout_ui() -> None:
+    """Build norns/web from frontend/ when running from a git checkout."""
+    stage = _load_stage_control_room()
+    if stage is None:
         return
-    try:
-        stage_control_room()
-    except Exception as exc:
-        print(f"Could not stage Control Room UI: {exc}", file=sys.stderr)
+    stage()
 
 
 def run_ide(*, host: str, port: int, open_window: bool = True) -> int:
-    _stage_checkout_ui()
+    try:
+        _stage_checkout_ui()
+    except Exception as exc:
+        print(f"Could not build Control Room UI: {exc}", file=sys.stderr)
+        return 1
     from backend.app.main import app
 
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
@@ -39,7 +60,8 @@ def run_ide(*, host: str, port: int, open_window: bool = True) -> int:
         return 1
     if not _ui_is_reachable(host, port):
         print(
-            "Control Room UI is not packaged. From a git checkout run: bash scripts/stage-ui.sh",
+            "Control Room UI is not packaged. From a git checkout, norns run builds it with npm or "
+            "the same Docker node:20 image as docker compose up.",
             file=sys.stderr,
         )
         if open_window:

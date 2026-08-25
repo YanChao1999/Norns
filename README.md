@@ -67,7 +67,7 @@ Human -> Frontend : confirm approve or reject
 Python 3.12+. `norns run` opens the Control Room in your browser. Electron is optional.
 
 ```bash
-# From this checkout (needs Node.js 20+ once, to compile the UI into the package):
+# From this checkout (needs Node.js 20+ or Docker once, to compile the UI into the package):
 uv tool install .
 # or
 python3 -m pip install .
@@ -105,9 +105,10 @@ norns run
 
 ### Developer checkout
 
+`uv run` is an editable install, so it does not run the wheel build that bakes the UI in. `norns run` compiles `frontend/` on first start with npm if it is on PATH, otherwise with Docker using the same `node:20` image as `docker compose up`. If docker compose left `frontend/node_modules` root-owned, the build uses `~/.cache/norns/ui-build` instead.
+
 ```bash
 uv sync
-bash scripts/stage-ui.sh
 uv run norns init
 uv run norns run
 ```

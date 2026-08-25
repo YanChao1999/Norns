@@ -46,6 +46,9 @@ Homepage = "https://yanchao1999.github.io/Norns/"
 Repository = "https://github.com/YanChao1999/Norns"
 Issues = "https://github.com/YanChao1999/Norns/issues"
 
+[tool.setuptools]
+py-modules = ["norns_build"]
+
 [tool.setuptools.packages.find]
 include = ["backend*", "worker*", "norns*"]
 
