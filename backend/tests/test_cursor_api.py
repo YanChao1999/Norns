@@ -7,27 +7,43 @@ import pytest
 from backend.app.cursor_api import list_cursor_models, run_cursor_cloud_agent
 
 
+class _FakeBridgeClient:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def list_models(self, *, api_key: str):
+        assert api_key == "crsr_test"
+        return [SimpleNamespace(id="composer-2"), SimpleNamespace(id="auto")]
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self.closed = True
+        return False
+
+
 @pytest.mark.asyncio
-async def test_list_cursor_models_uses_sdk(monkeypatch):
-    class FakeClient:
-        def __init__(self, *, auth_token: str):
-            assert auth_token == "crsr_test"
+async def test_list_cursor_models_uses_sdk_bridge(monkeypatch):
+    client = _FakeBridgeClient()
 
-        async def list_models(self, *, api_key: str):
-            assert api_key == "crsr_test"
-            return [SimpleNamespace(id="composer-2"), SimpleNamespace(id="auto")]
+    async def fake_launch_bridge(*, workspace: str):
+        assert workspace
+        return client
 
-        async def aclose(self) -> None:
-            return None
-
-    monkeypatch.setattr("backend.app.cursor_api.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "backend.app.cursor_api.AsyncClient.launch_bridge",
+        staticmethod(fake_launch_bridge),
+    )
     models = await list_cursor_models("crsr_test")
     assert models == ["composer-2", "auto"]
+    assert client.closed is True
 
 
 @pytest.mark.asyncio
-async def test_run_cursor_cloud_agent_uses_sdk(monkeypatch):
+async def test_run_cursor_cloud_agent_uses_sdk_bridge(monkeypatch):
     created: dict[str, object] = {}
+    client = _FakeBridgeClient()
 
     class FakeRun:
         async def wait(self) -> None:
@@ -44,22 +60,21 @@ async def test_run_cursor_cloud_agent_uses_sdk(monkeypatch):
         async def aclose(self) -> None:
             created["closed"] = True
 
-    class FakeClient:
-        def __init__(self, *, auth_token: str):
-            assert auth_token == "crsr_test"
-
-        async def aclose(self) -> None:
-            created["client_closed"] = True
+    async def fake_launch_bridge(*, workspace: str):
+        return client
 
     async def fake_create(*, client, model, api_key, name, cloud):
         assert api_key == "crsr_test"
         assert name == "Norns stage run"
-        assert model is None  # auto -> omit explicit id
-        assert cloud.repos == []
+        assert model == "auto"
+        assert list(cloud.repos or []) == []
         created["client"] = client
         return FakeAgent()
 
-    monkeypatch.setattr("backend.app.cursor_api.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "backend.app.cursor_api.AsyncClient.launch_bridge",
+        staticmethod(fake_launch_bridge),
+    )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
     text = await run_cursor_cloud_agent(
@@ -70,12 +85,14 @@ async def test_run_cursor_cloud_agent_uses_sdk(monkeypatch):
     )
     assert text == "Stage handoff from Cursor SDK"
     assert created["prompt"] == "Do the stage"
-    assert created["client_closed"] is True
+    assert created["closed"] is True
+    assert client.closed is True
 
 
 @pytest.mark.asyncio
 async def test_run_cursor_cloud_agent_attaches_repo(monkeypatch):
     seen: dict[str, object] = {}
+    client = _FakeBridgeClient()
 
     class FakeRun:
         async def wait(self) -> None:
@@ -91,19 +108,18 @@ async def test_run_cursor_cloud_agent_attaches_repo(monkeypatch):
         async def aclose(self) -> None:
             return None
 
-    class FakeClient:
-        def __init__(self, *, auth_token: str):
-            pass
-
-        async def aclose(self) -> None:
-            return None
+    async def fake_launch_bridge(*, workspace: str):
+        return client
 
     async def fake_create(*, client, model, api_key, name, cloud):
         seen["model"] = model
         seen["repos"] = list(cloud.repos)
         return FakeAgent()
 
-    monkeypatch.setattr("backend.app.cursor_api.AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "backend.app.cursor_api.AsyncClient.launch_bridge",
+        staticmethod(fake_launch_bridge),
+    )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
     text = await run_cursor_cloud_agent(

@@ -15,6 +15,7 @@ from ..cursor_api import run_cursor_cloud_agent
 from ..connector_config import (
     credentials_for_provider,
     resolve_llm_credentials,
+    resolve_stage_model,
     uses_cursor_cloud_agent,
 )
 from ..database import AsyncSessionLocal
@@ -182,7 +183,13 @@ async def _execute_agent(
 
     config = stage.agent_config
     system_prompt = config.system_prompt if config else "You are a focused orchestration stage agent."
-    model = config.model if config else resolved_model
+    stage_model = config.model if config else resolved_model
+    model = resolve_stage_model(
+        provider=provider,
+        base_url=resolved_url,
+        stage_model=stage_model,
+        default_model=resolved_model,
+    )
     temperature = config.temperature if config else 0.7
     user_content = (
         f"Card title: {card.title}\n\n"

@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import {
+  buildJourney,
+  diagramSvg,
+  formatRunTime,
+  handoffSummary,
+  isFinalizedRun,
+  journeyStateLabel,
+  latestFinalizedForStage,
+  stageName
+} from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
 import { IN_PROGRESS_HINT, PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
@@ -12,24 +22,19 @@ interface Props {
   card: Card | null;
   board?: BoardDetail;
   onClose: () => void;
+  onOpenHistory?: () => void;
 }
 
 function agentRecommendation(value: unknown): 'approve' | 'reject' | null {
   return value === 'approve' || value === 'reject' ? value : null;
 }
 
-function isFinalizedRun(run: AgentRun): boolean {
-  if (run.status === 'completed' || run.status === 'failed' || Boolean(run.completed_at)) {
-    return true;
-  }
-  const handoff = (run.handoff ?? {}) as Handoff;
-  return Boolean(handoff.summary || handoff.plantuml?.svg || (Array.isArray(handoff.links) && handoff.links.length));
-}
-
-export function CardDrawer({ card, board, onClose }: Props) {
+export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
   const queryClient = useQueryClient();
   const previousStatus = useRef<{ id?: string; status?: string }>({});
   const [runStarted, setRunStarted] = useState(false);
+  const [expandedStageId, setExpandedStageId] = useState<string | null>(null);
+
   const { data: runs = [] } = useQuery({
     enabled: Boolean(card),
     queryKey: ['runs', card?.id],
@@ -39,7 +44,12 @@ export function CardDrawer({ card, board, onClose }: Props) {
 
   useEffect(() => {
     setRunStarted(false);
-  }, [card?.id, card?.status]);
+    setExpandedStageId(null);
+  }, [card?.id]);
+
+  useEffect(() => {
+    setRunStarted(false);
+  }, [card?.status]);
 
   useEffect(() => {
     const sameCard = previousStatus.current.id === card?.id;
@@ -51,16 +61,15 @@ export function CardDrawer({ card, board, onClose }: Props) {
 
   const approvalMutation = useMutation({
     mutationFn: async (approved: boolean) => {
-      const latestHandoff = (runs.find(isFinalizedRun)?.handoff ?? {}) as Handoff;
+      const currentHandoff = (latestFinalizedForStage(runs, card?.current_stage_id ?? '')?.handoff ?? {}) as Handoff;
       return apiClient.post(`/cards/${card?.id}/approve`, {
         approved,
-        comment: gateComment(approved, agentRecommendation(latestHandoff.recommendation))
+        comment: gateComment(approved, agentRecommendation(currentHandoff.recommendation))
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
-      onClose();
     }
   });
 
@@ -79,26 +88,33 @@ export function CardDrawer({ card, board, onClose }: Props) {
     }
   });
 
+  const journey = useMemo(() => (card ? buildJourney(card, board, runs) : []), [board, card, runs]);
+
   if (!card) {
     return null;
   }
 
-  const latestRun = runs[0];
-  const handoffRun = runs.find(isFinalizedRun);
+  const currentStageId = card.current_stage_id ?? '';
+  const currentStageRuns = runs.filter((run) => run.stage_id === currentStageId);
+  const latestCurrentRun = currentStageRuns[0];
+  const handoffRun = latestFinalizedForStage(runs, currentStageId);
   const handoff = (handoffRun?.handoff ?? {}) as Handoff;
-  const plantuml = handoff.plantuml?.svg;
+  const plantuml = diagramSvg(handoff);
   const inProgress = card.status === 'running' || runStarted;
   const canRun = (card.status === 'idle' || card.status === 'blocked') && !runStarted;
   const waiting = card.status === 'waiting_approval';
   const joining = card.status === 'waiting_join';
-  const placeholderRun = isPlaceholderRun(handoffRun ?? latestRun);
-  const summary = handoff.summary || handoffRun?.model_output;
+  const placeholderRun = isPlaceholderRun(handoffRun ?? latestCurrentRun);
+  const summary = handoffSummary(handoffRun);
   const links = Array.isArray(handoff.links) ? handoff.links : [];
   const recommendation = agentRecommendation(handoff.recommendation);
-  const recommendationReason = typeof handoff.recommendation_reason === 'string' ? handoff.recommendation_reason.trim() : '';
+  const recommendationReason =
+    typeof handoff.recommendation_reason === 'string' ? handoff.recommendation_reason.trim() : '';
   const outgoing = (board?.transitions ?? []).filter((edge) => edge.from_stage_id === card.current_stage_id);
   const approveLines = outgoing.filter((edge) => edge.event === 'approve');
   const rejectLines = outgoing.filter((edge) => edge.event === 'reject');
+  const currentStageLabel = stageName(board, currentStageId);
+  const pastSteps = journey.filter((step) => step.state === 'done' || step.state === 'failed');
 
   return (
     <Dialog open onClose={onClose} labelledBy="card-drawer-title" variant="drawer">
@@ -114,6 +130,50 @@ export function CardDrawer({ card, board, onClose }: Props) {
 
       <div className="drawer-body">
         <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
+
+        <section className="journey-panel">
+          <div className="journey-panel-head">
+            <h3>Journey</h3>
+            {onOpenHistory ? (
+              <button type="button" className="btn btn-ghost btn-compact" onClick={onOpenHistory}>
+                Full history
+              </button>
+            ) : null}
+          </div>
+          <ol className="journey-strip" aria-label="Stage journey">
+            {journey.map((step, index) => (
+              <li key={step.stage.id} className={`journey-chip is-${step.state}`}>
+                {index > 0 ? (
+                  <span className="journey-arrow" aria-hidden="true">
+                    →
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className={`journey-chip-btn is-${step.state}`}
+                  aria-pressed={expandedStageId === step.stage.id}
+                  disabled={step.state === 'pending' && step.runs.length === 0}
+                  onClick={() => setExpandedStageId((current) => (current === step.stage.id ? null : step.stage.id))}
+                  title={`${step.stage.name} · ${journeyStateLabel(step.state)}`}
+                >
+                  <span className="journey-chip-name">{step.stage.name}</span>
+                  <span className="journey-chip-state">{journeyStateLabel(step.state)}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+          {expandedStageId ? (
+            <JourneyStageDetail
+              stageId={expandedStageId}
+              board={board}
+              runs={runs.filter((run) => run.stage_id === expandedStageId)}
+            />
+          ) : pastSteps.length ? (
+            <p className="muted">Select a past stage to review its handoff, or open full history.</p>
+          ) : (
+            <p className="muted">No prior stages yet. History accumulates as the card advances.</p>
+          )}
+        </section>
 
         {inProgress ? (
           <p className="notice" role="status">
@@ -131,17 +191,14 @@ export function CardDrawer({ card, board, onClose }: Props) {
           <p className="handoff">{card.body || 'No markdown body provided.'}</p>
         </section>
 
-        {summary ? (
-          <section>
-            <h3>Handoff</h3>
+        <section>
+          <h3>Current handoff · {currentStageLabel}</h3>
+          {summary ? (
             <p className="handoff">{summary}</p>
-          </section>
-        ) : (
-          <section>
-            <h3>Handoff</h3>
-            <p className="muted">No stage run yet. Run this station to produce a handoff.</p>
-          </section>
-        )}
+          ) : (
+            <p className="muted">No stage run yet for this station. Run it to produce a handoff.</p>
+          )}
+        </section>
 
         {waiting && recommendation ? (
           <section className={`agent-decision is-${recommendation}`}>
@@ -167,10 +224,10 @@ export function CardDrawer({ card, board, onClose }: Props) {
           </section>
         ) : null}
 
-        {latestRun ? (
+        {latestCurrentRun ? (
           <section>
-            <h3>Run log</h3>
-            <pre className="log">{latestRun.model_output}</pre>
+            <h3>Run log · {currentStageLabel}</h3>
+            <pre className="log">{latestCurrentRun.model_output}</pre>
           </section>
         ) : null}
 
@@ -186,10 +243,12 @@ export function CardDrawer({ card, board, onClose }: Props) {
           </section>
         ) : null}
 
-        {latestRun ? (
+        {latestCurrentRun ? (
           <details className="disclosure">
             <summary>Raw tool calls and handoff JSON</summary>
-            <pre className="log">{JSON.stringify({ tool_calls: latestRun.tool_calls, handoff: latestRun.handoff }, null, 2)}</pre>
+            <pre className="log">
+              {JSON.stringify({ tool_calls: latestCurrentRun.tool_calls, handoff: latestCurrentRun.handoff }, null, 2)}
+            </pre>
           </details>
         ) : null}
         {runMutation.isError ? <div className="error">{runErrorMessage(runMutation.error)}</div> : null}
@@ -233,11 +292,52 @@ export function CardDrawer({ card, board, onClose }: Props) {
             </button>
           </>
         ) : null}
-        {joining ? <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span> : null}
+        {joining ? (
+          <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span>
+        ) : null}
         {inProgress ? <span className="muted">Agent is running this stage…</span> : null}
         {!canRun && !waiting && !joining && !inProgress ? <span className="muted">No gate action on this card.</span> : null}
       </footer>
     </Dialog>
+  );
+}
+
+function JourneyStageDetail({
+  stageId,
+  board,
+  runs
+}: {
+  stageId: string;
+  board?: BoardDetail;
+  runs: AgentRun[];
+}) {
+  const finalized = runs.find(isFinalizedRun) ?? null;
+  const summary = handoffSummary(finalized);
+  const plantuml = finalized ? diagramSvg((finalized.handoff ?? {}) as Handoff) : undefined;
+  const latest = runs[0];
+
+  return (
+    <div className="journey-detail">
+      <p className="journey-detail-kicker">
+        {stageName(board, stageId)}
+        {finalized ? ` · ${formatRunTime(finalized.completed_at ?? finalized.created_at)}` : ''}
+      </p>
+      {summary ? <p className="handoff">{summary}</p> : <p className="muted">No handoff for this stage.</p>}
+      {plantuml ? (
+        <iframe
+          sandbox=""
+          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#fff}</style></head><body>${plantuml}</body></html>`}
+          title={`PlantUML ${stageId}`}
+          className="preview-frame"
+        />
+      ) : null}
+      {latest?.model_output ? (
+        <details className="disclosure">
+          <summary>Run log</summary>
+          <pre className="log">{latest.model_output}</pre>
+        </details>
+      ) : null}
+    </div>
   );
 }
 
@@ -262,5 +362,7 @@ function gateComment(approved: boolean, recommendation: 'approve' | 'reject' | n
     return `${action} in UI`;
   }
   const agreed = (approved && recommendation === 'approve') || (!approved && recommendation === 'reject');
-  return agreed ? `${action} in UI (confirmed agent ${recommendation})` : `${action} in UI (overrode agent ${recommendation})`;
+  return agreed
+    ? `${action} in UI (confirmed agent ${recommendation})`
+    : `${action} in UI (overrode agent ${recommendation})`;
 }

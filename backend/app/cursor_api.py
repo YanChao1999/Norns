@@ -1,31 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 
 from cursor_sdk import AsyncAgent, AsyncClient, CloudAgentOptions, CloudRepository
 
 DEFAULT_CURSOR_MODEL = "auto"
 
 
-def _normalize_model_id(model: str) -> str | None:
+def _model_for_sdk(model: str) -> str:
     model_id = str(model or "").strip()
-    if not model_id or model_id.lower() in {"auto", "default"}:
-        return None
+    if not model_id or model_id.lower() in {"default"}:
+        return DEFAULT_CURSOR_MODEL
     return model_id
 
 
 async def list_cursor_models(api_key: str, *, base_url: str = "") -> list[str]:
-    """List Cursor models via cursor-sdk. ``base_url`` is ignored (SDK owns the endpoint)."""
-    del base_url  # kept for call-site compatibility with connector config
+    """List Cursor models via cursor-sdk (bridge + API key). ``base_url`` is unused."""
+    del base_url
     key = api_key.strip()
     if not key:
         return [DEFAULT_CURSOR_MODEL]
 
-    client = AsyncClient(auth_token=key)
-    try:
+    async with await AsyncClient.launch_bridge(workspace=_bridge_workspace()) as client:
         items = await client.list_models(api_key=key)
-    finally:
-        await client.aclose()
 
     models: list[str] = []
     for item in items:
@@ -48,20 +46,18 @@ async def run_cursor_cloud_agent(
     timeout_seconds: float = 600.0,
 ) -> str:
     """Run a Cursor Cloud Agent for a Norns stage using cursor-sdk only."""
-    del base_url, poll_seconds  # REST polling / host override are unused with the SDK
+    del base_url, poll_seconds
     key = api_key.strip()
     if not key:
         raise ValueError("Cursor API key is required")
 
-    model_id = _normalize_model_id(model)
+    model_id = _model_for_sdk(model)
     repos: list[CloudRepository] = []
     repo = str(repo_url or "").strip()
     if repo:
         repos.append(CloudRepository(url=repo))
 
-    client = AsyncClient(auth_token=key)
-    agent = None
-    try:
+    async with await AsyncClient.launch_bridge(workspace=_bridge_workspace()) as client:
         agent = await AsyncAgent.create(
             client=client,
             model=model_id,
@@ -69,17 +65,21 @@ async def run_cursor_cloud_agent(
             name="Norns stage run",
             cloud=CloudAgentOptions(repos=repos),
         )
-        run = await agent.send(prompt)
-        await asyncio.wait_for(run.wait(), timeout=timeout_seconds)
-        text = (await run.text() or "").strip()
-        if not text:
-            raise RuntimeError("Cursor SDK agent finished with an empty result")
-        return text
-    finally:
-        if agent is not None:
+        try:
+            run = await agent.send(prompt)
+            await asyncio.wait_for(run.wait(), timeout=timeout_seconds)
+            text = (await run.text() or "").strip()
+            if not text:
+                raise RuntimeError("Cursor SDK agent finished with an empty result")
+            return text
+        finally:
             close = getattr(agent, "close", None) or getattr(agent, "aclose", None)
             if close is not None:
                 result = close()
                 if asyncio.iscoroutine(result):
                     await result
-        await client.aclose()
+
+
+def _bridge_workspace() -> str:
+    """Disposable workspace for the SDK bridge (cloud agents do not need a real repo checkout)."""
+    return tempfile.mkdtemp(prefix="norns-cursor-bridge-")

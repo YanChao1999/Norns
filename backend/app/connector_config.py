@@ -25,9 +25,19 @@ LLM_DEFAULTS: dict[ConnectorType, tuple[str, str]] = {
 }
 FALLBACK_MODELS: dict[ConnectorType, tuple[str, ...]] = {
     ConnectorType.OPENAI: ("gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini", "o4-mini"),
-    ConnectorType.DEEPSEEK: ("deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"),
+    # DeepSeek chat API currently advertises these ids (passing Cursor's "auto" fails with 400).
+    ConnectorType.DEEPSEEK: (
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash-vision-exp",
+        "deepseek-chat",
+        "deepseek-reasoner",
+    ),
     ConnectorType.CURSOR: ("auto", "auto-smart", "composer-2", "composer-2.5"),
 }
+
+# Model ids that only make sense on Cursor Cloud Agents / Cursor Router.
+CURSOR_ONLY_MODEL_IDS = frozenset({"auto", "auto-smart", "default"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +70,27 @@ def uses_cursor_cloud_agent(provider: str, base_url: str) -> bool:
         # A custom OpenAI-compatible proxy stays on the OpenAI SDK path.
         return not url or "api.cursor.com" in url
     return "api.cursor.com" in url
+
+
+def resolve_stage_model(
+    *,
+    provider: str,
+    base_url: str,
+    stage_model: str,
+    default_model: str,
+) -> str:
+    """Pick a model id that the selected provider can actually call.
+
+    Stages often keep Cursor's ``auto`` after switching the provider to DeepSeek/OpenAI;
+    OpenAI-compatible APIs reject that id (DeepSeek 400).
+    """
+    fallback = str(default_model or "").strip()
+    model = str(stage_model or "").strip() or fallback
+    if uses_cursor_cloud_agent(provider, base_url):
+        return model or DEFAULT_CURSOR_MODEL
+    if not model or model.lower() in CURSOR_ONLY_MODEL_IDS:
+        return fallback or model
+    return model
 
 
 def supports_chat_completions(creds: LlmCredentials) -> bool:

@@ -68,6 +68,29 @@ def test_deepseek_connector_credentials_are_used_for_runs():
     assert creds.base_url == "https://api.deepseek.com/v1"
 
 
+def test_resolve_stage_model_replaces_cursor_auto_for_deepseek():
+    from backend.app.connector_config import DEFAULT_DEEPSEEK_MODEL, resolve_stage_model
+
+    assert (
+        resolve_stage_model(
+            provider="deepseek",
+            base_url="https://api.deepseek.com/v1",
+            stage_model="auto",
+            default_model=DEFAULT_DEEPSEEK_MODEL,
+        )
+        == DEFAULT_DEEPSEEK_MODEL
+    )
+    assert (
+        resolve_stage_model(
+            provider="cursor",
+            base_url="https://api.cursor.com/v1",
+            stage_model="auto",
+            default_model="auto",
+        )
+        == "auto"
+    )
+
+
 def test_filter_chat_model_ids_keeps_provider_defaults():
     openai = filter_chat_model_ids(
         "openai",

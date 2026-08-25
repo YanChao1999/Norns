@@ -1108,3 +1108,171 @@ details.disclosure summary {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Card journey (drawer) + full history page */
+.journey-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.journey-panel-head,
+.history-head,
+.history-actions,
+.journey-step-head,
+.history-run-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.journey-panel-head h3,
+.history-section h2 {
+  margin: 0;
+}
+
+.journey-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.journey-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.journey-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.journey-arrow {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.journey-chip-btn,
+.journey-pill {
+  border: 1px solid var(--line);
+  background: var(--elevated);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.journey-chip-btn {
+  cursor: pointer;
+}
+
+.journey-chip-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.journey-chip-btn.is-current,
+.journey-pill.is-current,
+.journey-step.is-current {
+  border-color: var(--accent, #3d8bfd);
+}
+
+.journey-chip-btn.is-done,
+.journey-pill.is-done {
+  border-color: color-mix(in srgb, var(--text) 35%, transparent);
+}
+
+.journey-chip-btn.is-failed,
+.journey-pill.is-failed,
+.history-run.is-failed {
+  border-color: var(--blocked, #f85149);
+}
+
+.journey-chip-btn.is-running,
+.journey-pill.is-running {
+  border-color: var(--warn, #d29922);
+}
+
+.journey-chip-name {
+  font-weight: 600;
+}
+
+.journey-chip-state,
+.journey-pill {
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.journey-detail,
+.history-run,
+.journey-step {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--elevated);
+  display: grid;
+  gap: 8px;
+}
+
+.journey-detail-kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.btn-compact {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.history-page {
+  display: grid;
+  gap: 20px;
+  padding: 8px 0 32px;
+  max-width: 920px;
+}
+
+.history-head h1 {
+  margin: 4px 0 8px;
+}
+
+.history-section {
+  display: grid;
+  gap: 12px;
+}
+
+.history-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.history-run h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+@media (max-width: 720px) {
+  .history-head,
+  .history-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

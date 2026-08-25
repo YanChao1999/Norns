@@ -6,6 +6,7 @@ import { entryStageId, groupStages } from '../boardLayout';
 import { BoardDetail, Card, Stage } from '../types';
 import { AgentConfigModal } from './AgentConfig';
 import { CardDrawer } from './CardDrawer';
+import { CardHistory } from './CardHistory';
 import { Column } from './Column';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 
 export function Board({ boardId, onEditMachine }: Props) {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [historyCard, setHistoryCard] = useState<Card | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
 
   const { data: board, isLoading } = useQuery({
@@ -43,6 +45,23 @@ export function Board({ boardId, onEditMachine }: Props) {
   const entryId = entryStageId(stages);
   const rowCount = Math.max(1, ...stages.map((stage) => (stage.lane ?? 0) + 1));
   const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
+  const liveHistoryCard = historyCard
+    ? (board.cards.find((item) => item.id === historyCard.id) ?? historyCard)
+    : null;
+
+  if (liveHistoryCard) {
+    return (
+      <CardHistory
+        card={liveHistoryCard}
+        board={board}
+        onBack={() => setHistoryCard(null)}
+        onOpenCard={() => {
+          setSelectedCard(liveHistoryCard);
+          setHistoryCard(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -117,7 +136,19 @@ export function Board({ boardId, onEditMachine }: Props) {
         })}
       </div>
 
-      <CardDrawer card={liveCard} board={board} onClose={() => setSelectedCard(null)} />
+      <CardDrawer
+        card={liveCard}
+        board={board}
+        onClose={() => setSelectedCard(null)}
+        onOpenHistory={
+          liveCard
+            ? () => {
+                setHistoryCard(liveCard);
+                setSelectedCard(null);
+              }
+            : undefined
+        }
+      />
       <AgentConfigModal stage={selectedStage} onClose={() => setSelectedStage(null)} />
     </div>
   );
