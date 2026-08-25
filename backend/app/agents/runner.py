@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
-from ..connector_config import resolve_llm_credentials
+from ..cursor_api import run_cursor_cloud_agent
+from ..connector_config import (
+    credentials_for_provider,
+    resolve_llm_credentials,
+    uses_cursor_cloud_agent,
+)
 from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
@@ -78,7 +83,13 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
 
     next_jobs: list[tuple[str, str]] = []
     try:
-        creds = resolve_llm_credentials(connectors, settings)
+        preferred = ""
+        if stage.agent_config and str(getattr(stage.agent_config, "llm_provider", "") or "").strip():
+            preferred = str(stage.agent_config.llm_provider).strip().lower()
+        if preferred:
+            creds = credentials_for_provider(connectors, settings, preferred)
+        else:
+            creds = resolve_llm_credentials(connectors, settings)
         model_output, tool_calls, handoff = await _execute_agent(
             settings=settings,
             card=card,
@@ -87,6 +98,8 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             api_key=creds.api_key,
             base_url=creds.base_url,
             default_model=creds.default_model,
+            provider=creds.provider,
+            repo_url=creds.repo_url,
         )
         run.tool_calls = tool_calls
         run.model_output = model_output
@@ -152,6 +165,8 @@ async def _execute_agent(
     api_key: str = "",
     base_url: str = "",
     default_model: str = "",
+    provider: str = "",
+    repo_url: str = "",
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     resolved_key = api_key or str(getattr(settings, "openai_api_key", "") or "")
     resolved_url = base_url or str(getattr(settings, "openai_base_url", "") or "https://api.openai.com/v1")
@@ -169,10 +184,6 @@ async def _execute_agent(
     system_prompt = config.system_prompt if config else "You are a focused orchestration stage agent."
     model = config.model if config else resolved_model
     temperature = config.temperature if config else 0.7
-    tools_payload = [tool.openai_tool for tool in runtime_tools]
-    tool_map = {tool.name: tool for tool in runtime_tools}
-
-    client = AsyncOpenAI(api_key=resolved_key.strip(), base_url=resolved_url)
     user_content = (
         f"Card title: {card.title}\n\n"
         f"Card body:\n{card.body}\n\n"
@@ -180,6 +191,28 @@ async def _execute_agent(
     )
     if stage.require_approval:
         user_content = f"{user_content}\n\n{DECISION_INSTRUCTION}"
+
+    if uses_cursor_cloud_agent(provider, resolved_url):
+        prompt = (
+            f"{system_prompt}\n\n"
+            "You are running as a Norns stage agent. Produce a clear textual handoff for the next column. "
+            "Do not modify repositories unless the task explicitly requires it.\n\n"
+            f"{user_content}"
+        )
+        content = await run_cursor_cloud_agent(
+            api_key=resolved_key.strip(),
+            prompt=prompt,
+            model=model,
+            base_url=resolved_url,
+            repo_url=repo_url,
+        )
+        handoff = await _build_handoff(content)
+        return content, [], handoff
+
+    tools_payload = [tool.openai_tool for tool in runtime_tools]
+    tool_map = {tool.name: tool for tool in runtime_tools}
+
+    client = AsyncOpenAI(api_key=resolved_key.strip(), base_url=resolved_url)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},

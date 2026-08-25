@@ -22,6 +22,7 @@ class AgentConfigRead(BaseModel):
     id: str
     system_prompt: str
     model: str
+    llm_provider: str = ""
     temperature: float
     tool_allowlist: list[str]
 
@@ -123,6 +124,7 @@ class StageCreate(BaseModel):
         "If this stage has a human gate, recommend DECISION: approve or reject; a human must confirm."
     )
     model: str = "gpt-4o"
+    llm_provider: str = ""
     temperature: float = 0.7
     tool_allowlist: list[str] = []
 
@@ -134,6 +136,7 @@ class StageUpdate(BaseModel):
     require_approval: bool | None = None
     system_prompt: str | None = None
     model: str | None = None
+    llm_provider: str | None = None
     temperature: float | None = None
     tool_allowlist: list[str] | None = None
 
@@ -276,6 +279,7 @@ async def create_stage(
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,
         model=payload.model,
+        llm_provider=payload.llm_provider,
         temperature=payload.temperature,
         tool_allowlist=payload.tool_allowlist,
     )
@@ -307,14 +311,20 @@ async def update_stage(
         raise HTTPException(status_code=404, detail="Stage not found")
 
     stage_fields = payload.model_dump(
-        exclude_none=True, exclude={"system_prompt", "model", "temperature", "tool_allowlist"}
+        exclude_none=True, exclude={"system_prompt", "model", "llm_provider", "temperature", "tool_allowlist"}
     )
     for field, value in stage_fields.items():
         setattr(stage, field, value)
 
     if any(
         value is not None
-        for value in [payload.system_prompt, payload.model, payload.temperature, payload.tool_allowlist]
+        for value in [
+            payload.system_prompt,
+            payload.model,
+            payload.llm_provider,
+            payload.temperature,
+            payload.tool_allowlist,
+        ]
     ):
         if not stage.agent_config:
             stage.agent_config = AgentConfig(stage_id=stage.id)
@@ -322,6 +332,8 @@ async def update_stage(
             stage.agent_config.system_prompt = payload.system_prompt
         if payload.model is not None:
             stage.agent_config.model = payload.model
+        if payload.llm_provider is not None:
+            stage.agent_config.llm_provider = payload.llm_provider
         if payload.temperature is not None:
             stage.agent_config.temperature = payload.temperature
         if payload.tool_allowlist is not None:

@@ -4,10 +4,10 @@ export const IN_PROGRESS_HINT =
   'This stage is in progress. Wait for the handoff — extra Run clicks are ignored until it finishes.';
 
 export const NO_API_KEY_HINT =
-  'No model connector yet, so runs are practice only (no model is called). Open Settings, add OpenAI, Cursor, or DeepSeek with your API key, then run the stage again.';
+  'No usable model connector yet, so runs are practice only. Open Settings and add DeepSeek, OpenAI, or Cursor.';
 
 export const PLACEHOLDER_RUN_HINT =
-  'This handoff is a practice run because no API key was configured. Add an OpenAI, Cursor, or DeepSeek connector in Settings and run the stage again for a real agent.';
+  'This handoff is a practice run because no usable API key was configured. Add a DeepSeek, OpenAI, or Cursor connector in Settings and run the stage again.';
 
 export function isPlaceholderRun(run: Pick<AgentRun, 'model_output' | 'handoff'> | undefined): boolean {
   if (!run) {

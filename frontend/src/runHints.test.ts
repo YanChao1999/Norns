@@ -18,7 +18,7 @@ describe('run hints', () => {
   });
 
   it('tells people how to make a real run', () => {
-    expect(NO_API_KEY_HINT).toMatch(/Cursor|DeepSeek|OpenAI/i);
+    expect(NO_API_KEY_HINT).toMatch(/DeepSeek|OpenAI/i);
     expect(PLACEHOLDER_RUN_HINT).toMatch(/practice run/i);
   });
 });

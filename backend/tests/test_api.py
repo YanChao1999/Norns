@@ -298,6 +298,64 @@ def test_openai_connector_can_be_created_from_settings_api():
     asyncio.run(engine.dispose())
 
 
+def test_llm_models_endpoint_returns_fallback_catalog():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        response = client.get("/api/connectors/llm-models?provider=deepseek")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["provider"] == "deepseek"
+        assert body["source"] == "fallback"
+        assert "deepseek-v4-flash" in body["models"]
+        assert body["default_model"] == "deepseek-v4-flash"
+        assert any(entry["provider"] == "deepseek" and entry["id"] == "deepseek-v4-flash" for entry in body["entries"])
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_llm_models_endpoint_labels_models_by_provider():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        client.post(
+            "/api/connectors",
+            json={
+                "name": "DeepSeek",
+                "connector_type": "deepseek",
+                "config": {
+                    "api_key": "sk-deepseek",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "default_model": "deepseek-v4-flash",
+                },
+            },
+        )
+        client.post(
+            "/api/connectors",
+            json={
+                "name": "Cursor",
+                "connector_type": "cursor",
+                "config": {"api_key": "crsr_test", "base_url": "https://api.cursor.com/v1", "default_model": "auto"},
+            },
+        )
+        response = client.get("/api/connectors/llm-models")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        labels = {entry["label"] for entry in body["entries"]}
+        assert any("DeepSeek" in label for label in labels)
+        assert any("Cursor" in label for label in labels)
+        cursor_auto = next(
+            entry for entry in body["entries"] if entry["provider"] == "cursor" and entry["id"] == "auto"
+        )
+        assert cursor_auto["usable"] is True
+        assert "·" in cursor_auto["label"]
+        assert "Cursor" in cursor_auto["label"]
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 async def _create_tables(engine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

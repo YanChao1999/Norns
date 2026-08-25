@@ -5,6 +5,7 @@ export interface AgentConfig {
   id: string;
   system_prompt: string;
   model: string;
+  llm_provider?: string;
   temperature: number;
   tool_allowlist: string[];
 }

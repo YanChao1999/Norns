@@ -38,7 +38,7 @@ export function Settings({ onCreated }: Props) {
       <div className="board-head">
         <div>
           <h1>Settings</h1>
-          <p>Boards and connectors live here so the board canvas stays clear. Add an OpenAI, Cursor, or DeepSeek connector to make stage runs call a real model.</p>
+          <p>Boards and connectors live here so the board canvas stays clear. Add DeepSeek, OpenAI, or Cursor to make stage runs call a real agent.</p>
         </div>
       </div>
 

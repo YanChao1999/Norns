@@ -1,8 +1,16 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { Connector, ConnectorType } from '../types';
+
+interface LlmModelCatalog {
+  provider: string;
+  default_model: string;
+  models: string[];
+  source: string;
+  error?: string;
+}
 
 const TYPES: ConnectorType[] = ['openai', 'cursor', 'deepseek', 'github', 'jira', 'polarion'];
 
@@ -23,7 +31,8 @@ const EMPTY_FORM = {
   server: '',
   username: '',
   password: '',
-  project: ''
+  project: '',
+  repo_url: ''
 };
 
 export function ConnectorHealth() {
@@ -34,6 +43,26 @@ export function ConnectorHealth() {
     queryKey: ['connectors'],
     queryFn: () => apiClient.get<Connector[]>('/connectors')
   });
+  const { data: modelCatalog } = useQuery({
+    queryKey: ['llm-models', form.connector_type],
+    enabled: isLlmType(form.connector_type),
+    queryFn: () => apiClient.get<LlmModelCatalog>(`/connectors/llm-models?provider=${form.connector_type}`),
+    staleTime: 60_000
+  });
+  const modelOptions = useMemo(() => {
+    if (!isLlmType(form.connector_type)) {
+      return [];
+    }
+    const defaults = LLM_DEFAULTS[form.connector_type];
+    const merged = [...(modelCatalog?.models ?? [])];
+    if (defaults.default_model && !merged.includes(defaults.default_model)) {
+      merged.unshift(defaults.default_model);
+    }
+    if (form.default_model && !merged.includes(form.default_model)) {
+      merged.unshift(form.default_model);
+    }
+    return merged.length ? merged : [defaults.default_model];
+  }, [form.connector_type, form.default_model, modelCatalog]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -71,7 +100,12 @@ export function ConnectorHealth() {
   return (
     <section className="panel">
       <h2>Connectors</h2>
-      <p className="muted">OpenAI, Cursor, and DeepSeek are model connectors. GitHub, Jira, and Polarion unlock tools on a column when you check them under Agent. If more than one model connector is active, Cursor is used first, then DeepSeek, then OpenAI.</p>
+      <p className="muted">
+        OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface via{" "}
+        <code>cursor-sdk</code> only — pick models labeled · Cursor (e.g. auto). GitHub, Jira, and
+        Polarion unlock tools under Agent. If more than one model connector is active and the stage has no provider set,
+        DeepSeek is used first, then OpenAI, then Cursor.
+      </p>
 
       <form className="connector-form" onSubmit={onSubmit}>
         <label className="field">
@@ -119,9 +153,32 @@ export function ConnectorHealth() {
             </label>
             <label className="field">
               Default model
-              <input className="input" value={form.default_model} onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))} />
+              <select className="input" value={form.default_model} onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}>
+                {modelOptions.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
             </label>
+            {form.connector_type === 'cursor' ? (
+              <label className="field">
+                GitHub repo URL (optional)
+                <input
+                  className="input"
+                  value={form.repo_url}
+                  onChange={(event) => setForm((current) => ({ ...current, repo_url: event.target.value }))}
+                  placeholder="Leave empty for no-repo Cloud Agent"
+                />
+              </label>
+            ) : null}
           </>
+        ) : null}
+        {form.connector_type === 'cursor' ? (
+          <p className="muted">
+            Stage runs call Cursor only through <code>cursor-sdk</code> (no direct REST). Model ids like <code>auto</code> are
+            Cursor-specific. Optional GitHub repo URL attaches a repository to the cloud agent.
+          </p>
         ) : null}
         {form.connector_type === 'github' ? (
           <>
@@ -251,7 +308,11 @@ function labelFor(type: ConnectorType): string {
 
 function configFromForm(form: typeof EMPTY_FORM): Record<string, string> {
   if (isLlmType(form.connector_type)) {
-    return { api_key: form.api_key, base_url: form.base_url, default_model: form.default_model };
+    const config: Record<string, string> = { api_key: form.api_key, base_url: form.base_url, default_model: form.default_model };
+    if (form.connector_type === 'cursor' && form.repo_url.trim()) {
+      config.repo_url = form.repo_url.trim();
+    }
+    return config;
   }
   if (form.connector_type === 'github') {
     return { token: form.token, base_url: form.base_url };
@@ -275,7 +336,8 @@ function startEdit(connector: Connector, setEditingId: (id: string) => void, set
     default_model: publicConfig.default_model ?? defaults.default_model,
     server: publicConfig.server ?? '',
     username: publicConfig.username ?? '',
-    project: publicConfig.project ?? ''
+    project: publicConfig.project ?? '',
+    repo_url: publicConfig.repo_url ?? ''
   });
 }
 

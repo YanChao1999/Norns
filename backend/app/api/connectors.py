@@ -7,7 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..connector_config import LLM_CONNECTOR_TYPES, LLM_LABELS, merge_connector_config
+from ..config import get_settings
+from ..connector_config import (
+    LLM_CONNECTOR_TYPES,
+    LLM_LABELS,
+    credentials_for_provider,
+    fetch_all_llm_model_catalogs,
+    fetch_llm_model_catalog,
+    merge_connector_config,
+)
 from ..database import get_session
 from ..models import Connector, ConnectorType
 from .auth import get_current_user
@@ -40,10 +48,58 @@ class ConnectorRead(BaseModel):
     public_config: dict[str, str] = Field(default_factory=dict)
 
 
+class LlmModelEntryRead(BaseModel):
+    id: str
+    provider: str
+    label: str
+    usable: bool
+    source: str
+
+
+class LlmModelCatalogRead(BaseModel):
+    provider: str
+    default_model: str
+    models: list[str]
+    source: str
+    error: str = ""
+    entries: list[LlmModelEntryRead] = Field(default_factory=list)
+
+
 @router.get("", response_model=list[ConnectorRead])
 async def list_connectors(session: Annotated[AsyncSession, Depends(get_session)]) -> list[Connector]:
     result = await session.execute(select(Connector).order_by(Connector.name))
     return list(result.scalars().all())
+
+
+@router.get("/llm-models", response_model=LlmModelCatalogRead)
+async def list_llm_models(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    provider: str | None = None,
+) -> LlmModelCatalogRead:
+    settings = get_settings()
+    result = await session.execute(select(Connector).where(Connector.is_active.is_(True)))
+    connectors = list(result.scalars().all())
+    if provider and str(provider).strip():
+        catalog = await fetch_llm_model_catalog(credentials_for_provider(connectors, settings, provider))
+    else:
+        catalog = await fetch_all_llm_model_catalogs(connectors, settings)
+    return LlmModelCatalogRead(
+        provider=catalog.provider,
+        default_model=catalog.default_model,
+        models=catalog.models,
+        source=catalog.source,
+        error=catalog.error,
+        entries=[
+            LlmModelEntryRead(
+                id=entry.id,
+                provider=entry.provider,
+                label=entry.label,
+                usable=entry.usable,
+                source=entry.source,
+            )
+            for entry in catalog.entries
+        ],
+    )
 
 
 @router.post("", response_model=ConnectorRead, status_code=status.HTTP_201_CREATED)

@@ -27,6 +27,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_connector_types)
+        await conn.run_sync(ensure_agent_config_llm_provider)
         await conn.run_sync(assert_fresh_schema)
 
 
@@ -66,6 +67,17 @@ def _connector_ddl_missing_types(ddl: str) -> bool:
 
 def ensure_openai_connector_type(sync_conn) -> None:
     ensure_connector_types(sync_conn)
+
+
+def ensure_agent_config_llm_provider(sync_conn) -> None:
+    """create_all does not add columns to existing agent_configs tables."""
+    inspector = inspect(sync_conn)
+    if not inspector.has_table("agent_configs"):
+        return
+    present = {column["name"] for column in inspector.get_columns("agent_configs")}
+    if "llm_provider" in present:
+        return
+    sync_conn.execute(text("ALTER TABLE agent_configs ADD COLUMN llm_provider VARCHAR(32) NOT NULL DEFAULT ''"))
 
 
 def assert_fresh_schema(sync_conn) -> None:

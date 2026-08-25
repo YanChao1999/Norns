@@ -106,6 +106,29 @@ async def test_auto_advance_ignores_agent_reject_recommendation(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_execute_agent_uses_cursor_cloud_agent_for_native_host(monkeypatch):
+    async def fake_cursor(**kwargs):
+        assert kwargs["api_key"] == "crsr_test"
+        assert kwargs["model"] == "auto"
+        return "Cursor handoff text\nDECISION: approve\nREASON: looks good"
+
+    monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
+    text, tools, handoff = await _execute_agent(
+        SimpleNamespace(openai_api_key=""),
+        SimpleNamespace(title="Work", body="Do it", runs=[]),
+        SimpleNamespace(name="Urd", require_approval=True, agent_config=None),
+        [],
+        api_key="crsr_test",
+        base_url="https://api.cursor.com/v1",
+        default_model="auto",
+        provider="cursor",
+    )
+    assert tools == []
+    assert "Cursor handoff" in text
+    assert handoff["summary"]
+
+
+@pytest.mark.asyncio
 async def test_execute_agent_is_practice_run_without_api_key():
     text, tools, handoff = await _execute_agent(
         SimpleNamespace(openai_api_key=""),

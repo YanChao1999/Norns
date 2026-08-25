@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from backend.app.database import assert_fresh_schema, ensure_connector_types
+from backend.app.database import assert_fresh_schema, ensure_agent_config_llm_provider, ensure_connector_types
 
 
 def test_assert_fresh_schema_rejects_stages_without_lane(tmp_path: Path):
@@ -37,7 +37,29 @@ def test_assert_fresh_schema_accepts_current_columns(tmp_path: Path):
     engine.dispose()
 
 
-def test_ensure_connector_types_rebuilds_sqlite_check(tmp_path: Path):
+def test_ensure_agent_config_llm_provider_adds_column(tmp_path: Path):
+    path = tmp_path / "agents.db"
+    raw = sqlite3.connect(path)
+    raw.execute(
+        """
+        CREATE TABLE agent_configs (
+            id TEXT PRIMARY KEY,
+            stage_id TEXT NOT NULL,
+            system_prompt TEXT NOT NULL,
+            model TEXT NOT NULL,
+            temperature FLOAT NOT NULL,
+            tool_allowlist TEXT NOT NULL
+        )
+        """
+    )
+    raw.commit()
+    raw.close()
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as conn:
+        ensure_agent_config_llm_provider(conn)
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_configs)"))}
+    engine.dispose()
+    assert "llm_provider" in cols
     path = tmp_path / "connectors.db"
     raw = sqlite3.connect(path)
     raw.execute(

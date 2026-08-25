@@ -56,6 +56,7 @@ class AgentConfig(Base):
     stage_id: Mapped[str] = mapped_column(ForeignKey("stages.id", ondelete="CASCADE"), unique=True, nullable=False)
     system_prompt: Mapped[str] = mapped_column(Text, default="You are the stage agent.", nullable=False)
     model: Mapped[str] = mapped_column(String(120), default="gpt-4o", nullable=False)
+    llm_provider: Mapped[str] = mapped_column(String(32), default="", nullable=False)
     temperature: Mapped[float] = mapped_column(Float, default=0.7, nullable=False)
     tool_allowlist: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
 
