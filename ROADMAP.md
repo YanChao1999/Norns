@@ -11,8 +11,8 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 ## First-use Settings (users cannot finish setup in the UI)
 
-- [ ] **Connector form in Settings** — add/edit/disable Jira, GitHub, Polarion. Jira needs `server`, `username`, `token`. GitHub needs `token` (optional `base_url`). Polarion needs `server`, `username`, `password`, optional `project`. Today Settings only lists “No connectors configured.” The API already exists (`POST /api/connectors`).
-- [ ] **API key in Settings** — OpenAI-compatible API key, base URL, and default model. Today this is `~/.norns/config.toml` only.
+- [x] **Connector form in Settings** — add/edit/disable OpenAI, Cursor, DeepSeek, Jira, GitHub, Polarion. OpenAI / Cursor / DeepSeek are model connectors (`api_key`, optional `base_url` / `default_model`). Jira needs `server`, `username`, `token`. GitHub needs `token` (optional `base_url`). Polarion needs `server`, `username`, `password`, optional `project`.
+- [x] **API key in Settings** — OpenAI-compatible keys are encrypted connectors (OpenAI, Cursor, DeepSeek). Env/`config.toml` still works as a fallback.
 - [ ] **Agent setup path** — explain that the column **Agent** button opens prompt / model / tools; an empty tool allowlist grants no tools; checking `jira` / `github` / `polarion` requires an active connector of that type.
 - [ ] **Warn when tools have no connector** — do not silently grant nothing.
 - [ ] **Empty state after login** — with no boards, land in Settings (or a short checklist): create board → API key → connector if you need tools → open the board.

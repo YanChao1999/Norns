@@ -12,8 +12,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from ..config import get_settings
 from ..database import Base
 
+SECRET_CONFIG_KEYS = frozenset({"api_key", "token", "password"})
+
 
 class ConnectorType(str, Enum):
+    OPENAI = "openai"
+    CURSOR = "cursor"
+    DEEPSEEK = "deepseek"
     GITHUB = "github"
     JIRA = "jira"
     POLARION = "polarion"
@@ -46,3 +51,14 @@ class Connector(Base):
     @property
     def config_keys(self) -> list[str]:
         return sorted(self.get_config().keys()) if self.encrypted_config else []
+
+    @property
+    def public_config(self) -> dict[str, str]:
+        if not self.encrypted_config:
+            return {}
+        config = self.get_config()
+        return {
+            key: str(value)
+            for key, value in config.items()
+            if key not in SECRET_CONFIG_KEYS and value not in (None, "")
+        }

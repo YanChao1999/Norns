@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
+import { IN_PROGRESS_HINT, PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { AgentRun, BoardDetail, Card } from '../types';
 import { Dialog } from './Dialog';
@@ -28,12 +29,17 @@ function isFinalizedRun(run: AgentRun): boolean {
 export function CardDrawer({ card, board, onClose }: Props) {
   const queryClient = useQueryClient();
   const previousStatus = useRef<{ id?: string; status?: string }>({});
+  const [runStarted, setRunStarted] = useState(false);
   const { data: runs = [] } = useQuery({
     enabled: Boolean(card),
     queryKey: ['runs', card?.id],
     queryFn: () => apiClient.get<AgentRun[]>(`/cards/${card?.id}/runs`),
     refetchInterval: card?.status === 'running' ? 2000 : false
   });
+
+  useEffect(() => {
+    setRunStarted(false);
+  }, [card?.id, card?.status]);
 
   useEffect(() => {
     const sameCard = previousStatus.current.id === card?.id;
@@ -63,6 +69,13 @@ export function CardDrawer({ card, board, onClose }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+    },
+    onError: (error) => {
+      queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
+      queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      if (!runErrorMessage(error).includes('already running')) {
+        setRunStarted(false);
+      }
     }
   });
 
@@ -74,9 +87,11 @@ export function CardDrawer({ card, board, onClose }: Props) {
   const handoffRun = runs.find(isFinalizedRun);
   const handoff = (handoffRun?.handoff ?? {}) as Handoff;
   const plantuml = handoff.plantuml?.svg;
-  const canRun = card.status === 'idle' || card.status === 'blocked';
+  const inProgress = card.status === 'running' || runStarted;
+  const canRun = (card.status === 'idle' || card.status === 'blocked') && !runStarted;
   const waiting = card.status === 'waiting_approval';
   const joining = card.status === 'waiting_join';
+  const placeholderRun = isPlaceholderRun(handoffRun ?? latestRun);
   const summary = handoff.summary || handoffRun?.model_output;
   const links = Array.isArray(handoff.links) ? handoff.links : [];
   const recommendation = agentRecommendation(handoff.recommendation);
@@ -99,6 +114,17 @@ export function CardDrawer({ card, board, onClose }: Props) {
 
       <div className="drawer-body">
         <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
+
+        {inProgress ? (
+          <p className="notice" role="status">
+            {IN_PROGRESS_HINT}
+          </p>
+        ) : null}
+        {placeholderRun && !inProgress ? (
+          <p className="notice" role="status">
+            {PLACEHOLDER_RUN_HINT}
+          </p>
+        ) : null}
 
         <section>
           <h3>Card body</h3>
@@ -166,11 +192,20 @@ export function CardDrawer({ card, board, onClose }: Props) {
             <pre className="log">{JSON.stringify({ tool_calls: latestRun.tool_calls, handoff: latestRun.handoff }, null, 2)}</pre>
           </details>
         ) : null}
+        {runMutation.isError ? <div className="error">{runErrorMessage(runMutation.error)}</div> : null}
       </div>
 
       <footer className="drawer-foot">
         {canRun ? (
-          <button type="button" className="btn btn-primary" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setRunStarted(true);
+              runMutation.mutate();
+            }}
+            disabled={runMutation.isPending || runStarted}
+          >
             {runMutation.isPending ? 'Starting…' : 'Run this stage'}
           </button>
         ) : null}
@@ -199,10 +234,26 @@ export function CardDrawer({ card, board, onClose }: Props) {
           </>
         ) : null}
         {joining ? <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span> : null}
-        {!canRun && !waiting && !joining ? <span className="muted">No gate action on this card.</span> : null}
+        {inProgress ? <span className="muted">Agent is running this stage…</span> : null}
+        {!canRun && !waiting && !joining && !inProgress ? <span className="muted">No gate action on this card.</span> : null}
       </footer>
     </Dialog>
   );
+}
+
+function runErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Could not start this stage.';
+  }
+  try {
+    const parsed = JSON.parse(error.message) as { detail?: unknown };
+    if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+      return parsed.detail;
+    }
+  } catch {
+    /* response body was not JSON */
+  }
+  return error.message || 'Could not start this stage.';
 }
 
 function gateComment(approved: boolean, recommendation: 'approve' | 'reject' | null): string {

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from backend.app.agents.runner import _run_stage
+from backend.app.agents.runner import _execute_agent, _run_stage
 from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
 from backend.app.orchestrator.state_machine import CardStatus
@@ -101,3 +103,18 @@ async def test_auto_advance_ignores_agent_reject_recommendation(monkeypatch):
         assert queued == [(card.id, stage_b.id)]
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_is_practice_run_without_api_key():
+    text, tools, handoff = await _execute_agent(
+        SimpleNamespace(openai_api_key=""),
+        SimpleNamespace(title="Work", body="Do it"),
+        SimpleNamespace(name="Urd"),
+        [],
+        api_key="",
+    )
+    assert tools == []
+    assert handoff["placeholder"] is True
+    assert "practice run" in text.lower()
+    assert "api key" in text.lower()

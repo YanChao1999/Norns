@@ -6,6 +6,7 @@ import { Board } from './components/Board';
 import { LoginForm } from './components/LoginForm';
 import { Settings } from './components/Settings';
 import { StateMachineEditor } from './components/StateMachineEditor';
+import { NO_API_KEY_HINT } from './runHints';
 import { BoardDetail, BoardSummary } from './types';
 
 type View = 'board' | 'machine' | 'settings';
@@ -40,6 +41,12 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  const { data: runtime } = useQuery({
+    queryKey: ['health'],
+    enabled: Boolean(username),
+    queryFn: () => apiClient.get<{ status: string; openai_configured?: boolean }>('/health')
+  });
 
   const { data: boards = [], isLoading } = useQuery({
     queryKey: ['boards'],
@@ -116,6 +123,11 @@ export default function App() {
       </header>
 
       <main className="workspace">
+        {runtime?.openai_configured === false ? (
+          <p className="notice" role="status">
+            {NO_API_KEY_HINT}
+          </p>
+        ) : null}
         {view === 'settings' ? (
           <Settings
             onCreated={(boardId) => {

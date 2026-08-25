@@ -171,6 +171,17 @@ a {
   min-height: calc(100vh - var(--header-h));
 }
 
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--waiting) 40%, var(--line));
+  background: color-mix(in srgb, var(--waiting) 12%, var(--surface));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .board-head {
   display: flex;
   justify-content: space-between;
@@ -726,13 +737,32 @@ details.disclosure summary {
   text-transform: uppercase;
 }
 
+.panel form,
+.connector-form {
+  display: grid;
+  gap: 12px;
+}
+
 .connector-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   font-size: 14px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.connector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .connector-row:last-child {

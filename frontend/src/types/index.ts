@@ -1,5 +1,5 @@
 export type CardStatus = 'idle' | 'running' | 'waiting_approval' | 'waiting_join' | 'blocked' | 'done';
-export type ConnectorType = 'github' | 'jira' | 'polarion';
+export type ConnectorType = 'openai' | 'cursor' | 'deepseek' | 'github' | 'jira' | 'polarion';
 
 export interface AgentConfig {
   id: string;
@@ -77,6 +77,7 @@ export interface Connector {
   connector_type: ConnectorType;
   is_active: boolean;
   config_keys: string[];
+  public_config?: Record<string, string>;
 }
 
 export interface CardStatusMachine {

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..connector_config import LLM_CONNECTOR_TYPES, LLM_LABELS, merge_connector_config
 from ..database import get_session
 from ..models import Connector, ConnectorType
 from .auth import get_current_user
@@ -36,6 +37,7 @@ class ConnectorRead(BaseModel):
     connector_type: ConnectorType
     is_active: bool
     config_keys: list[str]
+    public_config: dict[str, str] = Field(default_factory=dict)
 
 
 @router.get("", response_model=list[ConnectorRead])
@@ -52,6 +54,7 @@ async def create_connector(
         name=payload.name, connector_type=payload.connector_type, is_active=payload.is_active, encrypted_config=b""
     )
     connector.set_config(payload.config)
+    _validate_llm_key(connector)
     session.add(connector)
     await session.commit()
     await session.refresh(connector)
@@ -69,7 +72,8 @@ async def update_connector(
     for field, value in updates.items():
         setattr(connector, field, value)
     if payload.config is not None:
-        connector.set_config(payload.config)
+        connector.set_config(merge_connector_config(connector.get_config(), payload.config))
+    _validate_llm_key(connector)
     await session.commit()
     await session.refresh(connector)
     return connector
@@ -82,3 +86,12 @@ async def delete_connector(connector_id: str, session: Annotated[AsyncSession, D
         raise HTTPException(status_code=404, detail="Connector not found")
     await session.delete(connector)
     await session.commit()
+
+
+def _validate_llm_key(connector: Connector) -> None:
+    if connector.connector_type not in LLM_CONNECTOR_TYPES:
+        return
+    key = str(connector.get_config().get("api_key") or "").strip()
+    if not key:
+        label = LLM_LABELS.get(connector.connector_type, connector.connector_type.value)
+        raise HTTPException(status_code=400, detail=f"{label} connector needs an API key")

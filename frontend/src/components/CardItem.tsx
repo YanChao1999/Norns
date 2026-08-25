@@ -16,7 +16,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, onOpen }: Props
         <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
       </div>
       {card.external_id ? <div className="card-ext">{card.external_id}</div> : null}
-      {card.status === 'running' ? <div className="card-live">Agent running this stage</div> : null}
+      {card.status === 'running' ? <div className="card-live">In progress — wait for the handoff</div> : null}
       {card.status === 'waiting_approval' ? <div className="card-live">Your turn — confirm the agent&apos;s approve or reject</div> : null}
       {card.status === 'blocked' ? <div className="card-live">Blocked — run again when ready</div> : null}
       {card.status === 'waiting_join' ? <div className="card-live">Waiting for other parallel tracks</div> : null}

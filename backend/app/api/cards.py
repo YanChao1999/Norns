@@ -179,7 +179,13 @@ async def trigger_card_run(card_id: str, session: Annotated[AsyncSession, Depend
     if not card.current_stage_id:
         raise HTTPException(status_code=400, detail="Card has no stage assigned")
     if card.status not in {CardStatus.IDLE, CardStatus.BLOCKED}:
-        raise HTTPException(status_code=409, detail="Card can only be run when idle or blocked")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Card is already running or waiting at a human gate. "
+                "Wait for the handoff, then Approve or Reject — do not click Run again."
+            ),
+        )
     start_card_run(card)
     await session.commit()
     try:

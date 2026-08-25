@@ -54,9 +54,12 @@ async def test_enqueue_stage_run_inline(monkeypatch):
     monkeypatch.setattr("backend.app.agents.runner.run_stage", fake_run_stage)
     try:
         run_id = await enqueue.enqueue_stage_run("card-1", "stage-1", "run-inline")
-        await asyncio.sleep(0)
+        pending = list(enqueue._inline_tasks)
+        if pending:
+            await asyncio.gather(*pending)
         assert run_id == "run-inline"
         assert captured["args"] == ("card-1", "stage-1", "run-inline")
+        assert not enqueue._inline_tasks
     finally:
         get_settings.cache_clear()
 

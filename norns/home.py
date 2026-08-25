@@ -62,6 +62,16 @@ def init_home(home: Path, *, force: bool = False) -> tuple[Path, str]:
                 'base_url = "https://api.openai.com/v1"',
                 'default_model = "gpt-4o"',
                 "",
+                "[cursor]",
+                'api_key = ""',
+                'base_url = "https://api.cursor.com/v1"',
+                'default_model = "auto"',
+                "",
+                "[deepseek]",
+                'api_key = ""',
+                'base_url = "https://api.deepseek.com/v1"',
+                'default_model = "deepseek-v4-flash"',
+                "",
             ]
         )
         + "\n",
@@ -85,6 +95,8 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     auth = data.get("auth", {})
     queue = data.get("queue", {})
     openai = data.get("openai", {})
+    cursor = data.get("cursor", {})
+    deepseek = data.get("deepseek", {})
     resolved_host = host or str(server.get("host", "127.0.0.1"))
     resolved_port = port or int(server.get("port", DEFAULT_PORT))
     db_path = home / "norns.db"
@@ -97,6 +109,12 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     os.environ["OPENAI_API_KEY"] = str(openai.get("api_key", ""))
     os.environ["OPENAI_BASE_URL"] = str(openai.get("base_url", "https://api.openai.com/v1"))
     os.environ["DEFAULT_MODEL"] = str(openai.get("default_model", "gpt-4o"))
+    os.environ["CURSOR_API_KEY"] = str(cursor.get("api_key", ""))
+    os.environ["CURSOR_BASE_URL"] = str(cursor.get("base_url", "https://api.cursor.com/v1"))
+    os.environ["CURSOR_DEFAULT_MODEL"] = str(cursor.get("default_model", "auto"))
+    os.environ["DEEPSEEK_API_KEY"] = str(deepseek.get("api_key", ""))
+    os.environ["DEEPSEEK_BASE_URL"] = str(deepseek.get("base_url", "https://api.deepseek.com/v1"))
+    os.environ["DEEPSEEK_DEFAULT_MODEL"] = str(deepseek.get("default_model", "deepseek-v4-flash"))
     os.environ["SESSION_COOKIE_SECURE"] = "false"
     os.environ["NORNS_ENV"] = "local"
     os.environ["CORS_ORIGINS"] = f"http://{resolved_host}:{resolved_port}"

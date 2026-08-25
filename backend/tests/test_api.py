@@ -222,6 +222,82 @@ def test_transition_lines_can_go_back_and_branch_on_if():
     asyncio.run(engine.dispose())
 
 
+def test_health_reports_whether_openai_is_configured():
+    client, engine = _make_client()
+    with client:
+        response = client.get("/api/health")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert isinstance(body["openai_configured"], bool)
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_openai_connector_can_be_created_from_settings_api():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        created = client.post(
+            "/api/connectors",
+            json={
+                "name": "OpenAI",
+                "connector_type": "openai",
+                "config": {"api_key": "sk-test", "base_url": "https://api.openai.com/v1", "default_model": "gpt-4o"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["connector_type"] == "openai"
+        assert "api_key" in body["config_keys"]
+        assert "api_key" not in body["public_config"]
+        assert body["public_config"]["default_model"] == "gpt-4o"
+        assert "sk-test" not in created.text
+        assert client.get("/api/health").json()["openai_configured"] is True
+        missing = client.post("/api/connectors", json={"name": "Empty", "connector_type": "openai", "config": {}})
+        assert missing.status_code == 400
+        cursor = client.post(
+            "/api/connectors",
+            json={
+                "name": "Cursor",
+                "connector_type": "cursor",
+                "config": {"api_key": "crsr_test", "base_url": "https://api.cursor.com/v1", "default_model": "auto"},
+            },
+        )
+        assert cursor.status_code == 201, cursor.text
+        assert cursor.json()["connector_type"] == "cursor"
+        assert "api_key" not in cursor.json()["public_config"]
+        deepseek = client.post(
+            "/api/connectors",
+            json={
+                "name": "DeepSeek",
+                "connector_type": "deepseek",
+                "config": {
+                    "api_key": "sk-deepseek",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "default_model": "deepseek-v4-flash",
+                },
+            },
+        )
+        assert deepseek.status_code == 201, deepseek.text
+        assert deepseek.json()["public_config"]["default_model"] == "deepseek-v4-flash"
+        empty_cursor = client.post(
+            "/api/connectors", json={"name": "Empty Cursor", "connector_type": "cursor", "config": {}}
+        )
+        assert empty_cursor.status_code == 400
+        updated = client.put(
+            f"/api/connectors/{body['id']}",
+            json={"config": {"api_key": "", "default_model": "gpt-4o-mini"}},
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["public_config"]["default_model"] == "gpt-4o-mini"
+        assert client.get("/api/health").json()["openai_configured"] is True
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 async def _create_tables(engine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
