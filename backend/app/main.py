@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +11,7 @@ from .api.router import api_router
 from .config import get_settings
 from .database import AsyncSessionLocal, init_db
 from .orchestrator.recovery import recover_stale_runs
+from .ui_assets import discover_ui_dir
 
 logger = logging.getLogger("norns")
 
@@ -32,32 +32,8 @@ async def lifespan(_: FastAPI):
     yield
 
 
-def _discover_ui_dir() -> Path | None:
-    here = Path(__file__).resolve()
-    roots = [
-        here.parents[2] / "norns" / "web",
-        here.parents[2] / "frontend" / "dist",
-        here.parent / "web",
-    ]
-    try:
-        import norns as norns_pkg
-
-        roots.insert(0, Path(norns_pkg.__file__).resolve().parent / "web")
-    except ImportError:
-        pass
-    seen: set[Path] = set()
-    for root in roots:
-        resolved = root.resolve()
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        if (resolved / "index.html").is_file():
-            return resolved
-    return None
-
-
 def _mount_packaged_ui(application: FastAPI) -> None:
-    ui_dir = _discover_ui_dir()
+    ui_dir = discover_ui_dir()
     if ui_dir is None:
         return
     application.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="ui")

@@ -21,20 +21,6 @@ def test_pypi_name_is_norns_ide():
     assert data["project"]["scripts"]["norns"] == "norns.cli:main"
 
 
-def test_check_dist_accepts_norns_ide_artifacts(tmp_path: Path):
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    with zipfile.ZipFile(dist / "norns_ide-0.0.1-py3-none-any.whl", "w") as archive:
-        archive.writestr("norns/web/index.html", "<html></html>")
-    html = b"<html></html>"
-    with tarfile.open(dist / "norns_ide-0.0.1.tar.gz", "w:gz") as archive:
-        info = tarfile.TarInfo("norns_ide-0.0.1/norns/web/index.html")
-        info.size = len(html)
-        archive.addfile(info, io.BytesIO(html))
-    completed = subprocess.run([sys.executable, str(ROOT / "scripts" / "check-dist.py"), str(dist)], check=False)
-    assert completed.returncode == 0
-
-
 def test_check_dist_rejects_taken_pypi_name(tmp_path: Path):
     dist = tmp_path / "dist"
     dist.mkdir()

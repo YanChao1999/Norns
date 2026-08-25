@@ -14,7 +14,20 @@ from pathlib import Path
 import uvicorn
 
 
+def _stage_checkout_ui() -> None:
+    """Build norns/web from frontend/ when running from a git checkout."""
+    try:
+        from norns_build import stage_control_room
+    except ImportError:
+        return
+    try:
+        stage_control_room()
+    except Exception as exc:
+        print(f"Could not stage Control Room UI: {exc}", file=sys.stderr)
+
+
 def run_ide(*, host: str, port: int, open_window: bool = True) -> int:
+    _stage_checkout_ui()
     from backend.app.main import app
 
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
@@ -26,10 +39,13 @@ def run_ide(*, host: str, port: int, open_window: bool = True) -> int:
         return 1
     if not _ui_is_reachable(host, port):
         print(
-            "Control Room UI is not packaged. Install Norns from a wheel, or from a git checkout with Node.js 20+: "
-            "pip install .",
+            "Control Room UI is not packaged. From a git checkout run: bash scripts/stage-ui.sh",
             file=sys.stderr,
         )
+        if open_window:
+            server.should_exit = True
+            thread.join(timeout=5)
+            return 1
 
     url = f"http://{host}:{port}"
     if not open_window:
