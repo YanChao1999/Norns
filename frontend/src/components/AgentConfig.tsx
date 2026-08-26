@@ -180,7 +180,12 @@ export function AgentConfigModal({ stage, onClose }: Props) {
             ))}
           </select>
         ) : (
-          <input className="input" value={form.model} onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))} placeholder={modelsLoading ? 'Loading models…' : 'model id'} />
+          <input
+            className="input"
+            value={form.model}
+            onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
+            placeholder={modelsLoading ? 'Loading models…' : 'model id'}
+          />
         )}
       </label>
       <p className="muted">

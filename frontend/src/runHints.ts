@@ -1,10 +1,8 @@
 import { AgentRun } from './types';
 
-export const IN_PROGRESS_HINT =
-  'This stage is in progress. Wait for the handoff — extra Run clicks are ignored until it finishes.';
+export const IN_PROGRESS_HINT = 'This stage is in progress. Wait for the handoff — extra Run clicks are ignored until it finishes.';
 
-export const NO_API_KEY_HINT =
-  'No usable model connector yet, so runs are practice only. Open Settings and add DeepSeek, OpenAI, or Cursor.';
+export const NO_API_KEY_HINT = 'No usable model connector yet, so runs are practice only. Open Settings and add DeepSeek, OpenAI, or Cursor.';
 
 export const PLACEHOLDER_RUN_HINT =
   'This handoff is a practice run because no usable API key was configured. Add a DeepSeek, OpenAI, or Cursor connector in Settings and run the stage again.';

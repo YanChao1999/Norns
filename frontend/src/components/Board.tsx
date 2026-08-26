@@ -45,9 +45,7 @@ export function Board({ boardId, onEditMachine }: Props) {
   const entryId = entryStageId(stages);
   const rowCount = Math.max(1, ...stages.map((stage) => (stage.lane ?? 0) + 1));
   const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
-  const liveHistoryCard = historyCard
-    ? (board.cards.find((item) => item.id === historyCard.id) ?? historyCard)
-    : null;
+  const liveHistoryCard = historyCard ? (board.cards.find((item) => item.id === historyCard.id) ?? historyCard) : null;
 
   if (liveHistoryCard) {
     return (

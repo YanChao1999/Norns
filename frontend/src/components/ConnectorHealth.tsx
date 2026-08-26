@@ -101,9 +101,8 @@ export function ConnectorHealth() {
     <section className="panel">
       <h2>Connectors</h2>
       <p className="muted">
-        OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface via{" "}
-        <code>cursor-sdk</code> only — pick models labeled · Cursor (e.g. auto). GitHub, Jira, and
-        Polarion unlock tools under Agent. If more than one model connector is active and the stage has no provider set,
+        OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface via <code>cursor-sdk</code> only — pick models labeled ·
+        Cursor (e.g. auto). GitHub, Jira, and Polarion unlock tools under Agent. If more than one model connector is active and the stage has no provider set,
         DeepSeek is used first, then OpenAI, then Cursor.
       </p>
 
@@ -153,7 +152,11 @@ export function ConnectorHealth() {
             </label>
             <label className="field">
               Default model
-              <select className="input" value={form.default_model} onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}>
+              <select
+                className="input"
+                value={form.default_model}
+                onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}
+              >
                 {modelOptions.map((model) => (
                   <option key={model} value={model}>
                     {model}
@@ -176,19 +179,31 @@ export function ConnectorHealth() {
         ) : null}
         {form.connector_type === 'cursor' ? (
           <p className="muted">
-            Stage runs call Cursor only through <code>cursor-sdk</code> (no direct REST). Model ids like <code>auto</code> are
-            Cursor-specific. Optional GitHub repo URL attaches a repository to the cloud agent.
+            Stage runs call Cursor only through <code>cursor-sdk</code> (no direct REST). Model ids like <code>auto</code> are Cursor-specific. Optional GitHub
+            repo URL attaches a repository to the cloud agent.
           </p>
         ) : null}
         {form.connector_type === 'github' ? (
           <>
             <label className="field">
               Token
-              <input className="input" type="password" autoComplete="off" value={form.token} onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))} placeholder={editingId ? 'Leave blank to keep the saved token' : ''} />
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={form.token}
+                onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+                placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
+              />
             </label>
             <label className="field">
               Base URL (optional)
-              <input className="input" value={form.base_url} onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))} placeholder="https://api.github.com" />
+              <input
+                className="input"
+                value={form.base_url}
+                onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))}
+                placeholder="https://api.github.com"
+              />
             </label>
           </>
         ) : null}
@@ -196,7 +211,12 @@ export function ConnectorHealth() {
           <>
             <label className="field">
               Server
-              <input className="input" value={form.server} onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))} placeholder="https://jira.example.com" />
+              <input
+                className="input"
+                value={form.server}
+                onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))}
+                placeholder="https://jira.example.com"
+              />
             </label>
             <label className="field">
               Username
@@ -204,7 +224,14 @@ export function ConnectorHealth() {
             </label>
             <label className="field">
               Token
-              <input className="input" type="password" autoComplete="off" value={form.token} onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))} placeholder={editingId ? 'Leave blank to keep the saved token' : ''} />
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={form.token}
+                onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+                placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
+              />
             </label>
           </>
         ) : null}
@@ -220,7 +247,14 @@ export function ConnectorHealth() {
             </label>
             <label className="field">
               Password
-              <input className="input" type="password" autoComplete="off" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingId ? 'Leave blank to keep the saved password' : ''} />
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={form.password}
+                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                placeholder={editingId ? 'Leave blank to keep the saved password' : ''}
+              />
             </label>
             <label className="field">
               Project (optional)
@@ -276,7 +310,9 @@ export function ConnectorHealth() {
           </span>
         </div>
       ))}
-      {!data.length && !isLoading ? <div className="muted">No connectors yet. Add OpenAI, Cursor, or DeepSeek here so stage runs call a real model.</div> : null}
+      {!data.length && !isLoading ? (
+        <div className="muted">No connectors yet. Add OpenAI, Cursor, or DeepSeek here so stage runs call a real model.</div>
+      ) : null}
     </section>
   );
 }

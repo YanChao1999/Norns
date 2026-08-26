@@ -62,8 +62,6 @@ describe('cardJourney', () => {
   it('reads handoff summary with model_output fallback', () => {
     expect(handoffSummary(run({ id: 'r1', stage_id: 's1', handoff: { summary: '  hi  ' } }))).toBe('hi');
     expect(handoffSummary(run({ id: 'r2', stage_id: 's1', model_output: 'log only' }))).toBe('log only');
-    expect(isFinalizedRun(run({ id: 'r3', stage_id: 's1', status: 'running', completed_at: null, handoff: {} }))).toBe(
-      false
-    );
+    expect(isFinalizedRun(run({ id: 'r3', stage_id: 's1', status: 'running', completed_at: null, handoff: {} }))).toBe(false);
   });
 });

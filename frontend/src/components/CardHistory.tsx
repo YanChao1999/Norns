@@ -1,16 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import {
-  buildJourney,
-  chronologicalRuns,
-  diagramSvg,
-  formatRunTime,
-  handoffSummary,
-  isFinalizedRun,
-  journeyStateLabel,
-  stageName
-} from '../cardJourney';
+import { buildJourney, chronologicalRuns, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, stageName } from '../cardJourney';
 import { Handoff } from '../gateLabels';
 import { AgentRun, BoardDetail, Card } from '../types';
 
@@ -36,9 +27,7 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
         <div>
           <p className="drawer-kicker">Card history</p>
           <h1>{card.title}</h1>
-          <p className="muted">
-            Full stage path and every agent run. Open the card drawer for gate actions on the current stage.
-          </p>
+          <p className="muted">Full stage path and every agent run. Open the card drawer for gate actions on the current stage.</p>
         </div>
         <div className="history-actions">
           <button type="button" className="btn btn-ghost" onClick={onBack}>
@@ -61,8 +50,7 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
               </div>
               {step.latestRun ? (
                 <p className="muted">
-                  {step.runs.length} run{step.runs.length === 1 ? '' : 's'} · last{' '}
-                  {formatRunTime(step.latestRun.completed_at ?? step.latestRun.created_at)}
+                  {step.runs.length} run{step.runs.length === 1 ? '' : 's'} · last {formatRunTime(step.latestRun.completed_at ?? step.latestRun.created_at)}
                 </p>
               ) : (
                 <p className="muted">No runs yet</p>
