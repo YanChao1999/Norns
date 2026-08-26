@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
-from ..cursor_api import run_cursor_cloud_agent
 from ..connector_config import (
     credentials_for_provider,
     resolve_llm_credentials,
     resolve_stage_model,
     uses_cursor_cloud_agent,
 )
+from ..cursor_api import run_cursor_cloud_agent
 from ..database import AsyncSessionLocal
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
