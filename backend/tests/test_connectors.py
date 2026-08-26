@@ -47,7 +47,9 @@ def test_openai_is_preferred_when_cursor_is_also_active_without_stage_binding():
 
 def test_cursor_proxy_url_is_usable_for_chat():
     cursor = Connector(name="Cursor", connector_type=ConnectorType.CURSOR, encrypted_config=b"", is_active=True)
-    cursor.set_config({"api_key": "proxy-key", "base_url": "http://127.0.0.1:3000/v1", "default_model": "claude-4-sonnet"})
+    cursor.set_config(
+        {"api_key": "proxy-key", "base_url": "http://127.0.0.1:3000/v1", "default_model": "claude-4-sonnet"}
+    )
     creds = resolve_llm_credentials([cursor], SimpleNamespace(openai_api_key=""))
     assert creds.provider == "cursor"
     assert creds.base_url == "http://127.0.0.1:3000/v1"
