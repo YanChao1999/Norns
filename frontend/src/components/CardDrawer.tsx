@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { buildJourney, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, latestFinalizedForStage, pluginsSnapshot, runsForStage, stageName } from '../cardJourney';
+import { buildJourney, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, latestFinalizedForStage, llmLabel, pluginsSnapshot, runsForStage, stageName } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
 import { IN_PROGRESS_HINT, PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
@@ -117,6 +117,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
   const recommendationReason = typeof handoff.recommendation_reason === 'string' ? handoff.recommendation_reason.trim() : '';
   const reasonCompare = latestCurrentRun ? compareRunDecision(latestCurrentRun, previousCurrentRun) : 'first';
   const plugins = pluginsSnapshot(latestCurrentRun);
+  const llm = llmLabel(latestCurrentRun);
   const outgoing = (board?.transitions ?? []).filter((edge) => edge.from_stage_id === card.current_stage_id);
   const approveLines = outgoing.filter((edge) => edge.event === 'approve');
   const rejectLines = outgoing.filter((edge) => edge.event === 'reject');
@@ -195,7 +196,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
         </section>
 
         <section>
-          <h3>Current handoff · {currentStageLabel}</h3>
+          <h3>Current handoff · {currentStageLabel}{llm ? ` · ${llm}` : ''}</h3>
           {summary ? <p className="handoff">{summary}</p> : <p className="muted">No stage run yet for this station. Run it to produce a handoff.</p>}
         </section>
 
@@ -248,7 +249,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
 
         {latestCurrentRun ? (
           <section>
-            <h3>Run log · {currentStageLabel}</h3>
+            <h3>Run log · {currentStageLabel}{llm ? ` · ${llm}` : ''}</h3>
             <pre className="log">{latestCurrentRun.model_output}</pre>
           </section>
         ) : null}

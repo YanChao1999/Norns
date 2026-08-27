@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildJourney, chronologicalRuns, compareRunDecision, handoffSummary, isFinalizedRun } from './cardJourney';
+import { buildJourney, chronologicalRuns, compareRunDecision, handoffSummary, isFinalizedRun, llmLabel } from './cardJourney';
 import { AgentRun, BoardDetail, Card } from './types';
 
 const board = {
@@ -105,5 +105,17 @@ describe('cardJourney', () => {
     expect(compareRunDecision(same, first)).toBe('same');
     expect(compareRunDecision(changed, first)).toBe('changed');
     expect(compareRunDecision(first, null)).toBe('first');
+  });
+
+  it('labels the LLM from the run handoff', () => {
+    expect(
+      llmLabel(
+        run({
+          id: 'r1',
+          stage_id: 's1',
+          handoff: { llm: { provider: 'deepseek', model: 'deepseek-v4-flash' } }
+        })
+      )
+    ).toBe('DeepSeek · deepseek-v4-flash');
   });
 });

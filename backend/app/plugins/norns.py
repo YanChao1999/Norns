@@ -111,7 +111,10 @@ class NornsPlugin(Plugin):
             ),
             ToolSpec(
                 name="norns_create_card",
-                description="Create a card on a board. It starts on the first stage.",
+                description=(
+                    "Create a workable Norns card on this board. "
+                    "For a Polarion requirement, set title, body to the description, and external_id to the Polarion id."
+                ),
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -120,7 +123,7 @@ class NornsPlugin(Plugin):
                         "body": {"type": "string"},
                         "external_id": {"type": "string"},
                     },
-                    "required": ["board_id", "title"],
+                    "required": ["title"] if context and context.board_id else ["board_id", "title"],
                 },
                 execute=_bind(_create_card, context),
             ),
@@ -358,7 +361,10 @@ async def _list_cards(arguments: dict[str, Any]) -> Any:
 
 async def _create_card(arguments: dict[str, Any]) -> Any:
     async with AsyncSessionLocal() as session:
-        board = await _load_board(session, arguments["board_id"])
+        board_id = str(arguments.get("board_id") or "").strip()
+        if not board_id:
+            return {"error": "board_id is required"}
+        board = await _load_board(session, board_id)
         if board is None:
             return {"error": "Board not found"}
         stages = sorted(board.stages, key=lambda stage: stage.order)

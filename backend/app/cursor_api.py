@@ -88,7 +88,13 @@ async def run_cursor_cloud_agent(
         agent = await (AsyncAgent.create(options, **create_kwargs) if options else AsyncAgent.create(**create_kwargs))
         try:
             run = await agent.send(prompt)
-            await asyncio.wait_for(run.wait(), timeout=timeout_seconds)
+            try:
+                await asyncio.wait_for(run.wait(), timeout=timeout_seconds)
+            except TimeoutError:
+                raise RuntimeError(
+                    f"Cursor cloud agent did not finish within {int(timeout_seconds)}s. "
+                    "Rerun this stage, or set the stage LLM to DeepSeek/OpenAI."
+                ) from None
             text = (await run.text() or "").strip()
             if not text:
                 raise RuntimeError("Cursor SDK agent finished with an empty result")

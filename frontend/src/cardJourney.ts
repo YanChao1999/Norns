@@ -89,6 +89,19 @@ export function compareRunDecision(current: AgentRun, previous: AgentRun | null 
   return 'changed';
 }
 
+export function llmLabel(run: AgentRun | null | undefined): string {
+  const source = run?.handoff?.llm ?? run?.inputs?.llm;
+  if (!source || typeof source !== 'object') {
+    return '';
+  }
+  const record = source as Record<string, unknown>;
+  const provider = String(record.provider || '').trim();
+  const model = String(record.model || '').trim();
+  const names: Record<string, string> = { openai: 'OpenAI', deepseek: 'DeepSeek', cursor: 'Cursor' };
+  const label = names[provider] || (provider ? provider[0].toUpperCase() + provider.slice(1) : '');
+  return [label, model].filter(Boolean).join(' · ');
+}
+
 export function pluginsSnapshot(run: AgentRun | null | undefined): { allowlist: string[]; attached: string[]; jiraConnector: boolean | null } {
   const plugins = run?.inputs?.plugins;
   if (!plugins || typeof plugins !== 'object') {

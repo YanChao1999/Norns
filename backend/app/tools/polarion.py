@@ -25,6 +25,9 @@ WRITABLE_FIELDS = frozenset(
     }
 )
 
+DEFAULT_REQUIREMENT_QUERY = "type:requirement"
+SEARCH_FIELDS = ["id", "title", "type", "status", "description"]
+
 
 def assert_writable_field(field: str) -> str:
     if field not in WRITABLE_FIELDS:
@@ -36,6 +39,32 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "default"
 
 
+def _enum_id(value: Any) -> Any:
+    if value is None:
+        return None
+    return getattr(value, "id", None) or getattr(value, "name", None) or value
+
+
+def workitem_payload(workitem: Any) -> dict[str, Any]:
+    description = None
+    getter = getattr(workitem, "getDescription", None)
+    if callable(getter):
+        try:
+            description = getter()
+        except Exception:
+            description = None
+    if description is None:
+        raw = getattr(workitem, "description", None)
+        description = getattr(raw, "content", raw)
+    return {
+        "id": getattr(workitem, "id", None),
+        "title": getattr(workitem, "title", None),
+        "type": _enum_id(getattr(workitem, "type", None)),
+        "status": _enum_id(getattr(workitem, "status", None)),
+        "description": description,
+    }
+
+
 def polarion_provider(connectors: list[Connector]) -> list[RuntimeTool]:
     runtime_tools: list[RuntimeTool] = []
     for connector in connectors:
@@ -45,12 +74,37 @@ def polarion_provider(connectors: list[Connector]) -> list[RuntimeTool]:
         runtime_tools.extend(
             [
                 RuntimeTool(
+                    name=f"polarion_{suffix}_search_workitems",
+                    openai_tool={
+                        "type": "function",
+                        "function": {
+                            "name": f"polarion_{suffix}_search_workitems",
+                            "description": (
+                                "Search Polarion work items in the connector project. "
+                                "Empty query lists requirements (type:requirement). "
+                                "Then create a Norns card with norns_create_card using title, body=description, external_id=id."
+                            ),
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {
+                                        "type": "string",
+                                        "description": "Polarion Lucene query, e.g. type:requirement AND status:draft",
+                                    },
+                                    "limit": {"type": "integer", "description": "Max results, default 50"},
+                                },
+                            },
+                        },
+                    },
+                    execute=_make_search_workitems(connector),
+                ),
+                RuntimeTool(
                     name=f"polarion_{suffix}_get_workitem",
                     openai_tool={
                         "type": "function",
                         "function": {
                             "name": f"polarion_{suffix}_get_workitem",
-                            "description": "Get a Polarion work item.",
+                            "description": "Get a Polarion work item by id, including description.",
                             "parameters": {
                                 "type": "object",
                                 "properties": {"workitem_id": {"type": "string"}},
@@ -120,27 +174,69 @@ def polarion_provider(connectors: list[Connector]) -> list[RuntimeTool]:
     return runtime_tools
 
 
+def _connector_project(connector: Connector) -> str:
+    if not connector.encrypted_config:
+        return ""
+    try:
+        return str(connector.get_config().get("project") or "").strip()
+    except Exception:
+        return ""
+
+
 def _polarion_client(connector: Connector) -> Any:
     if polarion_module is None:
         raise RuntimeError("polarion is not installed")
     config = connector.get_config()
-    client_class = getattr(polarion_module, "Polarion", None)
+    polarion_ns = getattr(polarion_module, "polarion", polarion_module)
+    client_class = getattr(polarion_ns, "Polarion", None) or getattr(polarion_module, "Polarion", None)
     if client_class is None:
         raise RuntimeError("Installed polarion package does not expose a Polarion client")
-    return client_class(config["server"], config["username"], config["password"], project=config.get("project"))
+    return client_class(
+        config["server"],
+        config["username"],
+        config.get("password") or None,
+        token=config.get("token") or None,
+    )
+
+
+def _polarion_project(connector: Connector) -> Any:
+    project_id = _connector_project(connector)
+    if not project_id:
+        raise ValueError("Set Project on the Polarion connector in Settings.")
+    return _polarion_client(connector).getProject(project_id)
+
+
+def _make_search_workitems(connector: Connector):
+    async def execute(arguments: dict[str, Any]) -> Any:
+        def _call() -> dict[str, Any]:
+            query = str(arguments.get("query") or DEFAULT_REQUIREMENT_QUERY).strip() or DEFAULT_REQUIREMENT_QUERY
+            try:
+                limit = int(arguments.get("limit") or 50)
+            except (TypeError, ValueError):
+                limit = 50
+            limit = max(1, min(limit, 200))
+            project = _polarion_project(connector)
+            items = project.searchWorkitem(query, field_list=list(SEARCH_FIELDS), limit=limit)
+            return {"query": query, "items": [workitem_payload(item) for item in items or []]}
+
+        try:
+            return await asyncio.to_thread(_call)
+        except Exception as exc:
+            return {"error": str(exc).split("response headers")[0].strip() or exc.__class__.__name__}
+
+    return execute
 
 
 def _make_get_workitem(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
-            workitem = _polarion_client(connector).getWorkitem(arguments["workitem_id"])
-            return {
-                "id": workitem.id,
-                "title": getattr(workitem, "title", None),
-                "status": getattr(workitem, "status", None),
-            }
+            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            return workitem_payload(workitem)
 
-        return await asyncio.to_thread(_call)
+        try:
+            return await asyncio.to_thread(_call)
+        except Exception as exc:
+            return {"error": str(exc).split("response headers")[0].strip() or exc.__class__.__name__}
 
     return execute
 
@@ -148,11 +244,14 @@ def _make_get_workitem(connector: Connector):
 def _make_add_comment(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
-            workitem = _polarion_client(connector).getWorkitem(arguments["workitem_id"])
-            workitem.addComment(arguments["comment"])
+            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            workitem.addComment("Norns", arguments["comment"])
             return {"id": arguments["workitem_id"], "comment_added": True}
 
-        return await asyncio.to_thread(_call)
+        try:
+            return await asyncio.to_thread(_call)
+        except Exception as exc:
+            return {"error": str(exc).split("response headers")[0].strip() or exc.__class__.__name__}
 
     return execute
 
@@ -161,23 +260,32 @@ def _make_update_field(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
             field = assert_writable_field(arguments["field"])
-            workitem = _polarion_client(connector).getWorkitem(arguments["workitem_id"])
-            setattr(workitem, field, arguments["value"])
-            workitem.update()
+            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            if field == "description" and hasattr(workitem, "setDescription"):
+                workitem.setDescription(arguments["value"])
+            else:
+                setattr(workitem, field, arguments["value"])
+                workitem.update()
             return {"id": arguments["workitem_id"], "field": field, "updated": True}
 
-        return await asyncio.to_thread(_call)
+        try:
+            return await asyncio.to_thread(_call)
+        except Exception as exc:
+            return {"error": str(exc).split("response headers")[0].strip() or exc.__class__.__name__}
 
     return execute
 
 
 def _make_follow_links(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
-        def _call() -> list[dict[str, Any]]:
-            workitem = _polarion_client(connector).getWorkitem(arguments["workitem_id"])
-            linked = getattr(workitem, "linkedWorkItems", [])
-            return [{"id": getattr(item, "id", None), "title": getattr(item, "title", None)} for item in linked]
+        def _call() -> list[dict[str, Any]] | dict[str, str]:
+            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            linked = workitem.getLinkedItem() if hasattr(workitem, "getLinkedItem") else []
+            return [workitem_payload(item) for item in linked or []]
 
-        return await asyncio.to_thread(_call)
+        try:
+            return await asyncio.to_thread(_call)
+        except Exception as exc:
+            return {"error": str(exc).split("response headers")[0].strip() or exc.__class__.__name__}
 
     return execute

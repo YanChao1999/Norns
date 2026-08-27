@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.agents.runner import _latest_handoff, parse_agent_recommendation
-from backend.app.tools.polarion import assert_writable_field
+from backend.app.tools.polarion import assert_writable_field, workitem_payload
 
 
 def test_latest_handoff_ignores_in_progress_run():
@@ -38,3 +38,17 @@ def test_polarion_rejects_arbitrary_fields():
     assert assert_writable_field("status") == "status"
     with pytest.raises(ValueError):
         assert_writable_field("__class__")
+
+
+def test_polarion_workitem_payload_includes_description():
+    item = SimpleNamespace(
+        id="PROJ-12",
+        title="Brake lamp",
+        type=SimpleNamespace(id="requirement"),
+        status=SimpleNamespace(id="draft"),
+        getDescription=lambda: "The lamp shall turn on with the brake pedal.",
+    )
+    payload = workitem_payload(item)
+    assert payload["id"] == "PROJ-12"
+    assert payload["type"] == "requirement"
+    assert "brake pedal" in payload["description"]

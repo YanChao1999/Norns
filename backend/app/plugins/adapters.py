@@ -75,7 +75,7 @@ def polarion_plugin() -> ConnectorToolPlugin:
     return ConnectorToolPlugin(
         name="polarion",
         title="Polarion",
-        description="Read and update Polarion work items via the Polarion connector.",
+        description="Search Polarion requirements and read work items via the Polarion connector.",
         provider=polarion_provider,
         requires_connector="polarion",
     )

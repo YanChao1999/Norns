@@ -14,7 +14,7 @@ from backend.app.plugins.base import PluginContext, ToolSpec
 from backend.app.plugins.catalog import cursor_mcp_servers, load_plugin_catalog
 from backend.app.plugins.norns import NornsPlugin, _create_card
 from backend.app.tools.github import github_provider
-from backend.app.tools.jira import jira_provider
+from backend.app.tools.jira import jira_provider, restrict_jql
 from backend.app.tools.registry import create_default_registry
 
 
@@ -63,6 +63,7 @@ def test_github_and_polarion_tools_require_connectors_on_plugin_context():
     polarion_names = {spec.name for spec in catalog.tools(["polarion"], PluginContext(connectors=[polarion]))}
     assert "github_work_gh_create_issue" in github_names
     assert "polarion_polarion_get_workitem" in polarion_names
+    assert "polarion_polarion_search_workitems" in polarion_names
 
 
 def test_github_defaults_repo_from_plugin_context():
@@ -84,6 +85,12 @@ def test_jira_defaults_project_when_provided():
     )
     assert "project" not in tool.openai_tool["function"]["parameters"]["required"]
     assert "summary" in tool.openai_tool["function"]["parameters"]["required"]
+
+
+def test_restrict_jql_adds_project_when_query_is_only_order_by():
+    assert restrict_jql("ORDER BY created DESC", "NORNS") == 'project = "NORNS" ORDER BY created DESC'
+    assert restrict_jql("", "").startswith("created >= -14d")
+    assert restrict_jql('project = "NORNS"', "NORNS") == 'project = "NORNS"'
 
 
 def test_jira_tools_require_connectors_on_plugin_context():
@@ -230,4 +237,13 @@ async def test_norns_create_card(monkeypatch):
     )
     updated = await bound.execute({"title": "Renamed by context"})
     assert updated["title"] == "Renamed by context"
+    create_tool = next(
+        spec
+        for spec in NornsPlugin().tools(PluginContext(board_id=board_id))
+        if spec.name == "norns_create_card"
+    )
+    assert "board_id" not in create_tool.input_schema["required"]
+    from_context = await create_tool.execute({"title": "From Polarion", "body": "req text", "external_id": "PROJ-12"})
+    assert from_context["title"] == "From Polarion"
+    assert from_context["external_id"] == "PROJ-12"
     await engine.dispose()

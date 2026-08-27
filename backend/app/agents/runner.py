@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Any
@@ -13,12 +14,14 @@ from sqlalchemy.orm import selectinload
 from ..config import get_settings
 from ..connector_config import (
     credentials_for_provider,
+    provider_label,
     resolve_llm_credentials,
     resolve_stage_model,
     uses_cursor_cloud_agent,
 )
 from ..cursor_api import run_cursor_cloud_agent
 from ..database import AsyncSessionLocal
+from ..faults import loop_tool_error_if_injected, runner_timeout_if_injected
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.progression import resolve_routes
@@ -30,6 +33,8 @@ from ..plugins.catalog import cursor_mcp_servers
 from ..plugins.tool_policy import is_write_tool
 from ..tools.registry import RuntimeTool, create_default_registry
 from ..workspace import resolve_workspace
+
+logger = logging.getLogger("norns")
 
 DECISION_INSTRUCTION = (
     "This stage has a human gate. The gate only blocks moving the card — it does not block tools. "
@@ -49,6 +54,46 @@ WORK_INSTRUCTION = (
 )
 
 MAX_TOOL_ROUNDS = 8
+
+
+def llm_identity(provider: str, model: str) -> dict[str, str]:
+    return {"provider": str(provider or "").strip().lower(), "model": str(model or "").strip()}
+
+
+def llm_line(identity: dict[str, Any] | None) -> str:
+    if not identity:
+        return ""
+    provider = str(identity.get("provider") or "").strip()
+    model = str(identity.get("model") or "").strip()
+    if not provider and not model:
+        return ""
+    label = provider_label(provider)
+    if model:
+        return f"LLM: {label} · {model}"
+    return f"LLM: {label}"
+
+
+def with_llm_line(text: str, identity: dict[str, Any] | None) -> str:
+    line = llm_line(identity)
+    body = text or ""
+    if not line or body.startswith("LLM:"):
+        return body
+    return f"{line}\n\n{body}" if body else line
+
+
+def tool_error_text(exc: BaseException) -> str:
+    if isinstance(exc, TimeoutError):
+        return (
+            "Cursor stage timed out waiting for the cloud agent. "
+            "The card body is still the task — rerun, or set this stage to DeepSeek/OpenAI."
+        )
+    text = str(getattr(exc, "text", None) or "").strip()
+    if not text:
+        text = str(exc).split("response headers")[0].strip()
+    status = getattr(exc, "status_code", None)
+    if status:
+        return f"HTTP {status}: {text}"
+    return text or exc.__class__.__name__
 
 
 class WriteConfirmationRequired(Exception):
@@ -144,6 +189,17 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             creds = credentials_for_provider(connectors, settings, preferred)
         else:
             creds = resolve_llm_credentials(connectors, settings)
+        identity = llm_identity(
+            creds.provider,
+            resolve_stage_model(
+                provider=creds.provider,
+                base_url=creds.base_url,
+                stage_model=(stage.agent_config.model if stage.agent_config else "") or creds.default_model,
+                default_model=creds.default_model,
+            ),
+        )
+        run.inputs = {**dict(run.inputs or {}), "llm": identity}
+        runner_timeout_if_injected()
         model_output, tool_calls, handoff = await _execute_agent(
             settings=settings,
             card=card,
@@ -160,10 +216,11 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             confirm_writes=bool(getattr(stage, "confirm_writes", False)),
         )
         await session.refresh(run)
+        run.inputs = {**dict(run.inputs or {}), "llm": identity}
         pending = list((run.inputs or {}).get("pending_writes") or [])
         run.tool_calls = tool_calls
-        run.model_output = model_output
-        run.handoff = handoff
+        run.model_output = with_llm_line(model_output, identity)
+        run.handoff = {**(handoff if isinstance(handoff, dict) else {}), "llm": identity}
         if pending:
             run.status = "waiting_tool"
             wait_for_tool_approval(card)
@@ -197,11 +254,13 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         inputs = dict(run.inputs or {})
         inputs["pending_writes"] = pending.pending
         run.inputs = inputs
+        identity = dict((run.inputs or {}).get("llm") or {})
         run.tool_calls = pending.executed
-        run.model_output = "Write tools are waiting for Control Room confirmation."
+        run.model_output = with_llm_line("Write tools are waiting for Control Room confirmation.", identity)
         run.handoff = {
             "summary": run.model_output,
             "pending_writes": pending.pending,
+            "llm": identity,
             "links": [],
             "attachment_metadata": [],
         }
@@ -210,13 +269,23 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         await session.commit()
         return
     except Exception as exc:
+        identity = dict((run.inputs or {}).get("llm") or {})
+        detail = tool_error_text(exc)
         run.status = "failed"
-        run.model_output = f"Stage run failed: {exc}"
-        run.handoff = {"summary": run.model_output, "links": [], "attachment_metadata": []}
+        run.model_output = with_llm_line(f"Stage run stopped: {detail}", identity)
+        run.handoff = {
+            "summary": run.model_output,
+            "llm": identity,
+            "recommendation": "reject",
+            "recommendation_reason": detail,
+            "links": [],
+            "attachment_metadata": [],
+        }
         run.completed_at = datetime.utcnow()
-        card.status = CardStatus.BLOCKED
+        card.status = CardStatus.IDLE
         await session.commit()
-        raise
+        logger.warning("Stage run stopped card=%s stage=%s: %s", card.id, stage.id, detail)
+        return
 
     for card_id, next_stage_id in next_jobs:
         try:
@@ -356,7 +425,10 @@ async def _execute_agent(
             mcp_servers=mcp_servers or None,
             workspace_path=getattr(workspace, "path", "") or "",
         )
+        identity = llm_identity(provider, model)
+        content = with_llm_line(content, identity)
         handoff = await _build_handoff(content)
+        handoff["llm"] = identity
         return content, [], handoff
 
     tools_payload = [tool.openai_tool for tool in runtime_tools]
@@ -376,7 +448,10 @@ async def _execute_agent(
         tool_map=tool_map,
         confirm_writes=confirm_writes,
     )
+    identity = llm_identity(provider, model)
+    content = with_llm_line(content, identity)
     handoff = await _build_handoff(content)
+    handoff["llm"] = identity
     return content, executed_tool_calls, handoff
 
 
@@ -428,8 +503,17 @@ async def _run_openai_tool_loop(
             if runtime_tool is None:
                 result: Any = {"error": f"Unknown or disallowed tool: {name}"}
             else:
-                result = await runtime_tool.execute(arguments)
-            executed_tool_calls.append({"name": name, "arguments": arguments, "result": result})
+                injected = loop_tool_error_if_injected(name)
+                if injected is not None:
+                    result = injected
+                else:
+                    try:
+                        result = await runtime_tool.execute(arguments)
+                    except Exception as exc:
+                        result = {"error": tool_error_text(exc)}
+            executed_tool_calls.append(
+                {"round": _round + 1, "name": name, "arguments": arguments, "result": result}
+            )
             messages.append(
                 {
                     "role": "tool",

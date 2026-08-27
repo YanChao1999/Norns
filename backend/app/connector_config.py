@@ -18,6 +18,16 @@ LLM_LABELS = {
     ConnectorType.DEEPSEEK: "DeepSeek",
     ConnectorType.OPENAI: "OpenAI",
 }
+
+
+def provider_label(provider: str) -> str:
+    key = str(provider or "").strip().lower()
+    for connector_type, label in LLM_LABELS.items():
+        if connector_type.value == key:
+            return label
+    return key.title() or "LLM"
+
+
 LLM_DEFAULTS: dict[ConnectorType, tuple[str, str]] = {
     ConnectorType.CURSOR: (DEFAULT_CURSOR_BASE_URL, DEFAULT_CURSOR_MODEL),
     ConnectorType.DEEPSEEK: (DEFAULT_DEEPSEEK_BASE_URL, DEFAULT_DEEPSEEK_MODEL),

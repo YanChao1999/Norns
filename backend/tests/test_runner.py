@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from backend.app.agents.runner import WORK_INSTRUCTION, _execute_agent, _run_openai_tool_loop, _run_stage
+from backend.app.agents.runner import WORK_INSTRUCTION, _execute_agent, _run_openai_tool_loop, _run_stage, llm_line, tool_error_text
 from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
 from backend.app.orchestrator.state_machine import CardStatus
@@ -135,6 +135,7 @@ async def test_execute_agent_uses_cursor_cloud_agent_for_native_host(monkeypatch
     )
     assert tools == []
     assert "Cursor handoff" in text
+    assert text.startswith("LLM: Cursor · auto")
     assert handoff["summary"]
     assert "Card id: card-1" in str(seen.get("prompt") or "")
     assert "Board id: board-1" in str(seen.get("prompt") or "")
@@ -307,3 +308,85 @@ async def test_execute_agent_is_practice_run_without_api_key():
     assert handoff["placeholder"] is True
     assert "practice run" in text.lower()
     assert "api key" in text.lower()
+
+
+def test_llm_line_names_provider_and_model():
+    assert llm_line({"provider": "deepseek", "model": "deepseek-v4-flash"}) == "LLM: DeepSeek · deepseek-v4-flash"
+
+
+def test_timeout_error_has_a_readable_stage_message():
+    assert "timed out" in tool_error_text(TimeoutError()).lower()
+
+
+@pytest.mark.asyncio
+async def test_empty_timeout_does_not_crash_the_stage(monkeypatch):
+    engine, SessionLocal = await _session_factory()
+
+    async def fake_execute(**_kwargs):
+        raise TimeoutError()
+
+    monkeypatch.setattr("backend.app.agents.runner._execute_agent", fake_execute)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        stage = _stage("Urd", 1, True)
+        board.stages = [stage]
+        card = Card(title="Work", body="Polarion requirements", status=CardStatus.IDLE, current_stage=stage)
+        board.cards = [card]
+        session.add(board)
+        await session.commit()
+
+        await _run_stage(session, card.id, stage.id, "run-timeout")
+        await session.refresh(card)
+        run = (await session.execute(select(AgentRun).where(AgentRun.id == "run-timeout"))).scalar_one()
+
+        assert card.status == CardStatus.IDLE
+        assert run.status == "failed"
+        assert "timed out" in (run.model_output or "").lower()
+        assert "timed out" in str(run.handoff.get("summary") or "").lower()
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_openai_tool_loop_keeps_going_when_a_tool_raises():
+    search_call = SimpleNamespace(
+        id="call-search",
+        function=SimpleNamespace(name="jira_search", arguments='{"jql": "ORDER BY created DESC"}'),
+    )
+
+    class FakeMessage:
+        def __init__(self, content=None, tool_calls=None):
+            self.content = content
+            self.tool_calls = tool_calls
+
+        def model_dump(self, exclude_none=True):
+            del exclude_none
+            return {"role": "assistant", "content": self.content}
+
+    script = [
+        SimpleNamespace(choices=[SimpleNamespace(message=FakeMessage(tool_calls=[search_call]))]),
+        SimpleNamespace(choices=[SimpleNamespace(message=FakeMessage(content="Search failed, creating next."))]),
+    ]
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            del kwargs
+            return script.pop(0)
+
+    async def search(arguments: dict) -> list:
+        del arguments
+        raise RuntimeError("Jira HTTP 400: Unbounded JQL queries are not allowed here.")
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    content, executed = await _run_openai_tool_loop(
+        client,
+        model="deepseek-v4-flash",
+        temperature=0.1,
+        messages=[{"role": "user", "content": "create a ticket"}],
+        tools_payload=[{"type": "function", "function": {"name": "jira_search"}}],
+        tool_map={"jira_search": RuntimeTool(name="jira_search", openai_tool={}, execute=search)},
+    )
+    assert executed[0]["round"] == 1
+    assert "Unbounded JQL" in executed[0]["result"]["error"]
+    assert "creating next" in content.lower()

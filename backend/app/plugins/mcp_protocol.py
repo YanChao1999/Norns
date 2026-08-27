@@ -11,6 +11,7 @@ from typing import Any, TextIO
 from sqlalchemy.orm.attributes import flag_modified
 
 from ..database import AsyncSessionLocal
+from ..faults import mcp_error_if_injected
 from ..models import AgentRun
 from .base import PluginContext, ToolSpec
 from .catalog import dump_mcp_tool_result, load_plugin_catalog_from_db
@@ -99,7 +100,10 @@ async def _handle(
                 },
             )
         try:
-            if str(os.environ.get("NORNS_CONFIRM_WRITES") or "") == "1" and is_write_tool(name):
+            injected = mcp_error_if_injected(name)
+            if injected is not None:
+                result = injected
+            elif str(os.environ.get("NORNS_CONFIRM_WRITES") or "") == "1" and is_write_tool(name):
                 result = await _queue_pending_write(name, arguments)
             else:
                 result = await tool.execute(arguments)

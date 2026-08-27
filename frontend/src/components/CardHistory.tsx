@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { buildJourney, chronologicalRuns, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, pluginsSnapshot, runDecision, stageName } from '../cardJourney';
+import { buildJourney, chronologicalRuns, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, llmLabel, pluginsSnapshot, runDecision, stageName } from '../cardJourney';
 import { Handoff } from '../gateLabels';
 import { AgentRun, BoardDetail, Card } from '../types';
 
@@ -88,6 +88,7 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
                       {' · '}
                       {formatRunTime(run.created_at)}
                       {run.completed_at ? ` → ${formatRunTime(run.completed_at)}` : ''}
+                      {llmLabel(run) ? ` · ${llmLabel(run)}` : ''}
                     </p>
                   </div>
                   {decision.recommendation ? (
