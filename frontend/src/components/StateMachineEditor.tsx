@@ -512,7 +512,11 @@ export function StateMachineEditor({ boardId }: Props) {
 
       <CardLifecycleLegend machine={cardMachine} />
 
-      <AgentConfigModal stage={agentStage} onClose={() => setAgentStage(null)} />
+      <AgentConfigModal
+        stage={agentStage}
+        boardWorkspace={{ path: board.workspace_path ?? '', git_url: board.git_url ?? '' }}
+        onClose={() => setAgentStage(null)}
+      />
 
       <Dialog open={confirmDelete && Boolean(selected)} onClose={() => setConfirmDelete(false)} labelledBy="delete-stage-title" variant="modal">
         <div className="modal-head">

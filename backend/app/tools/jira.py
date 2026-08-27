@@ -96,6 +96,27 @@ def jira_provider(connectors: list[Connector]) -> list[RuntimeTool]:
                     execute=_make_transition_issue(connector),
                 ),
                 RuntimeTool(
+                    name=f"jira_{suffix}_create_issue",
+                    openai_tool={
+                        "type": "function",
+                        "function": {
+                            "name": f"jira_{suffix}_create_issue",
+                            "description": "Create a Jira issue (Task, Bug, Story, etc.) using the configured connector.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "project": {"type": "string", "description": "Jira project key, e.g. PROJ"},
+                                    "summary": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "issuetype": {"type": "string", "description": "Issue type name, default Task"},
+                                },
+                                "required": ["project", "summary"],
+                            },
+                        },
+                    },
+                    execute=_make_create_issue(connector),
+                ),
+                RuntimeTool(
                     name=f"jira_{suffix}_create_subtask",
                     openai_tool={
                         "type": "function",
@@ -167,6 +188,22 @@ def _make_transition_issue(connector: Connector):
             client = _jira_client(connector)
             client.transition_issue(arguments["key"], arguments["transition"])
             return {"key": arguments["key"], "transition": arguments["transition"]}
+
+        return await asyncio.to_thread(_call)
+
+    return execute
+
+
+def _make_create_issue(connector: Connector):
+    async def execute(arguments: dict[str, Any]) -> Any:
+        def _call() -> dict[str, Any]:
+            issue = _jira_client(connector).create_issue(
+                project=arguments["project"],
+                summary=arguments["summary"],
+                description=arguments.get("description") or "",
+                issuetype={"name": arguments.get("issuetype") or "Task"},
+            )
+            return {"key": issue.key, "id": getattr(issue, "id", None)}
 
         return await asyncio.to_thread(_call)
 

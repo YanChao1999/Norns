@@ -151,6 +151,9 @@ Pull requests to `main` must pass the **CI** GitHub Actions check (`backend` tes
 - Use PostgreSQL in normal deployments via `DATABASE_URL`.
 - Redis backs ARQ worker execution.
 - PlantUML/Kroki rendering is opt-in via `PLANTUML_URL` / `KROKI_URL` (unset means no public egress).
-- An empty per-stage tool allowlist grants **no** tools. Enable GitHub, Jira, or Polarion explicitly on the stage.
+- An empty per-stage tool allowlist grants **no** tools. Enable **norns** (create cards, edit stages/prompts, edit the state machine, inspect the git workspace), **github**, **jira**, or **polarion** on the column **Agent** dialog. Cursor stages receive those as MCP servers; OpenAI/DeepSeek stages use the same plugins as chat tools.
+- **Workspace (git repo):** each board has a checkout path and/or `https://github.com/org/repo`. Stage agents inherit the board repo; a column **Agent** can override with its own path/URL. Cursor stages then run in that checkout (local agent) instead of a throwaway `/tmp` directory; GitHub tools default to that repo. If neither board nor agent is set, Norns uses the git root of the process working directory.
+- Extra MCP servers: add an **MCP** connector in Settings (stdio command or HTTP URL), then enable it under Agent → Tools. Third-party Python plugins register the `norns.plugins` entry point.
+- `norns mcp --plugins norns,github,jira` runs the plugin MCP server on stdin/stdout (Cursor attaches this automatically when those tools are enabled).
 - `PUT /api/cards/{id}` updates title/body only; new cards always start on the first stage.
 - Change `SECRET_KEY` and `ADMIN_PASSWORD` before any shared deployment. Sessions expire after 8 hours.

@@ -15,6 +15,8 @@ class Board(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workspace_path: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    git_url: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -59,6 +61,8 @@ class AgentConfig(Base):
     llm_provider: Mapped[str] = mapped_column(String(32), default="", nullable=False)
     temperature: Mapped[float] = mapped_column(Float, default=0.7, nullable=False)
     tool_allowlist: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    workspace_path: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
+    git_url: Mapped[str] = mapped_column(String(1024), default="", nullable=False)
 
     stage: Mapped[Stage] = relationship(back_populates="agent_config")
 

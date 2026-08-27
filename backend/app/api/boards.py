@@ -25,6 +25,8 @@ class AgentConfigRead(BaseModel):
     llm_provider: str = ""
     temperature: float
     tool_allowlist: list[str]
+    workspace_path: str = ""
+    git_url: str = ""
 
 
 class StageRead(BaseModel):
@@ -92,6 +94,8 @@ class BoardRead(BaseModel):
     id: str
     name: str
     description: str | None = None
+    workspace_path: str = ""
+    git_url: str = ""
     created_at: Any
     updated_at: Any
     stages: list[StageRead] = []
@@ -105,11 +109,15 @@ class BoardDetail(BoardRead):
 class BoardCreate(BaseModel):
     name: str = Field(min_length=1)
     description: str | None = None
+    workspace_path: str = ""
+    git_url: str = ""
 
 
 class BoardUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    workspace_path: str | None = None
+    git_url: str | None = None
 
 
 class StageCreate(BaseModel):
@@ -127,6 +135,8 @@ class StageCreate(BaseModel):
     llm_provider: str = ""
     temperature: float = 0.7
     tool_allowlist: list[str] = []
+    workspace_path: str = ""
+    git_url: str = ""
 
 
 class StageUpdate(BaseModel):
@@ -139,6 +149,8 @@ class StageUpdate(BaseModel):
     llm_provider: str | None = None
     temperature: float | None = None
     tool_allowlist: list[str] | None = None
+    workspace_path: str | None = None
+    git_url: str | None = None
 
 
 class StageReorder(BaseModel):
@@ -164,7 +176,12 @@ async def list_boards(session: Annotated[AsyncSession, Depends(get_session)]) ->
 
 @router.post("/boards", response_model=BoardDetail, status_code=status.HTTP_201_CREATED)
 async def create_board(session: Annotated[AsyncSession, Depends(get_session)], payload: BoardCreate) -> Board:
-    board = Board(name=payload.name, description=payload.description)
+    board = Board(
+        name=payload.name,
+        description=payload.description,
+        workspace_path=payload.workspace_path.strip(),
+        git_url=payload.git_url.strip(),
+    )
     board.stages = [
         Stage(
             name="Urd",
@@ -219,6 +236,8 @@ async def update_board(
 ) -> Board:
     board = await _get_board_or_404(session, board_id)
     for field, value in payload.model_dump(exclude_none=True).items():
+        if field in {"workspace_path", "git_url"} and isinstance(value, str):
+            value = value.strip()
         setattr(board, field, value)
     await session.commit()
     return await _get_board_or_404(session, board_id)
@@ -282,6 +301,8 @@ async def create_stage(
         llm_provider=payload.llm_provider,
         temperature=payload.temperature,
         tool_allowlist=payload.tool_allowlist,
+        workspace_path=payload.workspace_path.strip(),
+        git_url=payload.git_url.strip(),
     )
     session.add(stage)
     await session.flush()
@@ -311,7 +332,16 @@ async def update_stage(
         raise HTTPException(status_code=404, detail="Stage not found")
 
     stage_fields = payload.model_dump(
-        exclude_none=True, exclude={"system_prompt", "model", "llm_provider", "temperature", "tool_allowlist"}
+        exclude_none=True,
+        exclude={
+            "system_prompt",
+            "model",
+            "llm_provider",
+            "temperature",
+            "tool_allowlist",
+            "workspace_path",
+            "git_url",
+        },
     )
     for field, value in stage_fields.items():
         setattr(stage, field, value)
@@ -324,6 +354,8 @@ async def update_stage(
             payload.llm_provider,
             payload.temperature,
             payload.tool_allowlist,
+            payload.workspace_path,
+            payload.git_url,
         ]
     ):
         if not stage.agent_config:
@@ -338,6 +370,10 @@ async def update_stage(
             stage.agent_config.temperature = payload.temperature
         if payload.tool_allowlist is not None:
             stage.agent_config.tool_allowlist = payload.tool_allowlist
+        if payload.workspace_path is not None:
+            stage.agent_config.workspace_path = payload.workspace_path.strip()
+        if payload.git_url is not None:
+            stage.agent_config.git_url = payload.git_url.strip()
 
     await session.commit()
     result = await session.execute(select(Stage).where(Stage.id == stage.id).options(selectinload(Stage.agent_config)))

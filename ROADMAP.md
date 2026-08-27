@@ -13,7 +13,7 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 - [x] **Connector form in Settings** — add/edit/disable OpenAI, Cursor, DeepSeek, Jira, GitHub, Polarion. OpenAI / Cursor / DeepSeek are model connectors (`api_key`, optional `base_url` / `default_model`). Jira needs `server`, `username`, `token`. GitHub needs `token` (optional `base_url`). Polarion needs `server`, `username`, `password`, optional `project`.
 - [x] **API key in Settings** — OpenAI-compatible keys are encrypted connectors (OpenAI, Cursor, DeepSeek). Env/`config.toml` still works as a fallback.
-- [ ] **Agent setup path** — explain that the column **Agent** button opens prompt / model / tools; an empty tool allowlist grants no tools; checking `jira` / `github` / `polarion` requires an active connector of that type.
+- [x] **Agent setup path** — explain that the column **Agent** button opens prompt / model / tools; an empty tool allowlist grants no tools; checking `norns` / `jira` / `github` / `polarion` (or an MCP connector) attaches those plugins. Cursor stages get MCP; OpenAI-compatible stages get function tools.
 - [ ] **Warn when tools have no connector** — do not silently grant nothing.
 - [ ] **Empty state after login** — with no boards, land in Settings (or a short checklist): create board → API key → connector if you need tools → open the board.
 - [ ] **Login copy** — username is `admin`; password was printed by `norns init` and is in `~/.norns/config.toml`.

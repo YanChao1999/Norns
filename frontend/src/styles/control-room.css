@@ -721,6 +721,24 @@ details.disclosure summary {
   max-width: 760px;
 }
 
+.board-workspace {
+  margin: 0 0 16px;
+  max-width: 760px;
+}
+
+.board-workspace-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+}
+
+@media (max-width: 720px) {
+  .board-workspace-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);

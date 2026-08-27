@@ -25,7 +25,10 @@ from ..orchestrator.progression import resolve_routes
 from ..orchestrator.split import apply_forward_routes, load_family_cards
 from ..orchestrator.state_machine import CardStatus, start_card_run, wait_for_approval
 from ..plantuml.renderer import render_plantuml
+from ..plugins.base import PluginContext
+from ..plugins.catalog import cursor_mcp_servers
 from ..tools.registry import RuntimeTool, create_default_registry
+from ..workspace import resolve_workspace
 
 DECISION_INSTRUCTION = (
     "This stage has a human gate. You may recommend approve or reject, but you cannot move the card. "
@@ -70,17 +73,36 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     card.current_stage_id = stage.id
 
     prior_handoff = _latest_handoff(card)
+    workspace = resolve_workspace(connectors, agent=stage.agent_config, board=card.board)
     run = AgentRun(id=run_id, card_id=card.id, stage_id=stage.id, status="running")
     run.inputs = {
         "card": {"id": card.id, "title": card.title, "body": card.body, "external_id": card.external_id},
         "prior_handoff": prior_handoff,
+        "workspace": {
+            "path": workspace.path,
+            "git_url": workspace.git_url,
+            "github_repo": workspace.github_repo,
+            "source": workspace.source,
+        },
     }
     session.add(run)
     await session.commit()
 
     registry = create_default_registry()
     allowlist = stage.agent_config.tool_allowlist if stage.agent_config else []
-    runtime_tools = registry.get_runtime_tools(allowlist, connectors)
+    runtime_tools = registry.get_runtime_tools(
+        allowlist,
+        connectors,
+        context=PluginContext(
+            connectors=connectors,
+            board_id=card.board_id,
+            card_id=card.id,
+            stage_id=stage.id,
+            workspace_path=workspace.path,
+            git_url=workspace.git_url,
+            github_repo=workspace.github_repo,
+        ),
+    )
 
     next_jobs: list[tuple[str, str]] = []
     try:
@@ -101,6 +123,8 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             default_model=creds.default_model,
             provider=creds.provider,
             repo_url=creds.repo_url,
+            connectors=connectors,
+            workspace=workspace,
         )
         run.tool_calls = tool_calls
         run.model_output = model_output
@@ -168,6 +192,8 @@ async def _execute_agent(
     default_model: str = "",
     provider: str = "",
     repo_url: str = "",
+    connectors: list[Any] | None = None,
+    workspace: Any | None = None,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     resolved_key = api_key or str(getattr(settings, "openai_api_key", "") or "")
     resolved_url = base_url or str(getattr(settings, "openai_base_url", "") or "https://api.openai.com/v1")
@@ -191,19 +217,49 @@ async def _execute_agent(
         default_model=resolved_model,
     )
     temperature = config.temperature if config else 0.7
+    workspace_bits = ""
+    if workspace and (getattr(workspace, "path", "") or getattr(workspace, "git_url", "")):
+        workspace_bits = (
+            "\n\nGit workspace:\n"
+            f"- local path: {getattr(workspace, 'path', '') or '(none)'}\n"
+            f"- git url: {getattr(workspace, 'git_url', '') or '(none)'}\n"
+            f"- github repo: {getattr(workspace, 'github_repo', '') or '(none)'}\n"
+        )
     user_content = (
         f"Card title: {card.title}\n\n"
-        f"Card body:\n{card.body}\n\n"
+        f"Card body:\n{card.body}\n"
+        f"{workspace_bits}\n"
         f"Previous handoff:\n{json.dumps(_latest_handoff(card), indent=2)}"
     )
     if stage.require_approval:
         user_content = f"{user_content}\n\n{DECISION_INSTRUCTION}"
 
     if uses_cursor_cloud_agent(provider, resolved_url):
+        extra_env = {}
+        if workspace:
+            if getattr(workspace, "path", ""):
+                extra_env["NORNS_WORKSPACE"] = workspace.path
+            if getattr(workspace, "git_url", ""):
+                extra_env["NORNS_GIT_URL"] = workspace.git_url
+            if getattr(workspace, "github_repo", ""):
+                extra_env["NORNS_GITHUB_REPO"] = workspace.github_repo
+        mcp_servers = cursor_mcp_servers(
+            stage.agent_config.tool_allowlist if stage.agent_config else [],
+            list(connectors or []),
+            extra_env=extra_env or None,
+            cwd=getattr(workspace, "path", "") or None,
+        )
+        tool_hint = (
+            " MCP tools from the stage allowlist are attached (Norns Control Room, GitHub, Jira, Polarion, "
+            "and any MCP connectors). Use them instead of guessing that tools are missing."
+            if mcp_servers
+            else " This stage has no tool plugins enabled. Enable norns / github / jira / polarion under Agent → Tools."
+        )
         prompt = (
             f"{system_prompt}\n\n"
             "You are running as a Norns stage agent. Produce a clear textual handoff for the next column. "
-            "Do not modify repositories unless the task explicitly requires it.\n\n"
+            "Do not modify repositories unless the task explicitly requires it."
+            f"{tool_hint}\n\n"
             f"{user_content}"
         )
         content = await run_cursor_cloud_agent(
@@ -211,7 +267,9 @@ async def _execute_agent(
             prompt=prompt,
             model=model,
             base_url=resolved_url,
-            repo_url=repo_url,
+            repo_url=getattr(workspace, "git_url", "") or repo_url,
+            mcp_servers=mcp_servers or None,
+            workspace_path=getattr(workspace, "path", "") or "",
         )
         handoff = await _build_handoff(content)
         return content, [], handoff

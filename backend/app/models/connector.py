@@ -21,7 +21,8 @@ class ConnectorType(str, Enum):
     DEEPSEEK = "deepseek"
     GITHUB = "github"
     JIRA = "jira"
-    POLARION = "polarion"
+    MCP = "mcp"
+    WORKSPACE = "workspace"
 
 
 class Connector(Base):

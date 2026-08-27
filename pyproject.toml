@@ -42,6 +42,12 @@ dev = [
 [project.scripts]
 norns = "norns.cli:main"
 
+[project.entry-points."norns.plugins"]
+norns = "backend.app.plugins.norns:NornsPlugin"
+github = "backend.app.plugins.adapters:github_plugin"
+jira = "backend.app.plugins.adapters:jira_plugin"
+polarion = "backend.app.plugins.adapters:polarion_plugin"
+
 [project.urls]
 Homepage = "https://yanchao1999.github.io/Norns/"
 Repository = "https://github.com/YanChao1999/Norns"

@@ -111,9 +111,10 @@ async def test_run_cursor_cloud_agent_attaches_repo(monkeypatch):
     async def fake_launch_bridge(*, workspace: str):
         return client
 
-    async def fake_create(*, client, model, api_key, name, cloud):
+    async def fake_create(options=None, *, client, model, api_key, name, cloud):
         seen["model"] = model
         seen["repos"] = list(cloud.repos)
+        seen["options"] = options
         return FakeAgent()
 
     monkeypatch.setattr(
@@ -132,3 +133,93 @@ async def test_run_cursor_cloud_agent_attaches_repo(monkeypatch):
     assert seen["model"] == "composer-2"
     assert len(seen["repos"]) == 1
     assert seen["repos"][0].url == "https://github.com/example/norns"
+
+
+@pytest.mark.asyncio
+async def test_run_cursor_uses_local_git_workspace(monkeypatch, tmp_path):
+    repo = tmp_path / "app"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    seen: dict[str, object] = {}
+    client = _FakeBridgeClient()
+
+    class FakeRun:
+        async def wait(self) -> None:
+            return None
+
+        async def text(self) -> str:
+            return "ok"
+
+    class FakeAgent:
+        async def send(self, prompt: str):
+            return FakeRun()
+
+        async def aclose(self) -> None:
+            return None
+
+    async def fake_launch_bridge(*, workspace: str):
+        seen["bridge"] = workspace
+        return client
+
+    async def fake_create(options=None, *, client, model, api_key, name, cloud=None, local=None):
+        seen["local"] = local
+        seen["cloud"] = cloud
+        return FakeAgent()
+
+    monkeypatch.setattr(
+        "backend.app.cursor_api.AsyncClient.launch_bridge",
+        staticmethod(fake_launch_bridge),
+    )
+    monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
+
+    text = await run_cursor_cloud_agent(
+        api_key="crsr_test",
+        prompt="Edit the repo",
+        workspace_path=str(repo),
+        repo_url="https://github.com/example/norns",
+    )
+    assert text == "ok"
+    assert seen["bridge"] == str(repo)
+    assert seen["local"] is not None
+    assert seen["cloud"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_cursor_cloud_agent_attaches_mcp_servers(monkeypatch):
+    seen: dict[str, object] = {}
+    client = _FakeBridgeClient()
+
+    class FakeRun:
+        async def wait(self) -> None:
+            return None
+
+        async def text(self) -> str:
+            return "ok"
+
+    class FakeAgent:
+        async def send(self, prompt: str):
+            return FakeRun()
+
+        async def aclose(self) -> None:
+            return None
+
+    async def fake_launch_bridge(*, workspace: str):
+        return client
+
+    async def fake_create(options=None, *, client, model, api_key, name, cloud):
+        seen["mcp"] = options.mcp_servers
+        return FakeAgent()
+
+    monkeypatch.setattr(
+        "backend.app.cursor_api.AsyncClient.launch_bridge",
+        staticmethod(fake_launch_bridge),
+    )
+    monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
+
+    text = await run_cursor_cloud_agent(
+        api_key="crsr_test",
+        prompt="Use tools",
+        mcp_servers={"norns": {"command": "python", "args": ["-m", "norns.mcp"]}},
+    )
+    assert text == "ok"
+    assert "norns" in seen["mcp"]

@@ -5,7 +5,16 @@ import { apiClient } from '../api/client';
 import { Stage } from '../types';
 import { Dialog } from './Dialog';
 
-const availableTools = ['github', 'jira', 'polarion'];
+const FALLBACK_PLUGINS = ['norns', 'github', 'jira', 'polarion'];
+
+interface PluginInfo {
+  name: string;
+  title: string;
+  description: string;
+  builtin: boolean;
+  requires_connector: string | null;
+  available: boolean;
+}
 
 interface LlmModelEntry {
   id: string;
@@ -26,6 +35,7 @@ interface LlmModelCatalog {
 
 interface Props {
   stage: Stage | null;
+  boardWorkspace?: { path: string; git_url: string };
   onClose: () => void;
 }
 
@@ -41,7 +51,7 @@ function parseSelection(value: string): { llm_provider: string; model: string } 
   return { llm_provider: value.slice(0, split), model: value.slice(split + 2) };
 }
 
-export function AgentConfigModal({ stage, onClose }: Props) {
+export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState(() => initialForm(stage));
 
@@ -55,6 +65,12 @@ export function AgentConfigModal({ stage, onClose }: Props) {
     queryFn: () => apiClient.get<LlmModelCatalog>('/connectors/llm-models'),
     staleTime: 60_000
   });
+  const { data: plugins = [] } = useQuery({
+    queryKey: ['plugins'],
+    enabled: Boolean(stage),
+    queryFn: () => apiClient.get<PluginInfo[]>('/plugins')
+  });
+  const availableTools = plugins.length ? plugins.map((plugin) => plugin.name) : FALLBACK_PLUGINS;
 
   const entries = useMemo(() => {
     const fromApi = catalog?.entries ?? [];
@@ -127,7 +143,9 @@ export function AgentConfigModal({ stage, onClose }: Props) {
         model: form.model,
         llm_provider: form.llm_provider,
         temperature: form.temperature,
-        tool_allowlist: form.tool_allowlist
+        tool_allowlist: form.tool_allowlist,
+        workspace_path: form.workspace_path,
+        git_url: form.git_url
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', stage?.board_id] });
@@ -210,12 +228,44 @@ export function AgentConfigModal({ stage, onClose }: Props) {
       </label>
 
       <div className="field">
-        <span>Tools — empty allowlist grants none</span>
+        <span>Git workspace for this agent</span>
+        <p className="muted">
+          Leave blank to use the board repo
+          {boardWorkspace?.git_url || boardWorkspace?.path ? ` (${boardWorkspace.git_url || boardWorkspace.path}).` : '.'} Set a path here when this column
+          should work in a different checkout.
+        </p>
+        <label className="field">
+          Checkout path
+          <input
+            className="input"
+            value={form.workspace_path}
+            onChange={(event) => setForm((current) => ({ ...current, workspace_path: event.target.value }))}
+            placeholder={boardWorkspace?.path || '/home/you/other-repo'}
+          />
+        </label>
+        <label className="field">
+          Git remote URL
+          <input
+            className="input"
+            value={form.git_url}
+            onChange={(event) => setForm((current) => ({ ...current, git_url: event.target.value }))}
+            placeholder={boardWorkspace?.git_url || 'https://github.com/org/repo'}
+          />
+        </label>
+      </div>
+
+      <div className="field">
+        <span>Plugins / MCP — empty allowlist grants none</span>
+        <p className="muted">
+          Enable norns (cards, stages, prompts, git workspace), github, jira, polarion, or an MCP connector from Settings. Cursor stages receive these as MCP
+          servers; OpenAI/DeepSeek stages use the same tools as functions.
+        </p>
         <div className="tool-row">
           {availableTools.map((tool) => {
+            const plugin = plugins.find((item) => item.name === tool);
             const checked = form.tool_allowlist.includes(tool);
             return (
-              <label key={tool}>
+              <label key={tool} title={plugin?.description || tool}>
                 <input
                   type="checkbox"
                   checked={checked}
@@ -226,7 +276,8 @@ export function AgentConfigModal({ stage, onClose }: Props) {
                     }))
                   }
                 />
-                {tool}
+                {plugin?.title || tool}
+                {plugin && !plugin.available ? ' (no connector)' : ''}
               </label>
             );
           })}
@@ -246,6 +297,8 @@ function initialForm(stage: Stage | null) {
     model: stage?.agent_config?.model ?? 'gpt-4o',
     llm_provider: stage?.agent_config?.llm_provider ?? '',
     temperature: stage?.agent_config?.temperature ?? 0.7,
-    tool_allowlist: stage?.agent_config?.tool_allowlist ?? []
+    tool_allowlist: stage?.agent_config?.tool_allowlist ?? [],
+    workspace_path: stage?.agent_config?.workspace_path ?? '',
+    git_url: stage?.agent_config?.git_url ?? ''
   };
 }

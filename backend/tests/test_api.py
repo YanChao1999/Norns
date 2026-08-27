@@ -52,6 +52,56 @@ def test_board_crud():
     asyncio.run(engine.dispose())
 
 
+def test_board_and_agent_workspace():
+    client, engine = _make_client()
+    with client:
+        login = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        assert login.status_code == 200
+
+        created = client.post(
+            "/api/boards",
+            json={
+                "name": "Repo board",
+                "workspace_path": "/tmp/board-repo",
+                "git_url": "https://github.com/acme/board",
+            },
+        )
+        assert created.status_code == 201
+        board = created.json()
+        assert board["workspace_path"] == "/tmp/board-repo"
+        assert board["git_url"] == "https://github.com/acme/board"
+
+        updated = client.put(
+            f"/api/boards/{board['id']}",
+            json={"git_url": "https://github.com/acme/board.git"},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["git_url"] == "https://github.com/acme/board.git"
+
+        stage_id = board["stages"][0]["id"]
+        stage = client.put(
+            f"/api/stages/{stage_id}",
+            json={"workspace_path": "/tmp/agent-repo", "git_url": "https://github.com/acme/agent"},
+        )
+        assert stage.status_code == 200
+        config = stage.json()["agent_config"]
+        assert config["workspace_path"] == "/tmp/agent-repo"
+        assert config["git_url"] == "https://github.com/acme/agent"
+
+        resolved = client.get(f"/api/workspace?board_id={board['id']}&stage_id={stage_id}")
+        assert resolved.status_code == 200
+        body = resolved.json()
+        assert body["source"] == "agent"
+        assert body["github_repo"] == "acme/agent"
+
+        board_only = client.get(f"/api/workspace?board_id={board['id']}")
+        assert board_only.json()["source"] == "board"
+        assert board_only.json()["github_repo"] == "acme/board"
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 def test_card_update_cannot_bypass_gates():
     client, engine = _make_client()
     with client:

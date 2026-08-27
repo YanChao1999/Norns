@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 from sqlalchemy import create_engine, text
 
-from backend.app.database import assert_fresh_schema, ensure_agent_config_llm_provider, ensure_connector_types
+from backend.app.database import (
+    assert_fresh_schema,
+    ensure_agent_config_llm_provider,
+    ensure_connector_types,
+    ensure_workspace_columns,
+)
 
 
 def test_assert_fresh_schema_rejects_stages_without_lane(tmp_path: Path):
@@ -60,6 +65,39 @@ def test_ensure_agent_config_llm_provider_adds_column(tmp_path: Path):
         cols = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_configs)"))}
     engine.dispose()
     assert "llm_provider" in cols
+
+
+def test_ensure_workspace_columns_adds_board_and_agent_fields(tmp_path: Path):
+    path = tmp_path / "workspace.db"
+    raw = sqlite3.connect(path)
+    raw.execute("CREATE TABLE boards (id TEXT PRIMARY KEY, name TEXT NOT NULL)")
+    raw.execute(
+        """
+        CREATE TABLE agent_configs (
+            id TEXT PRIMARY KEY,
+            stage_id TEXT NOT NULL,
+            system_prompt TEXT NOT NULL,
+            model TEXT NOT NULL,
+            temperature FLOAT NOT NULL,
+            tool_allowlist TEXT NOT NULL
+        )
+        """
+    )
+    raw.commit()
+    raw.close()
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as conn:
+        ensure_workspace_columns(conn)
+        board_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(boards)"))}
+        agent_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(agent_configs)"))}
+    engine.dispose()
+    assert "workspace_path" in board_cols
+    assert "git_url" in board_cols
+    assert "workspace_path" in agent_cols
+    assert "git_url" in agent_cols
+
+
+def test_ensure_connector_types_legacy_insert(tmp_path: Path):
     path = tmp_path / "connectors.db"
     raw = sqlite3.connect(path)
     raw.execute(

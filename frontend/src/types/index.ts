@@ -1,5 +1,5 @@
 export type CardStatus = 'idle' | 'running' | 'waiting_approval' | 'waiting_join' | 'blocked' | 'done';
-export type ConnectorType = 'openai' | 'cursor' | 'deepseek' | 'github' | 'jira' | 'polarion';
+export type ConnectorType = 'openai' | 'cursor' | 'deepseek' | 'github' | 'jira' | 'polarion' | 'mcp' | 'workspace';
 
 export interface AgentConfig {
   id: string;
@@ -8,6 +8,8 @@ export interface AgentConfig {
   llm_provider?: string;
   temperature: number;
   tool_allowlist: string[];
+  workspace_path?: string;
+  git_url?: string;
 }
 
 export interface Stage {
@@ -37,6 +39,8 @@ export interface BoardSummary {
   id: string;
   name: string;
   description?: string | null;
+  workspace_path?: string;
+  git_url?: string;
   created_at: string;
   updated_at: string;
   stages: Stage[];

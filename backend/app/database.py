@@ -28,10 +28,11 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_connector_types)
         await conn.run_sync(ensure_agent_config_llm_provider)
+        await conn.run_sync(ensure_workspace_columns)
         await conn.run_sync(assert_fresh_schema)
 
 
-REQUIRED_CONNECTOR_TYPES = ("openai", "cursor", "deepseek")
+REQUIRED_CONNECTOR_TYPES = ("openai", "cursor", "deepseek", "mcp", "workspace")
 
 
 def ensure_connector_types(sync_conn) -> None:
@@ -78,6 +79,28 @@ def ensure_agent_config_llm_provider(sync_conn) -> None:
     if "llm_provider" in present:
         return
     sync_conn.execute(text("ALTER TABLE agent_configs ADD COLUMN llm_provider VARCHAR(32) NOT NULL DEFAULT ''"))
+
+
+def ensure_workspace_columns(sync_conn) -> None:
+    """create_all does not add git workspace columns to existing boards / agent_configs."""
+    inspector = inspect(sync_conn)
+    specs = {
+        "boards": (
+            ("workspace_path", "VARCHAR(1024) NOT NULL DEFAULT ''"),
+            ("git_url", "VARCHAR(1024) NOT NULL DEFAULT ''"),
+        ),
+        "agent_configs": (
+            ("workspace_path", "VARCHAR(1024) NOT NULL DEFAULT ''"),
+            ("git_url", "VARCHAR(1024) NOT NULL DEFAULT ''"),
+        ),
+    }
+    for table, columns in specs.items():
+        if not inspector.has_table(table):
+            continue
+        present = {column["name"] for column in inspector.get_columns(table)}
+        for name, ddl in columns:
+            if name not in present:
+                sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
 
 
 def assert_fresh_schema(sync_conn) -> None:

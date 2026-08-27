@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { entryStageId, groupStages } from '../boardLayout';
@@ -75,6 +75,8 @@ export function Board({ boardId, onEditMachine }: Props) {
         ) : null}
       </div>
 
+      <BoardWorkspace board={board} />
+
       <div
         className="board-grid"
         style={{
@@ -147,7 +149,58 @@ export function Board({ boardId, onEditMachine }: Props) {
             : undefined
         }
       />
-      <AgentConfigModal stage={selectedStage} onClose={() => setSelectedStage(null)} />
+      <AgentConfigModal
+        stage={selectedStage}
+        boardWorkspace={{ path: board.workspace_path ?? '', git_url: board.git_url ?? '' }}
+        onClose={() => setSelectedStage(null)}
+      />
     </div>
+  );
+}
+
+function BoardWorkspace({ board }: { board: BoardDetail }) {
+  const queryClient = useQueryClient();
+  const [path, setPath] = useState(board.workspace_path ?? '');
+  const [gitUrl, setGitUrl] = useState(board.git_url ?? '');
+
+  useEffect(() => {
+    setPath(board.workspace_path ?? '');
+    setGitUrl(board.git_url ?? '');
+  }, [board.id, board.workspace_path, board.git_url]);
+
+  const save = useMutation({
+    mutationFn: async () => apiClient.put<BoardDetail>(`/boards/${board.id}`, { workspace_path: path, git_url: gitUrl }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', board.id] });
+      queryClient.invalidateQueries({ queryKey: ['boards'] });
+    }
+  });
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    save.mutate();
+  };
+
+  const inherited = board.git_url || board.workspace_path;
+
+  return (
+    <form className="panel board-workspace" onSubmit={onSubmit}>
+      <h2>Board workspace</h2>
+      <p className="muted">This board works in one git repo. Column agents inherit it unless they set their own checkout under Agent.</p>
+      <div className="board-workspace-fields">
+        <label className="field">
+          Checkout path
+          <input className="input" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/home/you/my-repo" />
+        </label>
+        <label className="field">
+          Git remote URL
+          <input className="input" value={gitUrl} onChange={(event) => setGitUrl(event.target.value)} placeholder="https://github.com/org/repo" />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save workspace'}
+        </button>
+      </div>
+      {!inherited ? <p className="muted">No repo bound yet. Stage runs fall back to the process working directory.</p> : null}
+    </form>
   );
 }

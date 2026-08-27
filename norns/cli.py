@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -30,6 +31,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Run the local server without opening a desktop window",
     )
 
+    mcp_parser = sub.add_parser("mcp", help="Run Norns tool plugins as an MCP server on stdin/stdout")
+    mcp_parser.add_argument("--home", type=Path, default=None)
+    mcp_parser.add_argument(
+        "--plugins",
+        default="",
+        help="Comma-separated plugin ids (norns,github,jira,polarion). Empty = all built-ins.",
+    )
+
     args = parser.parse_args(argv)
     home = (args.home or default_home()).expanduser().resolve()
 
@@ -54,6 +63,19 @@ def main(argv: list[str] | None = None) -> int:
         from norns.desktop import run_ide
 
         return run_ide(host=runtime["host"], port=int(runtime["port"]), open_window=not args.no_window)
+
+    if args.command == "mcp":
+        from norns.mcp import main as mcp_main
+
+        try:
+            apply_config(home)
+        except FileNotFoundError:
+            if not os.environ.get("DATABASE_URL"):
+                print(f"Norns home not initialized at {home}. Run: norns init", file=sys.stderr)
+                return 1
+        names = [part.strip() for part in str(getattr(args, "plugins", "") or "").split(",") if part.strip()]
+        argv_mcp = ["--plugins", ",".join(names)] if names else []
+        return mcp_main(argv_mcp)
 
     parser.print_help()
     return 2

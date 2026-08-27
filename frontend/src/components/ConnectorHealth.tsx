@@ -12,7 +12,7 @@ interface LlmModelCatalog {
   error?: string;
 }
 
-const TYPES: ConnectorType[] = ['openai', 'cursor', 'deepseek', 'github', 'jira', 'polarion'];
+const TYPES: ConnectorType[] = ['openai', 'cursor', 'deepseek', 'github', 'jira', 'polarion', 'mcp'];
 
 const LLM_DEFAULTS: Record<'openai' | 'cursor' | 'deepseek', { base_url: string; default_model: string; placeholder: string }> = {
   openai: { base_url: 'https://api.openai.com/v1', default_model: 'gpt-4o', placeholder: 'sk-…' },
@@ -32,7 +32,13 @@ const EMPTY_FORM = {
   username: '',
   password: '',
   project: '',
-  repo_url: ''
+  repo_url: '',
+  mcp_transport: 'stdio',
+  mcp_command: '',
+  mcp_args: '',
+  mcp_url: '',
+  workspace_path: '',
+  git_url: ''
 };
 
 export function ConnectorHealth() {
@@ -102,8 +108,8 @@ export function ConnectorHealth() {
       <h2>Connectors</h2>
       <p className="muted">
         OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface via <code>cursor-sdk</code> only — pick models labeled ·
-        Cursor (e.g. auto). GitHub, Jira, and Polarion unlock tools under Agent. If more than one model connector is active and the stage has no provider set,
-        DeepSeek is used first, then OpenAI, then Cursor.
+        Cursor (e.g. auto). Bind a git repo on the board (and optionally on a column Agent). GitHub, Jira, Polarion, and MCP servers unlock plugins under Agent.
+        If more than one model connector is active and the stage has no provider set, DeepSeek is used first, then OpenAI, then Cursor.
       </p>
 
       <form className="connector-form" onSubmit={onSubmit}>
@@ -235,6 +241,54 @@ export function ConnectorHealth() {
             </label>
           </>
         ) : null}
+        {form.connector_type === 'mcp' ? (
+          <>
+            <label className="field">
+              Transport
+              <select
+                className="input"
+                value={form.mcp_transport}
+                onChange={(event) => setForm((current) => ({ ...current, mcp_transport: event.target.value }))}
+              >
+                <option value="stdio">stdio command</option>
+                <option value="http">HTTP URL</option>
+              </select>
+            </label>
+            {form.mcp_transport === 'http' ? (
+              <label className="field">
+                MCP URL
+                <input
+                  className="input"
+                  value={form.mcp_url}
+                  onChange={(event) => setForm((current) => ({ ...current, mcp_url: event.target.value }))}
+                  placeholder="https://example.com/mcp"
+                />
+              </label>
+            ) : (
+              <>
+                <label className="field">
+                  Command
+                  <input
+                    className="input"
+                    value={form.mcp_command}
+                    onChange={(event) => setForm((current) => ({ ...current, mcp_command: event.target.value }))}
+                    placeholder="npx"
+                  />
+                </label>
+                <label className="field">
+                  Args
+                  <input
+                    className="input"
+                    value={form.mcp_args}
+                    onChange={(event) => setForm((current) => ({ ...current, mcp_args: event.target.value }))}
+                    placeholder="-y @modelcontextprotocol/server-github"
+                  />
+                </label>
+              </>
+            )}
+            <p className="muted">Attach this MCP server to a stage by enabling its plugin under Agent → Tools (or check mcp for all MCP connectors).</p>
+          </>
+        ) : null}
         {form.connector_type === 'polarion' ? (
           <>
             <label className="field">
@@ -293,23 +347,25 @@ export function ConnectorHealth() {
       </form>
 
       {isLoading ? <div className="muted">Loading connectors…</div> : null}
-      {data.map((connector) => (
-        <div key={connector.id} className="connector-row">
-          <span>
-            {connector.name} · {labelFor(connector.connector_type)}
-            {connector.config_keys.includes('api_key') ? ' · key saved' : null}
-          </span>
-          <span className="connector-actions">
-            <span className={connector.is_active ? 'is-active-text' : 'is-inactive-text'}>{connector.is_active ? 'active' : 'inactive'}</span>
-            <button type="button" className="btn btn-ghost" onClick={() => startEdit(connector, setEditingId, setForm)}>
-              Edit
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={() => remove.mutate(connector.id)} disabled={remove.isPending}>
-              Remove
-            </button>
-          </span>
-        </div>
-      ))}
+      {data
+        .filter((connector) => connector.connector_type !== 'workspace')
+        .map((connector) => (
+          <div key={connector.id} className="connector-row">
+            <span>
+              {connector.name} · {labelFor(connector.connector_type)}
+              {connector.config_keys.includes('api_key') ? ' · key saved' : null}
+            </span>
+            <span className="connector-actions">
+              <span className={connector.is_active ? 'is-active-text' : 'is-inactive-text'}>{connector.is_active ? 'active' : 'inactive'}</span>
+              <button type="button" className="btn btn-ghost" onClick={() => startEdit(connector, setEditingId, setForm)}>
+                Edit
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => remove.mutate(connector.id)} disabled={remove.isPending}>
+                Remove
+              </button>
+            </span>
+          </div>
+        ))}
       {!data.length && !isLoading ? (
         <div className="muted">No connectors yet. Add OpenAI, Cursor, or DeepSeek here so stage runs call a real model.</div>
       ) : null}
@@ -339,6 +395,8 @@ function labelFor(type: ConnectorType): string {
   if (type === 'deepseek') return 'DeepSeek';
   if (type === 'github') return 'GitHub';
   if (type === 'jira') return 'Jira';
+  if (type === 'mcp') return 'MCP';
+  if (type === 'workspace') return 'Workspace';
   return 'Polarion';
 }
 
@@ -355,6 +413,17 @@ function configFromForm(form: typeof EMPTY_FORM): Record<string, string> {
   }
   if (form.connector_type === 'jira') {
     return { server: form.server, username: form.username, token: form.token };
+  }
+  if (form.connector_type === 'mcp') {
+    return {
+      transport: form.mcp_transport,
+      command: form.mcp_command,
+      args: form.mcp_args,
+      url: form.mcp_url
+    };
+  }
+  if (form.connector_type === 'workspace') {
+    return { path: form.workspace_path, git_url: form.git_url };
   }
   return { server: form.server, username: form.username, password: form.password, project: form.project };
 }
@@ -373,7 +442,13 @@ function startEdit(connector: Connector, setEditingId: (id: string) => void, set
     server: publicConfig.server ?? '',
     username: publicConfig.username ?? '',
     project: publicConfig.project ?? '',
-    repo_url: publicConfig.repo_url ?? ''
+    repo_url: publicConfig.repo_url ?? '',
+    mcp_transport: publicConfig.transport ?? 'stdio',
+    mcp_command: publicConfig.command ?? '',
+    mcp_args: publicConfig.args ?? '',
+    mcp_url: publicConfig.url ?? '',
+    workspace_path: publicConfig.path ?? '',
+    git_url: publicConfig.git_url ?? ''
   });
 }
 
