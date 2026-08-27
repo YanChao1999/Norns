@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildJourney, chronologicalRuns, handoffSummary, isFinalizedRun } from './cardJourney';
+import { buildJourney, chronologicalRuns, compareRunDecision, handoffSummary, isFinalizedRun } from './cardJourney';
 import { AgentRun, BoardDetail, Card } from './types';
 
 const board = {
@@ -39,6 +39,27 @@ describe('cardJourney', () => {
     expect(ordered.map((item) => item.id)).toEqual(['r1', 'r2']);
   });
 
+  it('keeps waiting_tool_approval on the current stage, not a named column', () => {
+    const card = {
+      id: 'c1',
+      board_id: 'b1',
+      title: 'test',
+      body: '',
+      current_stage_id: 's3',
+      status: 'waiting_tool_approval'
+    } as Card;
+    const journey = buildJourney(card, board, [
+      run({ id: 'r1', stage_id: 's1', handoff: { summary: 'from urd' } }),
+      run({ id: 'r2', stage_id: 's2', handoff: { summary: 'from verdandi' } }),
+      run({ id: 'r3', stage_id: 's3', status: 'waiting_tool', completed_at: null, handoff: { summary: 'pending create' } })
+    ]);
+    expect(journey.map((step) => [step.stage.name, step.state])).toEqual([
+      ['Urd', 'done'],
+      ['Verdandi', 'done'],
+      ['Skuld', 'current']
+    ]);
+  });
+
   it('marks prior stages done and current stage here', () => {
     const card = {
       id: 'c1',
@@ -63,5 +84,26 @@ describe('cardJourney', () => {
     expect(handoffSummary(run({ id: 'r1', stage_id: 's1', handoff: { summary: '  hi  ' } }))).toBe('hi');
     expect(handoffSummary(run({ id: 'r2', stage_id: 's1', model_output: 'log only' }))).toBe('log only');
     expect(isFinalizedRun(run({ id: 'r3', stage_id: 's1', status: 'running', completed_at: null, handoff: {} }))).toBe(false);
+  });
+
+  it('compares reject reasons across reruns', () => {
+    const first = run({
+      id: 'r1',
+      stage_id: 's1',
+      handoff: { recommendation: 'reject', recommendation_reason: 'Jira connector is not attached.' }
+    });
+    const same = run({
+      id: 'r2',
+      stage_id: 's1',
+      handoff: { recommendation: 'reject', recommendation_reason: 'jira connector is not attached.' }
+    });
+    const changed = run({
+      id: 'r3',
+      stage_id: 's1',
+      handoff: { recommendation: 'reject', recommendation_reason: 'Missing project key.' }
+    });
+    expect(compareRunDecision(same, first)).toBe('same');
+    expect(compareRunDecision(changed, first)).toBe('changed');
+    expect(compareRunDecision(first, null)).toBe('first');
   });
 });

@@ -38,6 +38,7 @@ class StageRead(BaseModel):
     order: int
     lane: int = 0
     require_approval: bool
+    confirm_writes: bool = False
     agent_config: AgentConfigRead | None = None
 
 
@@ -127,6 +128,7 @@ class StageCreate(BaseModel):
     parallel: bool = False
     from_stage_id: str | None = None
     require_approval: bool = True
+    confirm_writes: bool = False
     system_prompt: str = (
         "You are the stage agent. Produce a concise handoff. "
         "If this stage has a human gate, recommend DECISION: approve or reject; a human must confirm."
@@ -144,6 +146,7 @@ class StageUpdate(BaseModel):
     order: int | None = None
     lane: int | None = None
     require_approval: bool | None = None
+    confirm_writes: bool | None = None
     system_prompt: str | None = None
     model: str | None = None
     llm_provider: str | None = None
@@ -199,7 +202,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=2,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Verdandi. Refine the active work using the approved handoff only. Recommend DECISION: approve or reject; a human must confirm.",
+                system_prompt="You are Verdandi. Do the approved work with tools (create tickets, update the card). Then hand off. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -210,7 +213,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=3,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Skuld. Produce the final delivery handoff and highlight risks. Recommend DECISION: approve or reject; a human must confirm.",
+                system_prompt="You are Skuld. Finish delivery with tools if anything is still undone, then produce the final handoff and highlight risks. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -294,6 +297,7 @@ async def create_stage(
         order=order,
         lane=lane,
         require_approval=payload.require_approval,
+        confirm_writes=payload.confirm_writes,
     )
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,

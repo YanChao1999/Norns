@@ -337,6 +337,7 @@ a {
 }
 
 .card.status-waiting_approval,
+.card.status-waiting_tool_approval,
 .card.status-waiting_join {
   outline: 1px solid color-mix(in srgb, var(--waiting) 70%, transparent);
 }
@@ -386,6 +387,7 @@ a {
 }
 
 .status-waiting_approval,
+.status-waiting_tool_approval,
 .status-waiting_join {
   background: color-mix(in srgb, var(--waiting) 18%, transparent);
   color: var(--waiting);
@@ -721,22 +723,44 @@ details.disclosure summary {
   max-width: 760px;
 }
 
-.board-workspace {
-  margin: 0 0 16px;
-  max-width: 760px;
+.board-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.board-workspace-fields {
+.repo-chip {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-chip.is-empty {
+  border-style: dashed;
+  color: var(--waiting);
+  border-color: color-mix(in srgb, var(--waiting) 45%, var(--line));
+}
+
+.workspace-details {
   display: grid;
   gap: 12px;
-  grid-template-columns: 1fr 1fr auto;
-  align-items: end;
 }
 
-@media (max-width: 720px) {
-  .board-workspace-fields {
-    grid-template-columns: 1fr;
-  }
+.workspace-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workspace-details[open] summary {
+  margin-bottom: 8px;
+}
+
+.workspace-bind {
+  display: grid;
+  gap: 12px;
 }
 
 .panel {
@@ -1008,8 +1032,8 @@ details.disclosure summary {
   font-size: 10px;
 }
 
-.machine-node.is-gated {
-  border-color: color-mix(in srgb, var(--waiting) 55%, var(--line));
+.machine-node.is-confirm-writes {
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--waiting) 70%, transparent);
 }
 
 .machine-node.is-auto {

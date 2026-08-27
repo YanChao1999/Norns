@@ -55,6 +55,54 @@ export function handoffSummary(run: AgentRun | null | undefined): string {
   return (run.model_output || '').trim();
 }
 
+export function normalizeReason(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+export function runDecision(run: AgentRun | null | undefined): { recommendation: string; reason: string } {
+  if (!run) {
+    return { recommendation: '', reason: '' };
+  }
+  const handoff = (run.handoff ?? {}) as Handoff;
+  const recommendation = typeof handoff.recommendation === 'string' ? handoff.recommendation.trim().toLowerCase() : '';
+  const reason =
+    typeof handoff.recommendation_reason === 'string' && handoff.recommendation_reason.trim()
+      ? handoff.recommendation_reason.trim()
+      : '';
+  return { recommendation, reason };
+}
+
+export type ReasonCompare = 'first' | 'same' | 'changed';
+
+export function compareRunDecision(current: AgentRun, previous: AgentRun | null | undefined): ReasonCompare {
+  if (!previous) {
+    return 'first';
+  }
+  const now = runDecision(current);
+  const before = runDecision(previous);
+  if (!now.recommendation && !now.reason) {
+    return 'first';
+  }
+  if (now.recommendation === before.recommendation && normalizeReason(now.reason) === normalizeReason(before.reason) && now.reason) {
+    return 'same';
+  }
+  return 'changed';
+}
+
+export function pluginsSnapshot(run: AgentRun | null | undefined): { allowlist: string[]; attached: string[]; jiraConnector: boolean | null } {
+  const plugins = run?.inputs?.plugins;
+  if (!plugins || typeof plugins !== 'object') {
+    return { allowlist: [], attached: [], jiraConnector: null };
+  }
+  const record = plugins as Record<string, unknown>;
+  const allowlist = Array.isArray(record.allowlist) ? record.allowlist.map((item) => String(item)) : [];
+  const mcp = Array.isArray(record.mcp_servers) ? record.mcp_servers.map((item) => String(item)) : [];
+  const tools = Array.isArray(record.tools) ? record.tools.map((item) => String(item)) : [];
+  const attached = mcp.length ? mcp : tools;
+  const jiraConnector = typeof record.jira_connector === 'boolean' ? record.jira_connector : null;
+  return { allowlist, attached, jiraConnector };
+}
+
 export function formatRunTime(value: string | null | undefined): string {
   if (!value) {
     return '';

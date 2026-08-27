@@ -4,10 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { entryStageId, groupStages } from '../boardLayout';
 import { BoardDetail, Card, Stage } from '../types';
+import { repoChipLabel } from '../workspaceLabel';
 import { AgentConfigModal } from './AgentConfig';
 import { CardDrawer } from './CardDrawer';
 import { CardHistory } from './CardHistory';
 import { Column } from './Column';
+import { Dialog } from './Dialog';
 
 interface Props {
   boardId: string;
@@ -68,14 +70,15 @@ export function Board({ boardId, onEditMachine }: Props) {
           <h1>{board.name}</h1>
           <p>{board.description || 'Each column is a workflow step. Cards follow the lines you draw. Column and row only place stages on the board.'}</p>
         </div>
-        {onEditMachine ? (
-          <button type="button" className="btn" onClick={onEditMachine}>
-            Edit state machine
-          </button>
-        ) : null}
+        <div className="board-head-actions">
+          <BoardWorkspace board={board} />
+          {onEditMachine ? (
+            <button type="button" className="btn" onClick={onEditMachine}>
+              Edit state machine
+            </button>
+          ) : null}
+        </div>
       </div>
-
-      <BoardWorkspace board={board} />
 
       <div
         className="board-grid"
@@ -160,6 +163,7 @@ export function Board({ boardId, onEditMachine }: Props) {
 
 function BoardWorkspace({ board }: { board: BoardDetail }) {
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [path, setPath] = useState(board.workspace_path ?? '');
   const [gitUrl, setGitUrl] = useState(board.git_url ?? '');
 
@@ -168,11 +172,23 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
     setGitUrl(board.git_url ?? '');
   }, [board.id, board.workspace_path, board.git_url]);
 
+  const bound = Boolean(board.git_url || board.workspace_path);
+  const label = repoChipLabel(board.workspace_path, board.git_url);
+
+  const { data: detected } = useQuery({
+    queryKey: ['workspace-detected'],
+    enabled: open && !bound,
+    queryFn: () =>
+      apiClient.get<{ path?: string | null; git_url?: string | null; github_repo?: string | null }>('/workspace')
+  });
+
   const save = useMutation({
-    mutationFn: async () => apiClient.put<BoardDetail>(`/boards/${board.id}`, { workspace_path: path, git_url: gitUrl }),
+    mutationFn: async () =>
+      apiClient.put<BoardDetail>(`/boards/${board.id}`, { workspace_path: path, git_url: gitUrl }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });
+      setOpen(false);
     }
   });
 
@@ -181,26 +197,64 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
     save.mutate();
   };
 
-  const inherited = board.git_url || board.workspace_path;
-
   return (
-    <form className="panel board-workspace" onSubmit={onSubmit}>
-      <h2>Board workspace</h2>
-      <p className="muted">This board works in one git repo. Column agents inherit it unless they set their own checkout under Agent.</p>
-      <div className="board-workspace-fields">
-        <label className="field">
-          Checkout path
-          <input className="input" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/home/you/my-repo" />
-        </label>
-        <label className="field">
-          Git remote URL
-          <input className="input" value={gitUrl} onChange={(event) => setGitUrl(event.target.value)} placeholder="https://github.com/org/repo" />
-        </label>
-        <button type="submit" className="btn btn-primary" disabled={save.isPending}>
-          {save.isPending ? 'Saving…' : 'Save workspace'}
-        </button>
-      </div>
-      {!inherited ? <p className="muted">No repo bound yet. Stage runs fall back to the process working directory.</p> : null}
-    </form>
+    <>
+      <button
+        type="button"
+        className={`chip repo-chip${bound ? '' : ' is-empty'}`}
+        onClick={() => setOpen(true)}
+        title={bound ? `${board.workspace_path || ''} ${board.git_url || ''}`.trim() : 'Bind a git repo for this board'}
+      >
+        {bound ? label : 'Bind git repo'}
+      </button>
+      <Dialog open={open} onClose={() => setOpen(false)} labelledBy="board-workspace-title" variant="modal">
+        <form className="workspace-bind" onSubmit={onSubmit}>
+          <div className="modal-head">
+            <h2 id="board-workspace-title">Git repo for this board</h2>
+            <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>
+              Close
+            </button>
+          </div>
+          <p className="muted">
+            Agents on this board work in one folder. Pick the project checkout; the GitHub URL is optional and fills in from origin when you leave it blank.
+          </p>
+          <label className="field">
+            Folder on this machine
+            <input className="input" value={path} onChange={(event) => setPath(event.target.value)} placeholder="/home/you/projects/app" autoComplete="off" />
+          </label>
+          <label className="field">
+            GitHub or git URL
+            <input
+              className="input"
+              value={gitUrl}
+              onChange={(event) => setGitUrl(event.target.value)}
+              placeholder="https://github.com/org/app"
+              autoComplete="off"
+            />
+          </label>
+          {detected?.path && !path ? (
+            <p className="muted">
+              Norns is running from {detected.github_repo || detected.path}.{' '}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setPath(detected.path || '');
+                  setGitUrl(detected.git_url || '');
+                }}
+              >
+                Use this folder
+              </button>
+            </p>
+          ) : null}
+          {save.isError ? <div className="error">Could not save the git repo.</div> : null}
+          <div className="connector-actions">
+            <button type="submit" className="btn btn-primary" disabled={save.isPending}>
+              {save.isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   );
 }

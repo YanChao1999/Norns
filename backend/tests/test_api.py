@@ -146,6 +146,8 @@ def test_stage_machine_crud_and_guards():
         body = machine.json()
         assert "idle" in body["states"]
         assert "waiting_join" in body["states"]
+        assert "waiting_tool_approval" in body["states"]
+        assert "waiting_tool_approval" in body["transitions"]["running"]
         assert "running" in body["transitions"]["idle"]
 
         created = client.post(
@@ -167,10 +169,11 @@ def test_stage_machine_crud_and_guards():
         bad_reorder = client.put(f"/api/boards/{board_id}/stages/reorder", json={"stage_ids": original_ids})
         assert bad_reorder.status_code == 400
 
-        renamed = client.put(f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True})
+        renamed = client.put(f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True, "confirm_writes": True})
         assert renamed.status_code == 200
         assert renamed.json()["name"] == "QA"
         assert renamed.json()["require_approval"] is True
+        assert renamed.json()["confirm_writes"] is True
 
         removed = client.delete(f"/api/stages/{review_id}")
         assert removed.status_code == 204

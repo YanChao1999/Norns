@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { buildJourney, chronologicalRuns, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, stageName } from '../cardJourney';
+import { buildJourney, chronologicalRuns, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, pluginsSnapshot, runDecision, stageName } from '../cardJourney';
 import { Handoff } from '../gateLabels';
 import { AgentRun, BoardDetail, Card } from '../types';
 
@@ -65,11 +65,18 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
         {isLoading ? <p className="muted">Loading runs…</p> : null}
         {!isLoading && !timeline.length ? <p className="muted">No agent runs for this card yet.</p> : null}
         <div className="history-timeline">
-          {timeline.map((run) => {
+          {timeline.map((run, index) => {
             const handoff = (run.handoff ?? {}) as Handoff;
             const summary = handoffSummary(run);
             const links = Array.isArray(handoff.links) ? handoff.links : [];
             const plantuml = diagramSvg(handoff);
+            const previous = timeline
+              .slice(0, index)
+              .reverse()
+              .find((item) => item.stage_id === run.stage_id) ?? null;
+            const compare = compareRunDecision(run, previous);
+            const decision = runDecision(run);
+            const plugins = pluginsSnapshot(run);
             return (
               <article key={run.id} className={`history-run is-${run.status}`}>
                 <header className="history-run-head">
@@ -83,8 +90,33 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
                       {run.completed_at ? ` → ${formatRunTime(run.completed_at)}` : ''}
                     </p>
                   </div>
+                  {decision.recommendation ? (
+                    <span className={`journey-pill is-${decision.recommendation === 'reject' ? 'failed' : 'done'}`}>
+                      {decision.recommendation}
+                    </span>
+                  ) : null}
                 </header>
-                {summary ? <p className="handoff">{summary}</p> : <p className="muted">No handoff summary.</p>}
+                {decision.reason ? <p className="handoff">{decision.reason}</p> : null}
+                {compare === 'same' ? (
+                  <p className="notice" role="status">
+                    Same {decision.recommendation || 'decision'} as the previous {stageName(board, previous?.stage_id || run.stage_id)} run
+                    {previous ? ` (${formatRunTime(previous.completed_at ?? previous.created_at)})` : ''}.
+                  </p>
+                ) : null}
+                {compare === 'changed' && previous ? (
+                  <p className="muted">
+                    Different from the previous run
+                    {runDecision(previous).reason ? `: “${runDecision(previous).reason}”` : ''}.
+                  </p>
+                ) : null}
+                <p className="muted">
+                  Plugins: {plugins.attached.length ? plugins.attached.join(', ') : plugins.allowlist.length ? plugins.allowlist.join(', ') : 'none'}
+                  {plugins.jiraConnector === false ? ' · Jira connector not active in Settings' : ''}
+                  {plugins.jiraConnector === true && !plugins.attached.includes('jira') && !plugins.allowlist.includes('jira')
+                    ? ' · Jira connector is on, but this column Agent did not enable jira'
+                    : ''}
+                </p>
+                {summary && summary !== decision.reason ? <p className="handoff">{summary}</p> : !decision.reason ? <p className="muted">No handoff summary.</p> : null}
                 {links.length ? (
                   <div className="links">
                     {links.map((link) => (

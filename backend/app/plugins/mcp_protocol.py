@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from typing import Any, TextIO
 
+from sqlalchemy.orm.attributes import flag_modified
+
+from ..database import AsyncSessionLocal
+from ..models import AgentRun
 from .base import PluginContext, ToolSpec
 from .catalog import dump_mcp_tool_result, load_plugin_catalog_from_db
+from .tool_policy import is_write_tool
 
 
 async def serve_stdio(
@@ -19,7 +25,8 @@ async def serve_stdio(
 ) -> None:
     catalog = await load_plugin_catalog_from_db()
     allowlist = plugin_names or [plugin.name for plugin in catalog.plugins if plugin.builtin]
-    tools = catalog.tools(allowlist, PluginContext())
+    context = _stdio_plugin_context(catalog)
+    tools = catalog.tools(allowlist, context)
     tool_map = {tool.name: tool for tool in tools}
     reader = stdin or sys.stdin
     writer = stdout or sys.stdout
@@ -40,6 +47,22 @@ async def serve_stdio(
             continue
         writer.write(json.dumps(response) + "\n")
         writer.flush()
+
+
+def _stdio_plugin_context(catalog: Any) -> PluginContext:
+    connectors = list(getattr(catalog, "connectors", None) or [])
+    from ..workspace import resolve_workspace
+
+    workspace = resolve_workspace(connectors)
+    return PluginContext(
+        connectors=connectors,
+        board_id=str(os.environ.get("NORNS_BOARD_ID") or "").strip() or None,
+        card_id=str(os.environ.get("NORNS_CARD_ID") or "").strip() or None,
+        stage_id=str(os.environ.get("NORNS_STAGE_ID") or "").strip() or None,
+        workspace_path=str(os.environ.get("NORNS_WORKSPACE") or "").strip() or workspace.path,
+        git_url=str(os.environ.get("NORNS_GIT_URL") or "").strip() or workspace.git_url,
+        github_repo=str(os.environ.get("NORNS_GITHUB_REPO") or "").strip() or workspace.github_repo,
+    )
 
 
 async def _handle(
@@ -76,7 +99,10 @@ async def _handle(
                 },
             )
         try:
-            result = await tool.execute(arguments)
+            if str(os.environ.get("NORNS_CONFIRM_WRITES") or "") == "1" and is_write_tool(name):
+                result = await _queue_pending_write(name, arguments)
+            else:
+                result = await tool.execute(arguments)
             text = dump_mcp_tool_result(result)
             is_error = isinstance(result, dict) and "error" in result
             return _ok(request_id, {"content": [{"type": "text", "text": text}], "isError": is_error})
@@ -94,3 +120,25 @@ async def _handle(
 
 def _ok(request_id: Any, result: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+async def _queue_pending_write(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(os.environ.get("NORNS_RUN_ID") or "").strip()
+    if not run_id:
+        return {"error": "Write confirmation is enabled but NORNS_RUN_ID is missing"}
+    payload = {"name": name, "arguments": arguments, "status": "pending_approval"}
+    async with AsyncSessionLocal() as session:
+        run = await session.get(AgentRun, run_id)
+        if run is None:
+            return {"error": "Stage run not found for write confirmation"}
+        inputs = dict(run.inputs or {})
+        pending = list(inputs.get("pending_writes") or [])
+        pending.append({"name": name, "arguments": arguments})
+        inputs["pending_writes"] = pending
+        run.inputs = inputs
+        flag_modified(run, "inputs")
+        await session.commit()
+    return {
+        **payload,
+        "message": "Write queued for Control Room confirmation. Do not retry this write until a human confirms it.",
+    }

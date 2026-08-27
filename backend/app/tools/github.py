@@ -17,6 +17,12 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "default"
 
 
+def _required(default_repo: str, names: list[str]) -> list[str]:
+    if default_repo:
+        return [name for name in names if name != "repo"]
+    return names
+
+
 def github_provider(connectors: list[Connector], default_repo: str = "") -> list[RuntimeTool]:
     runtime_tools: list[RuntimeTool] = []
     for connector in connectors:
@@ -41,7 +47,7 @@ def github_provider(connectors: list[Connector], default_repo: str = "") -> list
                                     },
                                     "issue_number": {"type": "integer"},
                                 },
-                                "required": ["repo", "issue_number"],
+                                "required": _required(default_repo, ["repo", "issue_number"]),
                             },
                         },
                     },
@@ -64,7 +70,7 @@ def github_provider(connectors: list[Connector], default_repo: str = "") -> list
                                     "path": {"type": "string", "default": ""},
                                     "ref": {"type": "string"},
                                 },
-                                "required": ["repo"],
+                                "required": _required(default_repo, ["repo"]),
                             },
                         },
                     },
@@ -84,7 +90,7 @@ def github_provider(connectors: list[Connector], default_repo: str = "") -> list
                                     "title": {"type": "string"},
                                     "body": {"type": "string"},
                                 },
-                                "required": ["repo", "title"],
+                                "required": _required(default_repo, ["repo", "title"]),
                             },
                         },
                     },
@@ -109,7 +115,7 @@ def github_provider(connectors: list[Connector], default_repo: str = "") -> list
                                     "head": {"type": "string"},
                                     "base": {"type": "string"},
                                 },
-                                "required": ["repo", "title", "body", "head", "base"],
+                                "required": _required(default_repo, ["repo", "title", "body", "head", "base"]),
                             },
                         },
                     },
@@ -132,7 +138,7 @@ def github_provider(connectors: list[Connector], default_repo: str = "") -> list
                                     "pull_number": {"type": "integer"},
                                     "body": {"type": "string"},
                                 },
-                                "required": ["repo", "pull_number", "body"],
+                                "required": _required(default_repo, ["repo", "pull_number", "body"]),
                             },
                         },
                     },

@@ -1,4 +1,4 @@
-export type CardStatus = 'idle' | 'running' | 'waiting_approval' | 'waiting_join' | 'blocked' | 'done';
+export type CardStatus = 'idle' | 'running' | 'waiting_approval' | 'waiting_tool_approval' | 'waiting_join' | 'blocked' | 'done';
 export type ConnectorType = 'openai' | 'cursor' | 'deepseek' | 'github' | 'jira' | 'polarion' | 'mcp' | 'workspace';
 
 export interface AgentConfig {
@@ -19,6 +19,7 @@ export interface Stage {
   order: number;
   lane?: number;
   require_approval: boolean;
+  confirm_writes?: boolean;
   agent_config?: AgentConfig | null;
 }
 

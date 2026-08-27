@@ -17,12 +17,26 @@ def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "default"
 
 
-def jira_provider(connectors: list[Connector]) -> list[RuntimeTool]:
+def _project_value(arguments: dict[str, Any], default_project: str) -> str:
+    project = str(arguments.get("project") or default_project or "").strip()
+    if not project:
+        raise ValueError("project is required — set it on the Jira connector or pass a project key")
+    return project
+
+
+def _required_project(default_project: str, names: list[str]) -> list[str]:
+    if default_project:
+        return [name for name in names if name != "project"]
+    return names
+
+
+def jira_provider(connectors: list[Connector], default_project: str = "") -> list[RuntimeTool]:
     runtime_tools: list[RuntimeTool] = []
     for connector in connectors:
         if connector.connector_type != ConnectorType.JIRA or not connector.is_active:
             continue
         suffix = _slugify(connector.name)
+        project = default_project or _connector_project(connector)
         runtime_tools.extend(
             [
                 RuntimeTool(
@@ -110,11 +124,11 @@ def jira_provider(connectors: list[Connector]) -> list[RuntimeTool]:
                                     "description": {"type": "string"},
                                     "issuetype": {"type": "string", "description": "Issue type name, default Task"},
                                 },
-                                "required": ["project", "summary"],
+                                "required": _required_project(project, ["project", "summary"]),
                             },
                         },
                     },
-                    execute=_make_create_issue(connector),
+                    execute=_make_create_issue(connector, project),
                 ),
                 RuntimeTool(
                     name=f"jira_{suffix}_create_subtask",
@@ -131,15 +145,24 @@ def jira_provider(connectors: list[Connector]) -> list[RuntimeTool]:
                                     "summary": {"type": "string"},
                                     "description": {"type": "string"},
                                 },
-                                "required": ["project", "parent", "summary"],
+                                "required": _required_project(project, ["project", "parent", "summary"]),
                             },
                         },
                     },
-                    execute=_make_create_subtask(connector),
+                    execute=_make_create_subtask(connector, project),
                 ),
             ]
         )
     return runtime_tools
+
+
+def _connector_project(connector: Connector) -> str:
+    if not connector.encrypted_config:
+        return ""
+    try:
+        return str(connector.get_config().get("project") or "").strip()
+    except Exception:
+        return ""
 
 
 def _jira_client(connector: Connector) -> Any:
@@ -194,11 +217,11 @@ def _make_transition_issue(connector: Connector):
     return execute
 
 
-def _make_create_issue(connector: Connector):
+def _make_create_issue(connector: Connector, default_project: str = ""):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
             issue = _jira_client(connector).create_issue(
-                project=arguments["project"],
+                project=_project_value(arguments, default_project),
                 summary=arguments["summary"],
                 description=arguments.get("description") or "",
                 issuetype={"name": arguments.get("issuetype") or "Task"},
@@ -210,11 +233,11 @@ def _make_create_issue(connector: Connector):
     return execute
 
 
-def _make_create_subtask(connector: Connector):
+def _make_create_subtask(connector: Connector, default_project: str = ""):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
             issue = _jira_client(connector).create_issue(
-                project=arguments["project"],
+                project=_project_value(arguments, default_project),
                 parent={"key": arguments["parent"]},
                 summary=arguments["summary"],
                 description=arguments.get("description", ""),

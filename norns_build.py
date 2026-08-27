@@ -15,17 +15,22 @@ def project_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def stage_control_room(root: Path | None = None) -> Path:
-    """Copy a complete Vite build into norns/web. No-op when that UI is already packaged."""
+def stage_control_room(root: Path | None = None, *, force: bool = False) -> Path:
+    """Copy a complete Vite build into norns/web.
+
+    With force=False (norns run / wheel build), skip when norns/web is already complete.
+    scripts/stage-ui.sh passes force=True so frontend source changes are rebuilt.
+    """
     root = root or project_root()
     dest = root / "norns" / "web"
-    if _web_ui_is_complete(dest):
-        return dest
     frontend = root / "frontend"
     dist = frontend / "dist"
-    if _web_ui_is_complete(dist):
-        _replace_tree(dist, dest)
-        return dest
+    if not force:
+        if _web_ui_is_complete(dest):
+            return dest
+        if _web_ui_is_complete(dist):
+            _replace_tree(dist, dest)
+            return dest
     if not (frontend / "package.json").is_file():
         raise RuntimeError(
             "Control Room UI is missing from this source tree. Install a prebuilt Norns wheel, "
@@ -95,8 +100,7 @@ def _build_frontend(frontend: Path) -> Path:
     work = frontend if _can_build_in_place(frontend) else _prepare_cache_worktree(frontend)
     npm = _npm_executable()
     if npm is not None:
-        subprocess.run([npm, "ci"], cwd=work, check=True)
-        subprocess.run([npm, "run", "build"], cwd=work, check=True)
+        _run_npm(npm, work)
     else:
         _build_frontend_with_docker(work)
     dist = work / "dist"
@@ -108,12 +112,57 @@ def _build_frontend(frontend: Path) -> Path:
     return dist
 
 
+def _node_bindir(npm: str) -> Path:
+    """Directory that contains `node` for this npm. Do not resolve() the npm symlink.
+
+    Official Node tarballs link bin/npm -> lib/node_modules/npm/bin/npm-cli.js, so
+    resolve().parent is not the directory that has the node binary.
+    """
+    path = Path(npm).expanduser()
+    node_name = "node.exe" if os.name == "nt" else "node"
+    if (path.parent / node_name).is_file():
+        return path.parent
+    resolved = path.resolve().parent
+    if (resolved / node_name).is_file():
+        return resolved
+    return path.parent
+
+
+def _npm_env(npm: str) -> dict[str, str]:
+    """Keep node on PATH for npm and for scripts it spawns (`tsc`, `vite`)."""
+    env = os.environ.copy()
+    env["PATH"] = str(_node_bindir(npm)) + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _npm_argv(npm: str, *args: str) -> list[str]:
+    """Run npm via its sibling node binary so we never depend on `/usr/bin/env node`."""
+    bindir = _node_bindir(npm)
+    node_name = "node.exe" if os.name == "nt" else "node"
+    node = bindir / node_name
+    script = Path(npm).expanduser().resolve()
+    if node.is_file():
+        return [str(node), str(script), *args]
+    return [str(Path(npm).expanduser()), *args]
+
+
+def _run_npm(npm: str, work: Path) -> None:
+    env = _npm_env(npm)
+    subprocess.run(_npm_argv(npm, "ci"), cwd=work, check=True, env=env)
+    subprocess.run(_npm_argv(npm, "run", "build"), cwd=work, check=True, env=env)
+
+
 def _npm_executable() -> str | None:
     names = ("npm.cmd", "npm.exe", "npm") if os.name == "nt" else ("npm",)
     for name in names:
         found = shutil.which(name)
         if found:
             return found
+    portable_name = "npm.cmd" if os.name == "nt" else "npm"
+    portable = project_root() / ".tools" / "node" / "bin" / portable_name
+    node_name = "node.exe" if os.name == "nt" else "node"
+    if portable.is_file() and (portable.parent / node_name).is_file():
+        return str(portable)
     return None
 
 

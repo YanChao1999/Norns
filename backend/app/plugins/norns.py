@@ -12,6 +12,30 @@ from .base import Plugin, PluginContext, ToolSpec
 OBJECT = {"type": "object", "properties": {}}
 
 
+def _apply_run_ids(arguments: dict[str, Any], context: PluginContext | None) -> dict[str, Any]:
+    """Fill board/card/stage ids from the MCP/stage run when the model omits them."""
+    if context is None:
+        return dict(arguments)
+    merged = dict(arguments)
+    if not str(merged.get("board_id") or "").strip() and context.board_id:
+        merged["board_id"] = context.board_id
+    if not str(merged.get("card_id") or "").strip() and context.card_id:
+        merged["card_id"] = context.card_id
+    if not str(merged.get("stage_id") or "").strip() and context.stage_id:
+        merged["stage_id"] = context.stage_id
+    return merged
+
+
+def _bind(execute, context: PluginContext, *, with_context: bool = False, apply_ids: bool = True):
+    async def bound(arguments: dict[str, Any]) -> Any:
+        args = _apply_run_ids(arguments, context) if apply_ids else dict(arguments)
+        if with_context:
+            return await execute(args, context)
+        return await execute(args)
+
+    return bound
+
+
 class NornsPlugin(Plugin):
     name = "norns"
     title = "Norns"
@@ -20,12 +44,6 @@ class NornsPlugin(Plugin):
     requires_connector = None
 
     def tools(self, context: PluginContext) -> list[ToolSpec]:
-        async def get_workspace(arguments: dict[str, Any]) -> Any:
-            return await _get_workspace(arguments, context)
-
-        async def git_status(arguments: dict[str, Any]) -> Any:
-            return await _git_status(arguments, context)
-
         return [
             ToolSpec(
                 name="norns_get_workspace",
@@ -37,7 +55,7 @@ class NornsPlugin(Plugin):
                         "stage_id": {"type": "string"},
                     },
                 },
-                execute=get_workspace,
+                execute=_bind(_get_workspace, context, with_context=True, apply_ids=False),
             ),
             ToolSpec(
                 name="norns_git_status",
@@ -49,7 +67,7 @@ class NornsPlugin(Plugin):
                         "stage_id": {"type": "string"},
                     },
                 },
-                execute=git_status,
+                execute=_bind(_git_status, context, with_context=True, apply_ids=False),
             ),
             ToolSpec(
                 name="norns_set_board_workspace",
@@ -63,13 +81,13 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["board_id"],
                 },
-                execute=_set_board_workspace,
+                execute=_bind(_set_board_workspace, context),
             ),
             ToolSpec(
                 name="norns_list_boards",
                 description="List Norns boards (id, name, description).",
                 input_schema={**OBJECT},
-                execute=_list_boards,
+                execute=_bind(_list_boards, context),
             ),
             ToolSpec(
                 name="norns_get_board",
@@ -79,7 +97,7 @@ class NornsPlugin(Plugin):
                     "properties": {"board_id": {"type": "string"}},
                     "required": ["board_id"],
                 },
-                execute=_get_board,
+                execute=_bind(_get_board, context),
             ),
             ToolSpec(
                 name="norns_list_cards",
@@ -89,7 +107,7 @@ class NornsPlugin(Plugin):
                     "properties": {"board_id": {"type": "string"}},
                     "required": ["board_id"],
                 },
-                execute=_list_cards,
+                execute=_bind(_list_cards, context),
             ),
             ToolSpec(
                 name="norns_create_card",
@@ -104,7 +122,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["board_id", "title"],
                 },
-                execute=_create_card,
+                execute=_bind(_create_card, context),
             ),
             ToolSpec(
                 name="norns_update_card",
@@ -119,7 +137,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["card_id"],
                 },
-                execute=_update_card,
+                execute=_bind(_update_card, context),
             ),
             ToolSpec(
                 name="norns_update_stage_prompt",
@@ -132,7 +150,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["stage_id", "system_prompt"],
                 },
-                execute=_update_stage_prompt,
+                execute=_bind(_update_stage_prompt, context),
             ),
             ToolSpec(
                 name="norns_update_stage",
@@ -143,6 +161,10 @@ class NornsPlugin(Plugin):
                         "stage_id": {"type": "string"},
                         "name": {"type": "string"},
                         "require_approval": {"type": "boolean"},
+                        "confirm_writes": {
+                            "type": "boolean",
+                            "description": "If true, create/comment/transition and other writes wait for Control Room confirmation.",
+                        },
                         "system_prompt": {"type": "string"},
                         "model": {"type": "string"},
                         "llm_provider": {"type": "string"},
@@ -156,7 +178,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["stage_id"],
                 },
-                execute=_update_stage,
+                execute=_bind(_update_stage, context),
             ),
             ToolSpec(
                 name="norns_add_stage",
@@ -173,7 +195,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["board_id", "name"],
                 },
-                execute=_add_stage,
+                execute=_bind(_add_stage, context),
             ),
             ToolSpec(
                 name="norns_add_transition",
@@ -191,7 +213,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["board_id", "from_stage_id", "to_stage_id"],
                 },
-                execute=_add_transition,
+                execute=_bind(_add_transition, context),
             ),
             ToolSpec(
                 name="norns_update_transition",
@@ -210,7 +232,7 @@ class NornsPlugin(Plugin):
                     },
                     "required": ["transition_id"],
                 },
-                execute=_update_transition,
+                execute=_bind(_update_transition, context),
             ),
             ToolSpec(
                 name="norns_delete_transition",
@@ -220,7 +242,7 @@ class NornsPlugin(Plugin):
                     "properties": {"transition_id": {"type": "string"}},
                     "required": ["transition_id"],
                 },
-                execute=_delete_transition,
+                execute=_bind(_delete_transition, context),
             ),
         ]
 
@@ -234,11 +256,15 @@ async def _get_workspace(arguments: dict[str, Any], context: PluginContext | Non
 
     board_id = str(arguments.get("board_id") or "").strip()
     stage_id = str(arguments.get("stage_id") or "").strip()
-    if not board_id and not stage_id and context and (context.workspace_path or context.git_url):
-        from ..workspace import Workspace
+    if not board_id and not stage_id:
+        if context and (context.workspace_path or context.git_url):
+            from ..workspace import Workspace
 
-        found = Workspace(path=context.workspace_path, git_url=context.git_url, source="context")
-        return serialize_workspace(found)
+            found = Workspace(path=context.workspace_path, git_url=context.git_url, source="context")
+            return serialize_workspace(found)
+        if context:
+            board_id = str(context.board_id or "").strip()
+            stage_id = str(context.stage_id or "").strip()
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(select_stmt(Connector).where(Connector.is_active.is_(True)))
@@ -384,6 +410,8 @@ async def _update_stage(arguments: dict[str, Any]) -> Any:
             stage.name = str(arguments["name"]).strip()
         if "require_approval" in arguments and arguments["require_approval"] is not None:
             stage.require_approval = bool(arguments["require_approval"])
+        if "confirm_writes" in arguments and arguments["confirm_writes"] is not None:
+            stage.confirm_writes = bool(arguments["confirm_writes"])
         config_keys = (
             "system_prompt",
             "model",
@@ -522,6 +550,7 @@ def _stage_payload(stage: Stage) -> dict[str, Any]:
         "order": stage.order,
         "lane": stage.lane,
         "require_approval": stage.require_approval,
+        "confirm_writes": bool(getattr(stage, "confirm_writes", False)),
         "system_prompt": config.system_prompt if config else None,
         "model": config.model if config else None,
         "llm_provider": config.llm_provider if config else None,

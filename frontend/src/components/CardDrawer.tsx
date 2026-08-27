@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { buildJourney, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, latestFinalizedForStage, stageName } from '../cardJourney';
+import { buildJourney, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, latestFinalizedForStage, pluginsSnapshot, runsForStage, stageName } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
 import { IN_PROGRESS_HINT, PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
@@ -64,6 +64,18 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
     }
   });
 
+  const writeMutation = useMutation({
+    mutationFn: async (approved: boolean) =>
+      apiClient.post(`/cards/${card?.id}/approve-writes`, {
+        approved,
+        comment: approved ? 'Confirmed pending writes' : 'Declined pending writes'
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
+      queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+    }
+  });
+
   const runMutation = useMutation({
     mutationFn: async () => apiClient.post(`/cards/${card?.id}/run`),
     onSuccess: () => {
@@ -86,20 +98,25 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
   }
 
   const currentStageId = card.current_stage_id ?? '';
-  const currentStageRuns = runs.filter((run) => run.stage_id === currentStageId);
-  const latestCurrentRun = currentStageRuns[0];
+  const currentStageRuns = runsForStage(runs, currentStageId);
+  const latestCurrentRun = currentStageRuns.length ? currentStageRuns[currentStageRuns.length - 1] : undefined;
+  const previousCurrentRun = currentStageRuns.length > 1 ? currentStageRuns[currentStageRuns.length - 2] : null;
   const handoffRun = latestFinalizedForStage(runs, currentStageId);
   const handoff = (handoffRun?.handoff ?? {}) as Handoff;
   const plantuml = diagramSvg(handoff);
   const inProgress = card.status === 'running' || runStarted;
   const canRun = (card.status === 'idle' || card.status === 'blocked') && !runStarted;
   const waiting = card.status === 'waiting_approval';
+  const waitingWrites = card.status === 'waiting_tool_approval';
+  const pendingWrites = pendingWriteCalls(latestCurrentRun);
   const joining = card.status === 'waiting_join';
   const placeholderRun = isPlaceholderRun(handoffRun ?? latestCurrentRun);
   const summary = handoffSummary(handoffRun);
   const links = Array.isArray(handoff.links) ? handoff.links : [];
   const recommendation = agentRecommendation(handoff.recommendation);
   const recommendationReason = typeof handoff.recommendation_reason === 'string' ? handoff.recommendation_reason.trim() : '';
+  const reasonCompare = latestCurrentRun ? compareRunDecision(latestCurrentRun, previousCurrentRun) : 'first';
+  const plugins = pluginsSnapshot(latestCurrentRun);
   const outgoing = (board?.transitions ?? []).filter((edge) => edge.from_stage_id === card.current_stage_id);
   const approveLines = outgoing.filter((edge) => edge.event === 'approve');
   const rejectLines = outgoing.filter((edge) => edge.event === 'reject');
@@ -182,6 +199,18 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
           {summary ? <p className="handoff">{summary}</p> : <p className="muted">No stage run yet for this station. Run it to produce a handoff.</p>}
         </section>
 
+        {waitingWrites ? (
+          <section className="agent-decision">
+            <h3>Pending writes</h3>
+            <p className="muted">This stage confirms MCP writes before they run. Reads already happened. Confirm to execute these calls, or decline to skip them.</p>
+            {pendingWrites.length ? (
+              <pre className="log">{JSON.stringify(pendingWrites, null, 2)}</pre>
+            ) : (
+              <p className="muted">No payload listed. Confirming will still clear the wait and re-run the stage.</p>
+            )}
+          </section>
+        ) : null}
+
         {waiting && recommendation ? (
           <section className={`agent-decision is-${recommendation}`}>
             <h3>Agent recommendation</h3>
@@ -190,6 +219,17 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               {recommendationReason ? ` — ${recommendationReason}` : ''}
             </p>
             <p className="muted">Advisory only. A human still has to confirm before the card moves.</p>
+            {reasonCompare === 'same' ? (
+              <p className="notice" role="status">
+                Same {recommendation} reason as the previous run on this column. Enabling jira on this column Agent (and an active Jira connector) is required
+                before a rerun can create a ticket.
+              </p>
+            ) : null}
+            {plugins.allowlist.length === 0 || (plugins.jiraConnector && !plugins.allowlist.includes('jira') && !plugins.attached.includes('jira')) ? (
+              <p className="muted">
+                This run had no Jira plugin. Open <strong>Agent</strong> on {currentStageLabel}, check <strong>jira</strong>, save, then rerun.
+              </p>
+            ) : null}
           </section>
         ) : null}
 
@@ -247,6 +287,26 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
           >
             {runMutation.isPending ? 'Starting…' : 'Run this stage'}
           </button>
+        ) : null}
+        {waitingWrites ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-gate"
+              onClick={() => writeMutation.mutate(true)}
+              disabled={writeMutation.isPending}
+            >
+              Confirm writes
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => writeMutation.mutate(false)}
+              disabled={writeMutation.isPending}
+            >
+              Decline writes
+            </button>
+          </>
         ) : null}
         {waiting ? (
           <>
@@ -309,6 +369,14 @@ function JourneyStageDetail({ stageId, board, runs }: { stageId: string; board?:
       ) : null}
     </div>
   );
+}
+
+function pendingWriteCalls(run?: AgentRun): Array<Record<string, unknown>> {
+  const raw = run?.inputs?.pending_writes;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
 }
 
 function runErrorMessage(error: unknown): string {

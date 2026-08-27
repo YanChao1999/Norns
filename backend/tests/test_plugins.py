@@ -24,6 +24,10 @@ def test_catalog_includes_builtin_plugins():
     norns = catalog.by_name()["norns"]
     assert norns.available([]) is True
     assert catalog.by_name()["jira"].available([]) is False
+    norns_names = {spec.name for spec in catalog.tools(["norns"], PluginContext())}
+    assert "norns_create_card" in norns_names
+    assert "norns_get_workspace" in norns_names
+    assert "norns_update_card" in norns_names
 
 
 def test_default_registry_includes_norns():
@@ -49,17 +53,94 @@ def test_github_plugin_includes_create_issue():
     assert "github_work_gh_create_issue" in names
 
 
-def test_jira_plugin_includes_create_issue():
-    connector = Connector(name="Cloud Jira", connector_type=ConnectorType.JIRA, encrypted_config=b"", is_active=True)
-    names = {tool.name for tool in jira_provider([connector])}
-    assert "jira_cloud_jira_create_issue" in names
+def test_github_and_polarion_tools_require_connectors_on_plugin_context():
+    github = Connector(name="Work GH", connector_type=ConnectorType.GITHUB, encrypted_config=b"", is_active=True)
+    polarion = Connector(name="Polarion", connector_type=ConnectorType.POLARION, encrypted_config=b"", is_active=True)
+    catalog = load_plugin_catalog([github, polarion])
+    assert catalog.tools(["github"], PluginContext()) == []
+    assert catalog.tools(["polarion"], PluginContext()) == []
+    github_names = {spec.name for spec in catalog.tools(["github"], PluginContext(connectors=[github]))}
+    polarion_names = {spec.name for spec in catalog.tools(["polarion"], PluginContext(connectors=[polarion]))}
+    assert "github_work_gh_create_issue" in github_names
+    assert "polarion_polarion_get_workitem" in polarion_names
+
+
+def test_github_defaults_repo_from_plugin_context():
+    connector = Connector(name="Work GH", connector_type=ConnectorType.GITHUB, encrypted_config=b"", is_active=True)
+    catalog = load_plugin_catalog([connector])
+    spec = next(
+        item
+        for item in catalog.tools(["github"], PluginContext(connectors=[connector], github_repo="acme/app"))
+        if item.name == "github_work_gh_create_issue"
+    )
+    assert "repo" not in spec.input_schema["required"]
+    assert "title" in spec.input_schema["required"]
+
+
+def test_jira_defaults_project_when_provided():
+    connector = Connector(name="Jira", connector_type=ConnectorType.JIRA, encrypted_config=b"", is_active=True)
+    tool = next(
+        item for item in jira_provider([connector], default_project="PROJ") if item.name.endswith("create_issue")
+    )
+    assert "project" not in tool.openai_tool["function"]["parameters"]["required"]
+    assert "summary" in tool.openai_tool["function"]["parameters"]["required"]
+
+
+def test_jira_tools_require_connectors_on_plugin_context():
+    connector = Connector(name="Jira", connector_type=ConnectorType.JIRA, encrypted_config=b"", is_active=True)
+    catalog = load_plugin_catalog([connector])
+    assert catalog.tools(["jira"], PluginContext()) == []
+    names = {spec.name for spec in catalog.tools(["jira"], PluginContext(connectors=[connector]))}
+    assert "jira_jira_create_issue" in names
+
+
+@pytest.mark.asyncio
+async def test_stdio_mcp_passes_connectors_into_plugin_context(monkeypatch):
+    connector = Connector(name="Jira", connector_type=ConnectorType.JIRA, encrypted_config=b"", is_active=True)
+    seen: dict[str, object] = {}
+
+    class Catalog:
+        connectors = [connector]
+        plugins = []
+
+        def tools(self, names, context):
+            seen["names"] = names
+            seen["connectors"] = list(context.connectors)
+            seen["board_id"] = context.board_id
+            seen["card_id"] = context.card_id
+            seen["stage_id"] = context.stage_id
+            seen["github_repo"] = context.github_repo
+            return []
+
+    async def fake_catalog():
+        return Catalog()
+
+    monkeypatch.setattr(mcp_protocol, "load_plugin_catalog_from_db", fake_catalog)
+    monkeypatch.setenv("NORNS_BOARD_ID", "board-1")
+    monkeypatch.setenv("NORNS_CARD_ID", "card-1")
+    monkeypatch.setenv("NORNS_STAGE_ID", "stage-1")
+    monkeypatch.setenv("NORNS_GITHUB_REPO", "acme/app")
+    stdout = StringIO()
+    await mcp_protocol.serve_stdio(["norns", "jira"], stdin=StringIO(""), stdout=stdout)
+    assert seen["names"] == ["norns", "jira"]
+    assert seen["connectors"] == [connector]
+    assert seen["board_id"] == "board-1"
+    assert seen["card_id"] == "card-1"
+    assert seen["stage_id"] == "stage-1"
+    assert seen["github_repo"] == "acme/app"
 
 
 def test_cursor_mcp_servers_stdio_for_allowlist():
-    servers = cursor_mcp_servers(["norns", "jira"], [])
+    servers = cursor_mcp_servers(
+        ["norns", "jira"],
+        [],
+        extra_env={"NORNS_CARD_ID": "card-1", "NORNS_BOARD_ID": "board-1"},
+    )
     assert "norns" in servers
     assert servers["norns"]["args"][-1] == "norns,jira"
     assert "-m" in servers["norns"]["args"]
+    assert servers["norns"]["env"]["NORNS_CARD_ID"] == "card-1"
+    assert servers["norns"]["env"]["NORNS_BOARD_ID"] == "board-1"
 
 
 def test_external_mcp_connector_is_passthrough():
@@ -67,8 +148,12 @@ def test_external_mcp_connector_is_passthrough():
     connector.set_config({"transport": "stdio", "command": "npx", "args": "-y linear-mcp"})
     catalog = load_plugin_catalog([connector])
     assert "mcp_linear" in catalog.by_name()
-    servers = cursor_mcp_servers(["mcp"], [connector])
+    servers = cursor_mcp_servers(
+        ["mcp"], [connector], extra_env={"NORNS_CARD_ID": "card-1", "NORNS_WORKSPACE": "/tmp/app"}
+    )
     assert servers["mcp_linear"]["command"] == "npx"
+    assert servers["mcp_linear"]["env"]["NORNS_CARD_ID"] == "card-1"
+    assert servers["mcp_linear"]["env"]["NORNS_WORKSPACE"] == "/tmp/app"
 
 
 @pytest.mark.asyncio
@@ -84,6 +169,8 @@ async def test_mcp_protocol_lists_and_calls_tools(monkeypatch):
     )
 
     class Catalog:
+        connectors = []
+
         def tools(self, names, context):
             del names, context
             return [tool]
@@ -138,4 +225,9 @@ async def test_norns_create_card(monkeypatch):
     assert created["current_stage_id"]
     tools = {spec.name for spec in NornsPlugin().tools(PluginContext())}
     assert "norns_update_stage_prompt" in tools
+    bound = next(
+        spec for spec in NornsPlugin().tools(PluginContext(card_id=created["id"])) if spec.name == "norns_update_card"
+    )
+    updated = await bound.execute({"title": "Renamed by context"})
+    assert updated["title"] == "Renamed by context"
     await engine.dispose()

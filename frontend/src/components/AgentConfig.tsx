@@ -228,28 +228,28 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
       </label>
 
       <div className="field">
-        <span>Git workspace for this agent</span>
+        <span>Different git folder for this column</span>
         <p className="muted">
           Leave blank to use the board repo
-          {boardWorkspace?.git_url || boardWorkspace?.path ? ` (${boardWorkspace.git_url || boardWorkspace.path}).` : '.'} Set a path here when this column
-          should work in a different checkout.
+          {boardWorkspace?.git_url || boardWorkspace?.path ? ` (${boardWorkspace.git_url || boardWorkspace.path}).` : '.'} Only fill this in if this stage
+          should work in another project.
         </p>
         <label className="field">
-          Checkout path
+          Folder on this machine
           <input
             className="input"
             value={form.workspace_path}
             onChange={(event) => setForm((current) => ({ ...current, workspace_path: event.target.value }))}
-            placeholder={boardWorkspace?.path || '/home/you/other-repo'}
+            placeholder={boardWorkspace?.path || 'Same as the board'}
           />
         </label>
         <label className="field">
-          Git remote URL
+          GitHub or git URL
           <input
             className="input"
             value={form.git_url}
             onChange={(event) => setForm((current) => ({ ...current, git_url: event.target.value }))}
-            placeholder={boardWorkspace?.git_url || 'https://github.com/org/repo'}
+            placeholder={boardWorkspace?.git_url || 'Same as the board'}
           />
         </label>
       </div>
@@ -258,7 +258,7 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
         <span>Plugins / MCP — empty allowlist grants none</span>
         <p className="muted">
           Enable norns (cards, stages, prompts, git workspace), github, jira, polarion, or an MCP connector from Settings. Cursor stages receive these as MCP
-          servers; OpenAI/DeepSeek stages use the same tools as functions.
+          servers; OpenAI/DeepSeek stages use the same tools as functions. Confirm writes is per stage on Machine, not bound to column names.
         </p>
         <div className="tool-row">
           {availableTools.map((tool) => {

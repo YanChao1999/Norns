@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..models.connector import Connector
+from ..models.connector import Connector, ConnectorType
 from ..tools.github import github_provider
 from ..tools.jira import jira_provider
 from ..tools.polarion import polarion_provider
@@ -40,8 +40,14 @@ class ConnectorToolPlugin(Plugin):
 
     def tools(self, context: PluginContext) -> list[ToolSpec]:
         kwargs: dict[str, Any] = {}
-        if self.name == "github" and context.github_repo:
-            kwargs["default_repo"] = context.github_repo
+        if self.name == "github":
+            repo = context.github_repo or _connector_config_value(context.connectors, ConnectorType.GITHUB, "repo")
+            if repo:
+                kwargs["default_repo"] = repo
+        elif self.name == "jira":
+            project = _connector_config_value(context.connectors, ConnectorType.JIRA, "project")
+            if project:
+                kwargs["default_project"] = project
         return [runtime_tool_to_spec(tool) for tool in self._provider(context.connectors, **kwargs)]
 
 
@@ -110,6 +116,21 @@ class ExternalMcpPlugin(Plugin):
             "args": list(args),
             "env": {str(key): str(value) for key, value in env.items()},
         }
+
+
+def _connector_config_value(connectors: list[Connector], connector_type: ConnectorType, key: str) -> str:
+    for connector in connectors:
+        if connector.connector_type != connector_type or not connector.is_active:
+            continue
+        if not connector.encrypted_config:
+            continue
+        try:
+            value = str(connector.get_config().get(key) or "").strip()
+        except Exception:
+            continue
+        if value:
+            return value
+    return ""
 
 
 def _slugify(value: str) -> str:

@@ -239,6 +239,15 @@ export function ConnectorHealth() {
                 placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
               />
             </label>
+            <label className="field">
+              Project key (optional)
+              <input
+                className="input"
+                value={form.project}
+                onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))}
+                placeholder="PROJ"
+              />
+            </label>
           </>
         ) : null}
         {form.connector_type === 'mcp' ? (
@@ -412,7 +421,11 @@ function configFromForm(form: typeof EMPTY_FORM): Record<string, string> {
     return { token: form.token, base_url: form.base_url };
   }
   if (form.connector_type === 'jira') {
-    return { server: form.server, username: form.username, token: form.token };
+    const config: Record<string, string> = { server: form.server, username: form.username, token: form.token };
+    if (form.project.trim()) {
+      config.project = form.project.trim();
+    }
+    return config;
   }
   if (form.connector_type === 'mcp') {
     return {

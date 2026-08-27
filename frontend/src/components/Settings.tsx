@@ -44,7 +44,7 @@ export function Settings({ onCreated }: Props) {
       <div className="board-head">
         <div>
           <h1>Settings</h1>
-          <p>Create a board for one git repo. Each column Agent can override that repo. Add DeepSeek, OpenAI, or Cursor so stage runs call a real model.</p>
+          <p>Create a board, then bind its git folder from the board header. Add DeepSeek, OpenAI, or Cursor so stage runs call a real model.</p>
         </div>
       </div>
 
@@ -54,15 +54,23 @@ export function Settings({ onCreated }: Props) {
           Name
           <input className="input" value={boardName} onChange={(event) => setBoardName(event.target.value)} placeholder="Board name" />
         </label>
-        <label className="field">
-          Git checkout path
-          <input className="input" value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} placeholder="/home/you/my-repo" />
-        </label>
-        <label className="field">
-          Git remote URL
-          <input className="input" value={gitUrl} onChange={(event) => setGitUrl(event.target.value)} placeholder="https://github.com/org/repo" />
-        </label>
-        <p className="muted">One board, one repo. Stage agents inherit this workspace unless you set a different path on the column Agent.</p>
+        <details className="workspace-details">
+          <summary>Git repo for this board (optional)</summary>
+          <label className="field">
+            Folder on this machine
+            <input
+              className="input"
+              value={workspacePath}
+              onChange={(event) => setWorkspacePath(event.target.value)}
+              placeholder="/home/you/projects/app"
+            />
+          </label>
+          <label className="field">
+            GitHub or git URL
+            <input className="input" value={gitUrl} onChange={(event) => setGitUrl(event.target.value)} placeholder="https://github.com/org/app" />
+          </label>
+          <p className="muted">You can also bind this later from the board header. A column Agent can use a different folder if needed.</p>
+        </details>
         <button type="submit" className="btn btn-primary" disabled={!boardName || createBoard.isPending}>
           {createBoard.isPending ? 'Creating…' : 'Create board'}
         </button>

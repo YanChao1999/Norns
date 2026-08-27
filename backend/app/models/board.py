@@ -41,6 +41,7 @@ class Stage(Base):
     order: Mapped[int] = mapped_column(Integer, nullable=False)
     lane: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     require_approval: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    confirm_writes: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     board: Mapped[Board] = relationship(back_populates="stages")
     agent_config: Mapped[AgentConfig | None] = relationship(

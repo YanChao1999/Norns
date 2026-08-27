@@ -29,10 +29,11 @@ async def init_db() -> None:
         await conn.run_sync(ensure_connector_types)
         await conn.run_sync(ensure_agent_config_llm_provider)
         await conn.run_sync(ensure_workspace_columns)
+        await conn.run_sync(ensure_stage_confirm_writes)
         await conn.run_sync(assert_fresh_schema)
 
 
-REQUIRED_CONNECTOR_TYPES = ("openai", "cursor", "deepseek", "mcp", "workspace")
+REQUIRED_CONNECTOR_TYPES = ("openai", "cursor", "deepseek", "mcp", "workspace", "polarion")
 
 
 def ensure_connector_types(sync_conn) -> None:
@@ -101,6 +102,15 @@ def ensure_workspace_columns(sync_conn) -> None:
         for name, ddl in columns:
             if name not in present:
                 sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+
+def ensure_stage_confirm_writes(sync_conn) -> None:
+    inspector = inspect(sync_conn)
+    if not inspector.has_table("stages"):
+        return
+    present = {column["name"] for column in inspector.get_columns("stages")}
+    if "confirm_writes" not in present:
+        sync_conn.execute(text("ALTER TABLE stages ADD COLUMN confirm_writes BOOLEAN NOT NULL DEFAULT 0"))
 
 
 def assert_fresh_schema(sync_conn) -> None:

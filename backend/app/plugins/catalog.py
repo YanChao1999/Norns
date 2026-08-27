@@ -22,6 +22,7 @@ ENTRY_POINT_GROUP = "norns.plugins"
 @dataclass
 class PluginCatalog:
     plugins: list[Plugin] = field(default_factory=list)
+    connectors: list[Connector] = field(default_factory=list)
 
     def by_name(self) -> dict[str, Plugin]:
         return {plugin.name: plugin for plugin in self.plugins}
@@ -101,7 +102,7 @@ def load_plugin_catalog(connectors: list[Connector] | None = None) -> PluginCata
         if extra.name not in seen:
             seen.add(extra.name)
             plugins.append(extra)
-    return PluginCatalog(plugins=plugins)
+    return PluginCatalog(plugins=plugins, connectors=list(connectors or []))
 
 
 async def load_plugin_catalog_from_db() -> PluginCatalog:
@@ -135,7 +136,7 @@ def cursor_mcp_servers(
             servers[plugin.name] = {
                 "command": launch["command"],
                 "args": launch.get("args") or [],
-                "env": launch.get("env") or {},
+                "env": _stdio_env(launch.get("env"), extra_env),
                 "cwd": cwd or None,
             }
     return servers
@@ -144,17 +145,23 @@ def cursor_mcp_servers(
 def _stdio_norns_mcp(
     plugin_names: list[str], *, extra_env: Mapping[str, str] | None = None, cwd: str | None = None
 ) -> dict[str, Any]:
-    env = {key: value for key, value in os.environ.items() if value is not None}
-    if extra_env:
-        env.update(extra_env)
     payload: dict[str, Any] = {
         "command": sys.executable,
         "args": ["-m", "norns.mcp", "--plugins", ",".join(plugin_names)],
-        "env": env,
+        "env": _stdio_env(None, extra_env),
     }
     if cwd:
         payload["cwd"] = cwd
     return payload
+
+
+def _stdio_env(launch_env: Mapping[str, Any] | None, extra_env: Mapping[str, str] | None) -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if value is not None}
+    if launch_env:
+        env.update({str(key): str(value) for key, value in launch_env.items() if value is not None})
+    if extra_env:
+        env.update({str(key): str(value) for key, value in extra_env.items() if value is not None})
+    return env
 
 
 def dump_mcp_tool_result(result: Any) -> str:

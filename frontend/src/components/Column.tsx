@@ -26,7 +26,9 @@ export function Column({ boardId, stage, cards, isFirst, row = 1, parallel = fal
           <p>
             {parallel ? `Row ${row} · parallel · ` : ''}
             {stage.require_approval ? 'Human gate' : 'Auto-advance'}
+            {stage.confirm_writes ? ' · confirm writes' : ''}
             {stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ' · own repo' : ''}
+            {stage.agent_config?.tool_allowlist?.length ? ` · ${stage.agent_config.tool_allowlist.join(', ')}` : ' · no plugins'}
           </p>
         </div>
         <div className="column-actions">

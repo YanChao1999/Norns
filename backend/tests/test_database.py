@@ -10,6 +10,7 @@ from backend.app.database import (
     assert_fresh_schema,
     ensure_agent_config_llm_provider,
     ensure_connector_types,
+    ensure_stage_confirm_writes,
     ensure_workspace_columns,
 )
 
@@ -95,6 +96,22 @@ def test_ensure_workspace_columns_adds_board_and_agent_fields(tmp_path: Path):
     assert "git_url" in board_cols
     assert "workspace_path" in agent_cols
     assert "git_url" in agent_cols
+
+
+def test_ensure_stage_confirm_writes_adds_column(tmp_path: Path):
+    path = tmp_path / "writes.db"
+    raw = sqlite3.connect(path)
+    raw.execute(
+        'CREATE TABLE stages (id TEXT PRIMARY KEY, board_id TEXT, name TEXT, "order" INTEGER, lane INTEGER, require_approval INTEGER)'
+    )
+    raw.commit()
+    raw.close()
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as conn:
+        ensure_stage_confirm_writes(conn)
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stages)"))}
+    engine.dispose()
+    assert "confirm_writes" in cols
 
 
 def test_ensure_connector_types_legacy_insert(tmp_path: Path):

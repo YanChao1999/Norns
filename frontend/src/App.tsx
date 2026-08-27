@@ -83,7 +83,8 @@ export default function App() {
     return <LoginForm onLoggedIn={setUsername} />;
   }
 
-  const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval').length ?? 0;
+  const waitingCount =
+    selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
 
   return (
     <div>

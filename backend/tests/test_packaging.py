@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 import sys
 import tarfile
@@ -10,9 +11,38 @@ from pathlib import Path
 
 import pytest
 
-from norns_build import COMPOSE_NODE_IMAGE, docker_build_command, stage_control_room
+from norns_build import COMPOSE_NODE_IMAGE, _npm_argv, _npm_env, docker_build_command, stage_control_room
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_npm_env_uses_symlink_bin_dir_not_resolved_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    bindir = tmp_path / "node" / "bin"
+    bindir.mkdir(parents=True)
+    real = tmp_path / "node" / "lib" / "node_modules" / "npm" / "bin" / "npm-cli.js"
+    real.parent.mkdir(parents=True)
+    real.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+    npm = bindir / "npm"
+    npm.symlink_to(real)
+    (bindir / "node").write_text("", encoding="utf-8")
+    monkeypatch.setenv("PATH", "/usr/bin")
+    env = _npm_env(str(npm))
+    assert env["PATH"].split(os.pathsep)[0] == str(bindir)
+
+
+def test_npm_argv_invokes_sibling_node_for_symlinked_npm(tmp_path: Path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    real = tmp_path / "lib" / "npm-cli.js"
+    real.parent.mkdir()
+    real.write_text("x", encoding="utf-8")
+    npm = bindir / "npm"
+    npm.symlink_to(real)
+    (bindir / "node").write_text("", encoding="utf-8")
+    argv = _npm_argv(str(npm), "ci")
+    assert argv[0] == str(bindir / "node")
+    assert Path(argv[1]) == real.resolve()
+    assert argv[2:] == ["ci"]
 
 
 def test_pypi_name_is_norns_ide():
@@ -91,7 +121,7 @@ def test_stage_control_room_builds_in_writable_cache_when_checkout_is_not(
     monkeypatch.setattr("norns_build._can_build_in_place", lambda _frontend: False)
     monkeypatch.setattr("norns_build._npm_executable", lambda: "npm")
 
-    def fake_npm(cmd, cwd, check=False):
+    def fake_npm(cmd, cwd, check=False, **_kwargs):
         dist = Path(cwd) / "dist"
         dist.mkdir(parents=True, exist_ok=True)
         (dist / "index.html").write_text(_complete_index(), encoding="utf-8")
@@ -123,7 +153,7 @@ def test_stage_control_room_uses_compose_node_image_when_npm_is_missing(
     monkeypatch.setattr("norns_build._can_build_in_place", lambda _frontend: True)
     recorded: dict[str, list[str]] = {}
 
-    def fake_run(cmd, cwd=None, check=False):
+    def fake_run(cmd, cwd=None, check=False, **_kwargs):
         recorded["cmd"] = list(cmd)
         dist = frontend / "dist"
         dist.mkdir(parents=True, exist_ok=True)
@@ -138,6 +168,31 @@ def test_stage_control_room_uses_compose_node_image_when_npm_is_missing(
     assert recorded["cmd"][0] == "/usr/bin/docker"
     assert COMPOSE_NODE_IMAGE in recorded["cmd"]
     assert "npm ci && npm run build" in recorded["cmd"]
+
+
+def test_stage_control_room_force_rebuilds_when_web_is_already_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    web = tmp_path / "norns" / "web"
+    web.mkdir(parents=True)
+    (web / "index.html").write_text(_complete_index(), encoding="utf-8")
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "package.json").write_text("{}", encoding="utf-8")
+
+    def fake_build(_frontend: Path) -> Path:
+        dist = frontend / "dist"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "index.html").write_text(
+            _complete_index().replace("</body>", "<!-- rebuilt --></body>"), encoding="utf-8"
+        )
+        (dist / "assets").mkdir(exist_ok=True)
+        (dist / "assets" / "index.css").write_text("html{}", encoding="utf-8")
+        return dist
+
+    monkeypatch.setattr("norns_build._build_frontend", fake_build)
+    dest = stage_control_room(tmp_path, force=True)
+    assert "rebuilt" in (dest / "index.html").read_text(encoding="utf-8")
 
 
 def test_docker_build_command_errors_when_docker_is_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

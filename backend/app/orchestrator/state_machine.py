@@ -7,6 +7,7 @@ class CardStatus(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
+    WAITING_TOOL_APPROVAL = "waiting_tool_approval"
     WAITING_JOIN = "waiting_join"
     BLOCKED = "blocked"
     DONE = "done"
@@ -14,12 +15,24 @@ class CardStatus(str, Enum):
 
 TRANSITIONS: dict[CardStatus, set[CardStatus]] = {
     CardStatus.IDLE: {CardStatus.RUNNING, CardStatus.BLOCKED},
-    CardStatus.RUNNING: {CardStatus.WAITING_APPROVAL, CardStatus.WAITING_JOIN, CardStatus.BLOCKED, CardStatus.DONE},
+    CardStatus.RUNNING: {
+        CardStatus.WAITING_APPROVAL,
+        CardStatus.WAITING_TOOL_APPROVAL,
+        CardStatus.WAITING_JOIN,
+        CardStatus.BLOCKED,
+        CardStatus.DONE,
+    },
     CardStatus.WAITING_APPROVAL: {
         CardStatus.RUNNING,
         CardStatus.WAITING_JOIN,
         CardStatus.BLOCKED,
         CardStatus.DONE,
+        CardStatus.IDLE,
+    },
+    CardStatus.WAITING_TOOL_APPROVAL: {
+        CardStatus.RUNNING,
+        CardStatus.WAITING_APPROVAL,
+        CardStatus.BLOCKED,
         CardStatus.IDLE,
     },
     CardStatus.WAITING_JOIN: {CardStatus.RUNNING, CardStatus.BLOCKED, CardStatus.DONE},
@@ -48,6 +61,10 @@ def start_card_run(card: object) -> None:
 
 def wait_for_approval(card: object) -> None:
     transition_card(card, CardStatus.WAITING_APPROVAL)
+
+
+def wait_for_tool_approval(card: object) -> None:
+    transition_card(card, CardStatus.WAITING_TOOL_APPROVAL)
 
 
 def advance_card(card: object, next_stage_id: str | None = None) -> None:
