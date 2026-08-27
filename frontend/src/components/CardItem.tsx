@@ -1,5 +1,6 @@
 import { Card } from '../types';
 import { STATUS_LABEL } from '../status';
+import { WaitLive } from './WaitLive';
 
 interface Props {
   card: Card;
@@ -16,7 +17,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, onOpen }: Props
         <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
       </div>
       {card.external_id ? <div className="card-ext">{card.external_id}</div> : null}
-      {card.status === 'running' ? <div className="card-live">In progress — wait for the handoff</div> : null}
+      {card.status === 'running' ? <WaitLive startedAt={card.updated_at} /> : null}
       {card.status === 'waiting_approval' ? <div className="card-live">Your turn — confirm the agent&apos;s approve or reject</div> : null}
       {card.status === 'waiting_tool_approval' ? <div className="card-live">Your turn — confirm this write before it runs</div> : null}
       {card.status === 'blocked' ? <div className="card-live">Blocked — run again when ready</div> : null}

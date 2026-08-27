@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { buildJourney, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, latestFinalizedForStage, llmLabel, pluginsSnapshot, runsForStage, stageName } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
-import { IN_PROGRESS_HINT, PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
+import { PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { AgentRun, BoardDetail, Card } from '../types';
 import { Dialog } from './Dialog';
+import { WaitLive } from './WaitLive';
 
 interface Props {
   card: Card | null;
@@ -179,11 +180,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
           )}
         </section>
 
-        {inProgress ? (
-          <p className="notice" role="status">
-            {IN_PROGRESS_HINT}
-          </p>
-        ) : null}
+        {inProgress ? <WaitLive startedAt={latestCurrentRun?.created_at ?? card.updated_at} variant="banner" /> : null}
         {placeholderRun && !inProgress ? (
           <p className="notice" role="status">
             {PLACEHOLDER_RUN_HINT}
@@ -334,7 +331,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
           </>
         ) : null}
         {joining ? <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span> : null}
-        {inProgress ? <span className="muted">Agent is running this stage…</span> : null}
+        {inProgress ? <WaitLive startedAt={latestCurrentRun?.created_at ?? card.updated_at} variant="footer" /> : null}
         {!canRun && !waiting && !joining && !inProgress ? <span className="muted">No gate action on this card.</span> : null}
       </footer>
     </Dialog>

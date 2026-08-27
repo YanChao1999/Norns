@@ -159,6 +159,11 @@ a {
   border-color: var(--line);
 }
 
+.wait-count.is-pulling {
+  color: var(--running);
+  border-color: color-mix(in srgb, var(--running) 45%, transparent);
+}
+
 .user-name {
   color: var(--muted);
   font-size: 12px;
@@ -180,6 +185,51 @@ a {
   color: var(--text);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.wait-banner {
+  display: grid;
+  gap: 6px;
+}
+
+.wait-banner strong {
+  font-size: 13px;
+}
+
+.wait-banner span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.wait-track {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--running) 18%, var(--line));
+  overflow: hidden;
+}
+
+.wait-track i {
+  display: block;
+  width: 36%;
+  height: 100%;
+  background: var(--running);
+  animation: wait-slide 1.6s ease-in-out infinite;
+}
+
+.wait-live {
+  color: var(--running);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+@keyframes wait-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
 }
 
 .board-head {
@@ -365,6 +415,10 @@ a {
   color: var(--muted);
 }
 
+.card-live.is-wait {
+  color: var(--running);
+}
+
 .status {
   font-size: 10px;
   letter-spacing: 0.06em;
@@ -412,6 +466,12 @@ a {
 @media (prefers-reduced-motion: reduce) {
   .status-running {
     animation: none;
+  }
+
+  .wait-track i {
+    animation: none;
+    width: 100%;
+    opacity: 0.7;
   }
 }
 

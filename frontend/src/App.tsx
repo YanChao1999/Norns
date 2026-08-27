@@ -85,6 +85,7 @@ export default function App() {
 
   const waitingCount =
     selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
+  const pullingCount = selectedBoard?.cards.filter((card) => card.status === 'running').length ?? 0;
 
   return (
     <div>
@@ -109,6 +110,7 @@ export default function App() {
           ))}
         </nav>
         <div className="topbar-meta">
+          {pullingCount ? <span className="wait-count is-pulling">{pullingCount} pulling</span> : null}
           <span className={`wait-count${waitingCount ? '' : ' is-clear'}`}>{waitingCount} waiting</span>
           <button type="button" className={`chip${view === 'machine' ? ' is-active' : ''}`} onClick={() => setView('machine')} disabled={!selectedBoardId}>
             Machine
