@@ -178,13 +178,11 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
   const { data: detected } = useQuery({
     queryKey: ['workspace-detected'],
     enabled: open && !bound,
-    queryFn: () =>
-      apiClient.get<{ path?: string | null; git_url?: string | null; github_repo?: string | null }>('/workspace')
+    queryFn: () => apiClient.get<{ path?: string | null; git_url?: string | null; github_repo?: string | null }>('/workspace')
   });
 
   const save = useMutation({
-    mutationFn: async () =>
-      apiClient.put<BoardDetail>(`/boards/${board.id}`, { workspace_path: path, git_url: gitUrl }),
+    mutationFn: async () => apiClient.put<BoardDetail>(`/boards/${board.id}`, { workspace_path: path, git_url: gitUrl }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });

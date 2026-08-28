@@ -58,12 +58,7 @@ export function Settings({ onCreated }: Props) {
           <summary>Git repo for this board (optional)</summary>
           <label className="field">
             Folder on this machine
-            <input
-              className="input"
-              value={workspacePath}
-              onChange={(event) => setWorkspacePath(event.target.value)}
-              placeholder="/home/you/projects/app"
-            />
+            <input className="input" value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} placeholder="/home/you/projects/app" />
           </label>
           <label className="field">
             GitHub or git URL

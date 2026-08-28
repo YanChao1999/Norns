@@ -839,7 +839,8 @@ function LineInspector({
 }
 
 function CardLifecycleLegend({ machine }: { machine?: CardStatusMachine }) {
-  const states = machine?.states ?? (['idle', 'running', 'waiting_approval', 'waiting_tool_approval', 'waiting_join', 'blocked', 'done'] satisfies CardStatus[]);
+  const states =
+    machine?.states ?? (['idle', 'running', 'waiting_approval', 'waiting_tool_approval', 'waiting_join', 'blocked', 'done'] satisfies CardStatus[]);
   const transitions = machine?.transitions;
   return (
     <section className="panel">

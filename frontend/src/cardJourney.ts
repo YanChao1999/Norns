@@ -65,10 +65,7 @@ export function runDecision(run: AgentRun | null | undefined): { recommendation:
   }
   const handoff = (run.handoff ?? {}) as Handoff;
   const recommendation = typeof handoff.recommendation === 'string' ? handoff.recommendation.trim().toLowerCase() : '';
-  const reason =
-    typeof handoff.recommendation_reason === 'string' && handoff.recommendation_reason.trim()
-      ? handoff.recommendation_reason.trim()
-      : '';
+  const reason = typeof handoff.recommendation_reason === 'string' && handoff.recommendation_reason.trim() ? handoff.recommendation_reason.trim() : '';
   return { recommendation, reason };
 }
 

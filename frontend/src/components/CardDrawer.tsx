@@ -2,7 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { buildJourney, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, latestFinalizedForStage, llmLabel, pluginsSnapshot, runsForStage, stageName } from '../cardJourney';
+import {
+  buildJourney,
+  compareRunDecision,
+  diagramSvg,
+  formatRunTime,
+  handoffSummary,
+  isFinalizedRun,
+  journeyStateLabel,
+  latestFinalizedForStage,
+  llmLabel,
+  pluginsSnapshot,
+  runsForStage,
+  stageName
+} from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
 import { PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
@@ -193,14 +206,19 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
         </section>
 
         <section>
-          <h3>Current handoff · {currentStageLabel}{llm ? ` · ${llm}` : ''}</h3>
+          <h3>
+            Current handoff · {currentStageLabel}
+            {llm ? ` · ${llm}` : ''}
+          </h3>
           {summary ? <p className="handoff">{summary}</p> : <p className="muted">No stage run yet for this station. Run it to produce a handoff.</p>}
         </section>
 
         {waitingWrites ? (
           <section className="agent-decision">
             <h3>Pending writes</h3>
-            <p className="muted">This stage confirms MCP writes before they run. Reads already happened. Confirm to execute these calls, or decline to skip them.</p>
+            <p className="muted">
+              This stage confirms MCP writes before they run. Reads already happened. Confirm to execute these calls, or decline to skip them.
+            </p>
             {pendingWrites.length ? (
               <pre className="log">{JSON.stringify(pendingWrites, null, 2)}</pre>
             ) : (
@@ -246,7 +264,10 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
 
         {latestCurrentRun ? (
           <section>
-            <h3>Run log · {currentStageLabel}{llm ? ` · ${llm}` : ''}</h3>
+            <h3>
+              Run log · {currentStageLabel}
+              {llm ? ` · ${llm}` : ''}
+            </h3>
             <pre className="log">{latestCurrentRun.model_output}</pre>
           </section>
         ) : null}
@@ -288,20 +309,10 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
         ) : null}
         {waitingWrites ? (
           <>
-            <button
-              type="button"
-              className="btn btn-gate"
-              onClick={() => writeMutation.mutate(true)}
-              disabled={writeMutation.isPending}
-            >
+            <button type="button" className="btn btn-gate" onClick={() => writeMutation.mutate(true)} disabled={writeMutation.isPending}>
               Confirm writes
             </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={() => writeMutation.mutate(false)}
-              disabled={writeMutation.isPending}
-            >
+            <button type="button" className="btn btn-danger" onClick={() => writeMutation.mutate(false)} disabled={writeMutation.isPending}>
               Decline writes
             </button>
           </>

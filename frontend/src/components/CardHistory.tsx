@@ -1,7 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { buildJourney, chronologicalRuns, compareRunDecision, diagramSvg, formatRunTime, handoffSummary, isFinalizedRun, journeyStateLabel, llmLabel, pluginsSnapshot, runDecision, stageName } from '../cardJourney';
+import {
+  buildJourney,
+  chronologicalRuns,
+  compareRunDecision,
+  diagramSvg,
+  formatRunTime,
+  handoffSummary,
+  isFinalizedRun,
+  journeyStateLabel,
+  llmLabel,
+  pluginsSnapshot,
+  runDecision,
+  stageName
+} from '../cardJourney';
 import { Handoff } from '../gateLabels';
 import { AgentRun, BoardDetail, Card } from '../types';
 
@@ -70,10 +83,11 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
             const summary = handoffSummary(run);
             const links = Array.isArray(handoff.links) ? handoff.links : [];
             const plantuml = diagramSvg(handoff);
-            const previous = timeline
-              .slice(0, index)
-              .reverse()
-              .find((item) => item.stage_id === run.stage_id) ?? null;
+            const previous =
+              timeline
+                .slice(0, index)
+                .reverse()
+                .find((item) => item.stage_id === run.stage_id) ?? null;
             const compare = compareRunDecision(run, previous);
             const decision = runDecision(run);
             const plugins = pluginsSnapshot(run);
@@ -92,9 +106,7 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
                     </p>
                   </div>
                   {decision.recommendation ? (
-                    <span className={`journey-pill is-${decision.recommendation === 'reject' ? 'failed' : 'done'}`}>
-                      {decision.recommendation}
-                    </span>
+                    <span className={`journey-pill is-${decision.recommendation === 'reject' ? 'failed' : 'done'}`}>{decision.recommendation}</span>
                   ) : null}
                 </header>
                 {decision.reason ? <p className="handoff">{decision.reason}</p> : null}
@@ -117,7 +129,11 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
                     ? ' · Jira connector is on, but this column Agent did not enable jira'
                     : ''}
                 </p>
-                {summary && summary !== decision.reason ? <p className="handoff">{summary}</p> : !decision.reason ? <p className="muted">No handoff summary.</p> : null}
+                {summary && summary !== decision.reason ? (
+                  <p className="handoff">{summary}</p>
+                ) : !decision.reason ? (
+                  <p className="muted">No handoff summary.</p>
+                ) : null}
                 {links.length ? (
                   <div className="links">
                     {links.map((link) => (
