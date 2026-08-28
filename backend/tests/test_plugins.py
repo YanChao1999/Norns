@@ -238,9 +238,7 @@ async def test_norns_create_card(monkeypatch):
     updated = await bound.execute({"title": "Renamed by context"})
     assert updated["title"] == "Renamed by context"
     create_tool = next(
-        spec
-        for spec in NornsPlugin().tools(PluginContext(board_id=board_id))
-        if spec.name == "norns_create_card"
+        spec for spec in NornsPlugin().tools(PluginContext(board_id=board_id)) if spec.name == "norns_create_card"
     )
     assert "board_id" not in create_tool.input_schema["required"]
     from_context = await create_tool.execute({"title": "From Polarion", "body": "req text", "external_id": "PROJ-12"})

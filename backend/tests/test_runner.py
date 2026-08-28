@@ -7,7 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from backend.app.agents.runner import WORK_INSTRUCTION, _execute_agent, _run_openai_tool_loop, _run_stage, llm_line, tool_error_text
+from backend.app.agents.runner import (
+    WORK_INSTRUCTION,
+    _execute_agent,
+    _run_openai_tool_loop,
+    _run_stage,
+    llm_line,
+    tool_error_text,
+)
 from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
 from backend.app.orchestrator.state_machine import CardStatus
@@ -255,7 +262,9 @@ async def test_openai_tool_loop_pauses_writes_when_confirm_enabled():
             temperature=0.1,
             messages=[{"role": "user", "content": "create"}],
             tools_payload=[{"type": "function", "function": {"name": "jira_jira_create_issue"}}],
-            tool_map={"jira_jira_create_issue": RuntimeTool(name="jira_jira_create_issue", openai_tool={}, execute=create)},
+            tool_map={
+                "jira_jira_create_issue": RuntimeTool(name="jira_jira_create_issue", openai_tool={}, execute=create)
+            },
             confirm_writes=True,
         )
     except WriteConfirmationRequired as pending:

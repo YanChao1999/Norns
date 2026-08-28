@@ -169,7 +169,9 @@ def test_stage_machine_crud_and_guards():
         bad_reorder = client.put(f"/api/boards/{board_id}/stages/reorder", json={"stage_ids": original_ids})
         assert bad_reorder.status_code == 400
 
-        renamed = client.put(f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True, "confirm_writes": True})
+        renamed = client.put(
+            f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True, "confirm_writes": True}
+        )
         assert renamed.status_code == 200
         assert renamed.json()["name"] == "QA"
         assert renamed.json()["require_approval"] is True

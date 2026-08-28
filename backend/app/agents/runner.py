@@ -511,9 +511,7 @@ async def _run_openai_tool_loop(
                         result = await runtime_tool.execute(arguments)
                     except Exception as exc:
                         result = {"error": tool_error_text(exc)}
-            executed_tool_calls.append(
-                {"round": _round + 1, "name": name, "arguments": arguments, "result": result}
-            )
+            executed_tool_calls.append({"round": _round + 1, "name": name, "arguments": arguments, "result": result})
             messages.append(
                 {
                     "role": "tool",
