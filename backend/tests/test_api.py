@@ -134,7 +134,7 @@ def test_card_update_cannot_bypass_gates():
 
 
 def test_board_cards_include_latest_recommendation():
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -147,7 +147,10 @@ def test_board_cards_include_latest_recommendation():
         stage_id = board["stages"][0]["id"]
         card = client.post(
             f"/api/boards/{board['id']}/cards",
-            json={"title": "Polarion", "body": "## Urd handoff\n\n| Action | Result |\n|---|---|\n| search | failed |\n"},
+            json={
+                "title": "Polarion",
+                "body": "## Urd handoff\n\n| Action | Result |\n|---|---|\n| search | failed |\n",
+            },
         ).json()
 
         async def insert_run() -> None:
@@ -166,7 +169,7 @@ def test_board_cards_include_latest_recommendation():
                             "recommendation_reason": "Polarion client is broken.",
                         },
                         status="completed",
-                        completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                        completed_at=datetime.now(UTC).replace(tzinfo=None),
                     )
                 )
                 await session.commit()
@@ -333,7 +336,8 @@ def test_health_reports_whether_openai_is_configured():
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "ok"
-        assert isinstance(body["openai_configured"], bool)
+        assert isinstance(body["llm_configured"], bool)
+        assert body["openai_configured"] is body["llm_configured"]
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
@@ -358,7 +362,9 @@ def test_openai_connector_can_be_created_from_settings_api():
         assert "api_key" not in body["public_config"]
         assert body["public_config"]["default_model"] == "gpt-4o"
         assert "sk-test" not in created.text
-        assert client.get("/api/health").json()["openai_configured"] is True
+        health = client.get("/api/health").json()
+        assert health["llm_configured"] is True
+        assert health["openai_configured"] is True
         missing = client.post("/api/connectors", json={"name": "Empty", "connector_type": "openai", "config": {}})
         assert missing.status_code == 400
         cursor = client.post(
@@ -396,7 +402,9 @@ def test_openai_connector_can_be_created_from_settings_api():
         )
         assert updated.status_code == 200, updated.text
         assert updated.json()["public_config"]["default_model"] == "gpt-4o-mini"
-        assert client.get("/api/health").json()["openai_configured"] is True
+        later = client.get("/api/health").json()
+        assert later["llm_configured"] is True
+        assert later["openai_configured"] is True
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())

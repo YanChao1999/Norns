@@ -12,7 +12,11 @@ const STEPS: Array<{ afterMs: number; title: string; detail: string }> = [
   { afterMs: 90_000, title: 'Waiting on tools', detail: 'Search, create, and MCP calls can sit here for a while. You can leave this card open.' },
   { afterMs: 180_000, title: 'Long wait', detail: 'Still going. No need to click Run again — extra clicks are ignored.' },
   { afterMs: 720_000, title: 'Near the time limit', detail: 'Cursor stages stop around 20 minutes. Hang on, or use DeepSeek/OpenAI next time.' },
-  { afterMs: 1_200_000, title: 'Past the Cursor wait', detail: 'Norns should have stopped this Cursor wait. If the card is still running, Control Room was likely restarted — reject or run again.' }
+  {
+    afterMs: 1_200_000,
+    title: 'Past the Cursor wait',
+    detail: 'Norns should have stopped this Cursor wait. If the card is still running, Control Room was likely restarted — reject or run again.'
+  }
 ];
 
 export function formatElapsed(ms: number): string {

@@ -12,11 +12,7 @@ export function formatRecommendation(recommendation?: string | null, reason?: st
   return why ? `${label} — ${why}` : label;
 }
 
-export function cardFaceSummary(
-  body: string,
-  rec?: { recommendation?: string | null; reason?: string | null },
-  maxLength = MAX_LENGTH
-): string {
+export function cardFaceSummary(body: string, rec?: { recommendation?: string | null; reason?: string | null }, maxLength = MAX_LENGTH): string {
   const fromRec = formatRecommendation(rec?.recommendation, rec?.reason);
   if (fromRec) {
     return clip(fromRec, maxLength);

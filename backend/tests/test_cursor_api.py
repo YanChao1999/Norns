@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.app.cursor_api import list_cursor_models, run_cursor_cloud_agent
+from backend.app.cursor_api import _bridge_workspace, list_cursor_models, run_cursor_cloud_agent
 
 
 class _FakeBridgeClient:
@@ -21,6 +21,10 @@ class _FakeBridgeClient:
     async def __aexit__(self, exc_type, exc, tb):
         self.closed = True
         return False
+
+
+def test_bridge_workspace_reuses_one_directory():
+    assert _bridge_workspace() == _bridge_workspace()
 
 
 @pytest.mark.asyncio
