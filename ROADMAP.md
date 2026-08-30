@@ -20,7 +20,7 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 ## Docs / install leftovers
 
-- [ ] **Pages install snippet** — `docs/index.html` still says `git checkout cursor/v0.0.1-first-production`. Point it at `main`.
+- [x] **Pages install snippet** — `docs/index.html` install path is `uv tool install .` / `norns run` (not the old `cursor/v0.0.1-first-production` checkout).
 - [ ] **Sample board / card** — optional seeded work so the first session is not an empty board.
 
 ## After first use / publish

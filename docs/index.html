@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Norns · v0.0.1 coming</title>
+    <title>Norns · v0.0.1</title>
     <meta
       name="description"
-      content="Norns is a Control Room where each board column runs an isolated LLM agent and a human gate. First production-ready cut: v0.0.1."
+      content="Norns is a local Control Room: each board column runs an isolated LLM agent and a human gate. OpenAI, Cursor, and DeepSeek; Jira, Polarion, and GitHub plugins."
     />
     <meta name="theme-color" content="#0d1117" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -200,6 +200,14 @@
         flex-wrap: wrap;
       }
 
+      .app-frame .card-body {
+        margin: 8px 0 0;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--muted);
+        text-align: left;
+      }
+
       .preview-toast {
         position: absolute;
         bottom: 16px;
@@ -235,7 +243,7 @@
         <a class="site-brand" href="#top">Norns</a>
         <nav class="site-nav">
           <a href="#look">Look</a>
-          <a href="#in">In 0.0.1</a>
+          <a href="#in">Now</a>
           <a href="#install">Install</a>
           <a href="https://github.com/YanChao1999/Norns">GitHub</a>
         </nav>
@@ -243,10 +251,10 @@
 
       <main id="top">
         <div class="site-hero">
-          <span class="pill">Coming · v0.0.1</span>
+          <span class="pill">v0.0.1 · local IDE</span>
           <h1>Control Room for staged agent work.</h1>
           <p class="site-lede">
-            Each column is an isolated LLM agent. A card only moves after a human gate, unless you mark that stage auto-advance. The board below is the real UI, as a static preview.
+            Each column is an isolated LLM agent. A card only moves after a human gate, unless you mark that stage auto-advance. Board cards show a short agent recommend; the drawer keeps the full markdown handoff. The board below is the real UI, as a static preview.
           </p>
           <div class="site-actions">
             <a class="btn btn-primary" href="#look">See the UI</a>
@@ -309,6 +317,7 @@
                           <span class="status status-waiting_approval">waiting</span>
                         </div>
                         <div class="card-ext">NOR-14</div>
+                        <p class="card-body">Approve — cookie helper is a local change with a clear test.</p>
                         <div class="card-live">Your turn — confirm the agent's approve or reject</div>
                       </button>
                     </div>
@@ -452,40 +461,39 @@
         <section class="site-section" id="in">
           <div class="site-grid">
             <div>
-              <h2>Shipping in v0.0.1</h2>
+              <h2>In v0.0.1 now</h2>
               <ul>
-                <li>Local Electron IDE: <code>norns init</code> / <code>norns run</code></li>
+                <li>Local Control Room: <code>norns init</code> / <code>norns run</code> (browser; optional Electron)</li>
                 <li>Visual state machine, including parallel split and join</li>
                 <li>Human approve/reject gates; agent recommendation is advisory</li>
-                <li>Fresh schema only — <code>norns init --force</code> wipes the local database</li>
+                <li>Short recommend on board cards; markdown handoff and journey in the drawer</li>
+                <li>OpenAI, Cursor, and DeepSeek as Settings model connectors</li>
+                <li>Jira, Polarion, and GitHub plugins; optional confirm-writes on a column</li>
+                <li>Install from a checkout with <code>uv tool install .</code> or <code>pip install .</code></li>
                 <li>Production refuses <code>admin</code>/<code>admin</code> and requires secure cookies</li>
-                <li>Compose backend/worker image is baked at build time</li>
               </ul>
             </div>
             <div>
-              <h2>Not in this cut</h2>
+              <h2>Not published yet</h2>
               <ul>
-                <li>Schema migrations — Alembic starts when 0.0.1 is published</li>
+                <li>PyPI package <code>norns-ide</code> — follow PUBLISH.md after merge</li>
+                <li>Schema migrations — Alembic starts when 0.0.1 is on PyPI</li>
                 <li>Multi-user accounts, teams, or RBAC</li>
                 <li>A hosted Control Room. This is a local IDE, not SaaS</li>
-                <li>Polarion field writes still need hardening if you use that connector</li>
               </ul>
             </div>
           </div>
         </section>
 
         <section class="site-section" id="install">
-          <h2>Try the coming cut</h2>
-          <p class="site-lede">From the 0.0.1 branch. Init prints a generated admin password. Existing <code>~/.norns</code> does not upgrade in place.</p>
+          <h2>Install</h2>
+          <p class="site-lede">Python 3.12+. Init prints a generated admin password into <code>~/.norns/config.toml</code>. The command is <code>norns</code>; the future PyPI name is <code>norns-ide</code>.</p>
           <pre>git clone https://github.com/YanChao1999/Norns.git
 cd Norns
-git checkout cursor/v0.0.1-first-production
-uv sync
-cd frontend && npm install && npm run build && cd ..
-bash scripts/stage-ui.sh
-npm install --prefix norns/electron
-uv run norns init --force
-uv run norns run</pre>
+uv tool install .
+norns init
+norns run</pre>
+          <p class="site-lede">Developer checkout: <code>uv sync</code> then <code>uv run norns init</code> and <code>uv run norns run</code> (http://127.0.0.1:8765). UI rebuild: <code>./scripts/stage-ui.sh</code>.</p>
         </section>
       </main>
 
