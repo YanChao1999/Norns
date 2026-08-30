@@ -76,15 +76,17 @@ jobs:
         run: |
           norns --help
           norns --version
-          python -c "import norns, pathlib; root = pathlib.Path(norns.__file__).with_name('web'); assert (root / 'index.html').is_file(), root"
+          python -c "import norns, pathlib; from backend.app.ui_assets import packaged_control_room_errors; root = pathlib.Path(norns.__file__).with_name('web'); errors = packaged_control_room_errors(root); assert not errors, errors"
           norns init --home "$RUNNER_TEMP/norns-home"
           norns run --home "$RUNNER_TEMP/norns-home" --no-window &
           server_pid=$!
           for _ in $(seq 1 50); do
-            if curl -fsS "http://127.0.0.1:8765/api/health" && curl -fsS "http://127.0.0.1:8765/" | grep -q 'id="root"'; then
+            if curl -fsS "http://127.0.0.1:8765/api/health"; then
+              python scripts/check-served-ui.py http://127.0.0.1:8765
+              status=$?
               kill "$server_pid"
               wait "$server_pid" || true
-              exit 0
+              exit "$status"
             fi
             sleep 0.2
           done

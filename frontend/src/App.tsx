@@ -6,6 +6,7 @@ import { Board } from './components/Board';
 import { LoginForm } from './components/LoginForm';
 import { Settings } from './components/Settings';
 import { StateMachineEditor } from './components/StateMachineEditor';
+import { NO_API_KEY_HINT } from './runHints';
 import { BoardDetail, BoardSummary } from './types';
 
 type View = 'board' | 'machine' | 'settings';
@@ -40,6 +41,12 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  const { data: runtime } = useQuery({
+    queryKey: ['health'],
+    enabled: Boolean(username),
+    queryFn: () => apiClient.get<{ status: string; llm_configured?: boolean; openai_configured?: boolean }>('/health')
+  });
 
   const { data: boards = [], isLoading } = useQuery({
     queryKey: ['boards'],
@@ -76,7 +83,8 @@ export default function App() {
     return <LoginForm onLoggedIn={setUsername} />;
   }
 
-  const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval').length ?? 0;
+  const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
+  const pullingCount = selectedBoard?.cards.filter((card) => card.status === 'running').length ?? 0;
 
   return (
     <div>
@@ -101,6 +109,7 @@ export default function App() {
           ))}
         </nav>
         <div className="topbar-meta">
+          {pullingCount ? <span className="wait-count is-pulling">{pullingCount} pulling</span> : null}
           <span className={`wait-count${waitingCount ? '' : ' is-clear'}`}>{waitingCount} waiting</span>
           <button type="button" className={`chip${view === 'machine' ? ' is-active' : ''}`} onClick={() => setView('machine')} disabled={!selectedBoardId}>
             Machine
@@ -116,6 +125,11 @@ export default function App() {
       </header>
 
       <main className="workspace">
+        {(runtime?.llm_configured ?? runtime?.openai_configured) === false ? (
+          <p className="notice" role="status">
+            {NO_API_KEY_HINT}
+          </p>
+        ) : null}
         {view === 'settings' ? (
           <Settings
             onCreated={(boardId) => {

@@ -17,6 +17,8 @@ def test_init_creates_config(tmp_path: Path):
     assert "encryption_key" in text
     assert "secret_key" in text
     assert 'backend = "inline"' in text
+    assert "[cursor]" in text
+    assert "[deepseek]" in text
     assert password
     assert 'admin_password = "admin"' not in text
     assert f'admin_password = "{password}"' in text
@@ -58,6 +60,8 @@ def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
     assert os.environ["DATABASE_URL"] == sqlite_url(home / "norns.db")
     assert os.environ["NORNS_HOME"] == str(home.resolve())
     assert os.environ["NORNS_ENV"] == "local"
+    assert os.environ["CURSOR_BASE_URL"] == "https://api.cursor.com/v1"
+    assert os.environ["DEEPSEEK_DEFAULT_MODEL"] == "deepseek-v4-flash"
 
 
 def test_electron_app_dir_ships_chromium_shell():

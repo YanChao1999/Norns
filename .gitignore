@@ -229,3 +229,6 @@ node_modules/
 norns/web/*
 !norns/web/.gitkeep
 
+
+# Local tooling (portable node, etc.)
+.tools/

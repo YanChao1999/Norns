@@ -247,7 +247,7 @@ export function StateMachineEditor({ boardId }: Props) {
   });
 
   const updateStage = useMutation({
-    mutationFn: async (payload: { name?: string; require_approval?: boolean; order?: number; lane?: number }) =>
+    mutationFn: async (payload: { name?: string; require_approval?: boolean; confirm_writes?: boolean; order?: number; lane?: number }) =>
       apiClient.put<Stage>(`/stages/${selected?.id}`, payload),
     onSuccess: invalidateBoard
   });
@@ -437,6 +437,7 @@ export function StateMachineEditor({ boardId }: Props) {
                     (stage.id === selectedId ? ' is-selected' : '') +
                     (stage.id === drawingFrom ? ' is-drawing' : '') +
                     (stage.require_approval ? ' is-gated' : ' is-auto') +
+                    (stage.confirm_writes ? ' is-confirm-writes' : '') +
                     (parallelColumns.has(stage.order) ? ' is-parallel' : '')
                   }
                   onClick={() => pickNode(stage.id)}
@@ -447,7 +448,10 @@ export function StateMachineEditor({ boardId }: Props) {
                     {parallelColumns.has(stage.order) ? ' · parallel' : ''}
                   </span>
                   <strong>{stage.name}</strong>
-                  <span>{stage.require_approval ? 'Human gate' : 'Auto-advance'}</span>
+                  <span>
+                    {stage.require_approval ? 'Human gate' : 'Auto-advance'}
+                    {stage.confirm_writes ? ' · confirm writes' : ''}
+                  </span>
                 </button>
               ))}
               <button
@@ -483,6 +487,7 @@ export function StateMachineEditor({ boardId }: Props) {
               outgoing={lines.filter((edge) => edge.from_stage_id === selected.id)}
               onSaveName={(name) => updateStage.mutate({ name })}
               onToggleGate={(requireApproval) => updateStage.mutate({ require_approval: requireApproval })}
+              onToggleWrites={(confirmWrites) => updateStage.mutate({ confirm_writes: confirmWrites })}
               onDrawLine={() => {
                 setDrawingFrom(selected.id);
                 setSelectedLineId(null);
@@ -512,7 +517,11 @@ export function StateMachineEditor({ boardId }: Props) {
 
       <CardLifecycleLegend machine={cardMachine} />
 
-      <AgentConfigModal stage={agentStage} onClose={() => setAgentStage(null)} />
+      <AgentConfigModal
+        stage={agentStage}
+        boardWorkspace={{ path: board.workspace_path ?? '', git_url: board.git_url ?? '' }}
+        onClose={() => setAgentStage(null)}
+      />
 
       <Dialog open={confirmDelete && Boolean(selected)} onClose={() => setConfirmDelete(false)} labelledBy="delete-stage-title" variant="modal">
         <div className="modal-head">
@@ -570,6 +579,7 @@ interface StageInspectorProps {
   outgoing: StageTransition[];
   onSaveName: (name: string) => void;
   onToggleGate: (requireApproval: boolean) => void;
+  onToggleWrites: (confirmWrites: boolean) => void;
   onDrawLine: () => void;
   onEditAgent: () => void;
   onAddParallel: (name: string) => void;
@@ -587,6 +597,7 @@ function StageInspector({
   outgoing,
   onSaveName,
   onToggleGate,
+  onToggleWrites,
   onDrawLine,
   onEditAgent,
   onAddParallel,
@@ -646,6 +657,16 @@ function StageInspector({
           Require human approval
         </label>
         <p className="muted">The agent may recommend approve or reject. The card still waits here until a human confirms.</p>
+      </div>
+      <div className="field">
+        <span>Writes</span>
+        <label className="tool-row">
+          <input type="checkbox" checked={Boolean(stage.confirm_writes)} disabled={busy} onChange={(event) => onToggleWrites(event.target.checked)} />
+          Confirm MCP writes
+        </label>
+        <p className="muted">
+          Independent of the human gate. Reads run immediately. Create, comment, transition, PR, and other writes wait on this stage until you confirm them.
+        </p>
       </div>
       <p className="muted">
         {cardCount} card{cardCount === 1 ? '' : 's'} on this stage. Agent model: {stage.agent_config?.model ?? 'unset'}.
@@ -818,7 +839,8 @@ function LineInspector({
 }
 
 function CardLifecycleLegend({ machine }: { machine?: CardStatusMachine }) {
-  const states = machine?.states ?? (['idle', 'running', 'waiting_approval', 'waiting_join', 'blocked', 'done'] satisfies CardStatus[]);
+  const states =
+    machine?.states ?? (['idle', 'running', 'waiting_approval', 'waiting_tool_approval', 'waiting_join', 'blocked', 'done'] satisfies CardStatus[]);
   const transitions = machine?.transitions;
   return (
     <section className="panel">

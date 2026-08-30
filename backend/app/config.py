@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_base_url: str = Field(default="https://api.openai.com/v1", alias="OPENAI_BASE_URL")
     default_model: str = Field(default="gpt-4o", alias="DEFAULT_MODEL")
+    cursor_api_key: str = Field(default="", alias="CURSOR_API_KEY")
+    cursor_base_url: str = Field(default="https://api.cursor.com/v1", alias="CURSOR_BASE_URL")
+    cursor_default_model: str = Field(default="auto", alias="CURSOR_DEFAULT_MODEL")
+    deepseek_api_key: str = Field(default="", alias="DEEPSEEK_API_KEY")
+    deepseek_base_url: str = Field(default="https://api.deepseek.com/v1", alias="DEEPSEEK_BASE_URL")
+    deepseek_default_model: str = Field(default="deepseek-v4-flash", alias="DEEPSEEK_DEFAULT_MODEL")
     admin_username: str = Field(default="admin", alias="ADMIN_USERNAME")
     admin_password: str = Field(default="admin", alias="ADMIN_PASSWORD")
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")
@@ -33,6 +39,7 @@ class Settings(BaseSettings):
     queue_backend: str = Field(default="redis", alias="QUEUE_BACKEND")
     environment: str = Field(default="local", alias="NORNS_ENV")
     stale_run_seconds: int = Field(default=1800, alias="STALE_RUN_SECONDS")
+    cursor_timeout_seconds: float = Field(default=1200.0, alias="CURSOR_TIMEOUT_SECONDS")
 
     @field_validator("encryption_key")
     @classmethod

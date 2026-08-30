@@ -10,6 +10,7 @@ from backend.app.orchestrator.state_machine import (
     return_card_to_stage,
     start_card_run,
     wait_for_approval,
+    wait_for_tool_approval,
 )
 
 
@@ -18,12 +19,13 @@ from backend.app.orchestrator.state_machine import (
     [
         (CardStatus.IDLE, start_card_run),
         (CardStatus.RUNNING, wait_for_approval),
+        (CardStatus.RUNNING, wait_for_tool_approval),
     ],
 )
 def test_valid_transitions(initial, transition):
     card = SimpleNamespace(status=initial, current_stage_id="stage-a")
     transition(card)
-    assert card.status in {CardStatus.RUNNING, CardStatus.WAITING_APPROVAL}
+    assert card.status in {CardStatus.RUNNING, CardStatus.WAITING_APPROVAL, CardStatus.WAITING_TOOL_APPROVAL}
 
 
 def test_advance_to_next_stage_sets_running():

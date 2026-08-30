@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from ..database import get_session
 from ..models import AgentRun, Approval, Board, Card
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
-from ..orchestrator.gates import approve_card, reject_card
+from ..orchestrator.gates import approve_card, approve_pending_writes, reject_card, reject_pending_writes
 from ..orchestrator.state_machine import CardStatus, start_card_run
 from .auth import SessionUser, get_current_user
 
@@ -157,6 +157,23 @@ async def approve_or_reject_card(
         raise _gate_http_exception(exc) from exc
 
 
+@router.post("/cards/{card_id}/approve-writes", response_model=ApprovalRead)
+async def approve_or_reject_writes(
+    card_id: str,
+    payload: ApprovalRequest,
+    current_user: Annotated[SessionUser, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Approval:
+    try:
+        if payload.approved:
+            return await approve_pending_writes(session, card_id, current_user.username, payload.comment)
+        return await reject_pending_writes(session, card_id, current_user.username, payload.comment)
+    except ValueError as exc:
+        raise _gate_http_exception(exc) from exc
+    except EnqueueError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
 @router.get("/cards/{card_id}/runs", response_model=list[AgentRunRead])
 async def list_runs(card_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> list[AgentRun]:
     card = await session.get(Card, card_id)
@@ -179,7 +196,13 @@ async def trigger_card_run(card_id: str, session: Annotated[AsyncSession, Depend
     if not card.current_stage_id:
         raise HTTPException(status_code=400, detail="Card has no stage assigned")
     if card.status not in {CardStatus.IDLE, CardStatus.BLOCKED}:
-        raise HTTPException(status_code=409, detail="Card can only be run when idle or blocked")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Card is already running or waiting for confirmation. "
+                "Wait for the handoff or pending write, then Approve or Reject — do not click Run again."
+            ),
+        )
     start_card_run(card)
     await session.commit()
     try:

@@ -19,5 +19,5 @@ def test_allowlist_selects_named_providers_only():
     registry = ToolRegistry()
     registry.register_provider("github", lambda _connectors: [_tool("github_read")])
     registry.register_provider("jira", lambda _connectors: [_tool("jira_get")])
-    tools = registry.get_runtime_tools(["jira"], [])
+    tools = registry.get_runtime_tools(["Jira"], [])
     assert [tool.name for tool in tools] == ["jira_get"]

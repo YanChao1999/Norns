@@ -3,6 +3,7 @@ import { BoardDetail, StageTransition } from './types';
 export interface Handoff {
   summary?: string;
   links?: string[];
+  /** Backend stores diagram under `plantuml` (svg + source). */
   plantuml?: { svg?: string; source?: string };
   recommendation?: string;
   recommendation_reason?: string;

@@ -52,6 +52,56 @@ def test_board_crud():
     asyncio.run(engine.dispose())
 
 
+def test_board_and_agent_workspace():
+    client, engine = _make_client()
+    with client:
+        login = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        assert login.status_code == 200
+
+        created = client.post(
+            "/api/boards",
+            json={
+                "name": "Repo board",
+                "workspace_path": "/tmp/board-repo",
+                "git_url": "https://github.com/acme/board",
+            },
+        )
+        assert created.status_code == 201
+        board = created.json()
+        assert board["workspace_path"] == "/tmp/board-repo"
+        assert board["git_url"] == "https://github.com/acme/board"
+
+        updated = client.put(
+            f"/api/boards/{board['id']}",
+            json={"git_url": "https://github.com/acme/board.git"},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["git_url"] == "https://github.com/acme/board.git"
+
+        stage_id = board["stages"][0]["id"]
+        stage = client.put(
+            f"/api/stages/{stage_id}",
+            json={"workspace_path": "/tmp/agent-repo", "git_url": "https://github.com/acme/agent"},
+        )
+        assert stage.status_code == 200
+        config = stage.json()["agent_config"]
+        assert config["workspace_path"] == "/tmp/agent-repo"
+        assert config["git_url"] == "https://github.com/acme/agent"
+
+        resolved = client.get(f"/api/workspace?board_id={board['id']}&stage_id={stage_id}")
+        assert resolved.status_code == 200
+        body = resolved.json()
+        assert body["source"] == "agent"
+        assert body["github_repo"] == "acme/agent"
+
+        board_only = client.get(f"/api/workspace?board_id={board['id']}")
+        assert board_only.json()["source"] == "board"
+        assert board_only.json()["github_repo"] == "acme/board"
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 def test_card_update_cannot_bypass_gates():
     client, engine = _make_client()
     with client:
@@ -83,6 +133,58 @@ def test_card_update_cannot_bypass_gates():
     asyncio.run(engine.dispose())
 
 
+def test_board_cards_include_latest_recommendation():
+    from datetime import UTC, datetime
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from backend.app.models import AgentRun
+
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post("/api/boards", json={"name": "Platform"}).json()
+        stage_id = board["stages"][0]["id"]
+        card = client.post(
+            f"/api/boards/{board['id']}/cards",
+            json={
+                "title": "Polarion",
+                "body": "## Urd handoff\n\n| Action | Result |\n|---|---|\n| search | failed |\n",
+            },
+        ).json()
+
+        async def insert_run() -> None:
+            SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+            async with SessionLocal() as session:
+                session.add(
+                    AgentRun(
+                        card_id=card["id"],
+                        stage_id=stage_id,
+                        inputs={},
+                        tool_calls=[],
+                        model_output="## Urd handoff\n\n| Action | Result |\n",
+                        handoff={
+                            "summary": "## Urd handoff\n\n| Action | Result |\n|---|---|\n| Polarion search | Failed |\n",
+                            "recommendation": "reject",
+                            "recommendation_reason": "Polarion client is broken.",
+                        },
+                        status="completed",
+                        completed_at=datetime.now(UTC).replace(tzinfo=None),
+                    )
+                )
+                await session.commit()
+
+        asyncio.run(insert_run())
+        detail = client.get(f"/api/boards/{board['id']}").json()
+        listed = next(item for item in detail["cards"] if item["id"] == card["id"])
+        assert listed["recommendation"] == "reject"
+        assert listed["recommendation_reason"] == "Polarion client is broken."
+        assert listed["body"].startswith("## Urd handoff")
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 def test_stage_machine_crud_and_guards():
     client, engine = _make_client()
     with client:
@@ -96,6 +198,8 @@ def test_stage_machine_crud_and_guards():
         body = machine.json()
         assert "idle" in body["states"]
         assert "waiting_join" in body["states"]
+        assert "waiting_tool_approval" in body["states"]
+        assert "waiting_tool_approval" in body["transitions"]["running"]
         assert "running" in body["transitions"]["idle"]
 
         created = client.post(
@@ -117,10 +221,13 @@ def test_stage_machine_crud_and_guards():
         bad_reorder = client.put(f"/api/boards/{board_id}/stages/reorder", json={"stage_ids": original_ids})
         assert bad_reorder.status_code == 400
 
-        renamed = client.put(f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True})
+        renamed = client.put(
+            f"/api/stages/{review_id}", json={"name": "QA", "require_approval": True, "confirm_writes": True}
+        )
         assert renamed.status_code == 200
         assert renamed.json()["name"] == "QA"
         assert renamed.json()["require_approval"] is True
+        assert renamed.json()["confirm_writes"] is True
 
         removed = client.delete(f"/api/stages/{review_id}")
         assert removed.status_code == 204
@@ -217,6 +324,145 @@ def test_transition_lines_can_go_back_and_branch_on_if():
             if edge["from_stage_id"] == urd["id"] and edge["event"] == "approve" and not edge["condition_key"]
         ]
         assert len(split_lines) >= 2
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_health_reports_whether_openai_is_configured():
+    client, engine = _make_client()
+    with client:
+        response = client.get("/api/health")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "ok"
+        assert isinstance(body["llm_configured"], bool)
+        assert body["openai_configured"] is body["llm_configured"]
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_openai_connector_can_be_created_from_settings_api():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        created = client.post(
+            "/api/connectors",
+            json={
+                "name": "OpenAI",
+                "connector_type": "openai",
+                "config": {"api_key": "sk-test", "base_url": "https://api.openai.com/v1", "default_model": "gpt-4o"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["connector_type"] == "openai"
+        assert "api_key" in body["config_keys"]
+        assert "api_key" not in body["public_config"]
+        assert body["public_config"]["default_model"] == "gpt-4o"
+        assert "sk-test" not in created.text
+        health = client.get("/api/health").json()
+        assert health["llm_configured"] is True
+        assert health["openai_configured"] is True
+        missing = client.post("/api/connectors", json={"name": "Empty", "connector_type": "openai", "config": {}})
+        assert missing.status_code == 400
+        cursor = client.post(
+            "/api/connectors",
+            json={
+                "name": "Cursor",
+                "connector_type": "cursor",
+                "config": {"api_key": "crsr_test", "base_url": "https://api.cursor.com/v1", "default_model": "auto"},
+            },
+        )
+        assert cursor.status_code == 201, cursor.text
+        assert cursor.json()["connector_type"] == "cursor"
+        assert "api_key" not in cursor.json()["public_config"]
+        deepseek = client.post(
+            "/api/connectors",
+            json={
+                "name": "DeepSeek",
+                "connector_type": "deepseek",
+                "config": {
+                    "api_key": "sk-deepseek",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "default_model": "deepseek-v4-flash",
+                },
+            },
+        )
+        assert deepseek.status_code == 201, deepseek.text
+        assert deepseek.json()["public_config"]["default_model"] == "deepseek-v4-flash"
+        empty_cursor = client.post(
+            "/api/connectors", json={"name": "Empty Cursor", "connector_type": "cursor", "config": {}}
+        )
+        assert empty_cursor.status_code == 400
+        updated = client.put(
+            f"/api/connectors/{body['id']}",
+            json={"config": {"api_key": "", "default_model": "gpt-4o-mini"}},
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["public_config"]["default_model"] == "gpt-4o-mini"
+        later = client.get("/api/health").json()
+        assert later["llm_configured"] is True
+        assert later["openai_configured"] is True
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_llm_models_endpoint_returns_fallback_catalog():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        response = client.get("/api/connectors/llm-models?provider=deepseek")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["provider"] == "deepseek"
+        assert body["source"] == "fallback"
+        assert "deepseek-v4-flash" in body["models"]
+        assert body["default_model"] == "deepseek-v4-flash"
+        assert any(entry["provider"] == "deepseek" and entry["id"] == "deepseek-v4-flash" for entry in body["entries"])
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_llm_models_endpoint_labels_models_by_provider():
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        client.post(
+            "/api/connectors",
+            json={
+                "name": "DeepSeek",
+                "connector_type": "deepseek",
+                "config": {
+                    "api_key": "sk-deepseek",
+                    "base_url": "https://api.deepseek.com/v1",
+                    "default_model": "deepseek-v4-flash",
+                },
+            },
+        )
+        client.post(
+            "/api/connectors",
+            json={
+                "name": "Cursor",
+                "connector_type": "cursor",
+                "config": {"api_key": "crsr_test", "base_url": "https://api.cursor.com/v1", "default_model": "auto"},
+            },
+        )
+        response = client.get("/api/connectors/llm-models")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        labels = {entry["label"] for entry in body["entries"]}
+        assert any("DeepSeek" in label for label in labels)
+        assert any("Cursor" in label for label in labels)
+        cursor_auto = next(
+            entry for entry in body["entries"] if entry["provider"] == "cursor" and entry["id"] == "auto"
+        )
+        assert cursor_auto["usable"] is True
+        assert "·" in cursor_auto["label"]
+        assert "Cursor" in cursor_auto["label"]
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())

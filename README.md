@@ -2,7 +2,7 @@
 
 Norns is a Kanban orchestration system where each board column runs an isolated LLM agent and a human approval gate controls progression to the next stage. The name comes from the Norse Norns: Urd, Verdandi, and Skuld.
 
-**v0.0.1** site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/). First-use backlog: [ROADMAP.md](ROADMAP.md).
+**v0.0.2** site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/). First-use backlog: [ROADMAP.md](ROADMAP.md).
 
 ## Features
 - Local Control Room (`norns init` / `norns run`) — UI in the browser by default, optional Electron window, config under `~/.norns`
@@ -67,7 +67,7 @@ Human -> Frontend : confirm approve or reject
 Python 3.12+. `norns run` opens the Control Room in your browser. Electron is optional.
 
 ```bash
-# From this checkout (needs Node.js 20+ once, to compile the UI into the package):
+# From this checkout (needs Node.js 20+ or Docker once, to compile the UI into the package):
 uv tool install .
 # or
 python3 -m pip install .
@@ -105,9 +105,10 @@ norns run
 
 ### Developer checkout
 
+`uv run` is an editable install, so it does not run the wheel build that bakes the UI in. `norns run` compiles `frontend/` on first start with npm if it is on PATH (or `./.tools/node`), otherwise with Docker using the same `node:20` image as `docker compose up`. If docker compose left `frontend/node_modules` root-owned, the build uses `~/.cache/norns/ui-build` instead. Rebuild after UI source changes with `./scripts/stage-ui.sh` (same npm-or-Docker path; it always rebuilds, unlike `norns run`).
+
 ```bash
 uv sync
-bash scripts/stage-ui.sh
 uv run norns init
 uv run norns run
 ```
@@ -150,6 +151,9 @@ Pull requests to `main` must pass the **CI** GitHub Actions check (`backend` tes
 - Use PostgreSQL in normal deployments via `DATABASE_URL`.
 - Redis backs ARQ worker execution.
 - PlantUML/Kroki rendering is opt-in via `PLANTUML_URL` / `KROKI_URL` (unset means no public egress).
-- An empty per-stage tool allowlist grants **no** tools. Enable GitHub, Jira, or Polarion explicitly on the stage.
+- An empty per-stage tool allowlist grants **no** tools. Enable **norns** (create cards, edit stages/prompts, edit the state machine, inspect the git workspace), **github**, **jira**, or **polarion** on the column **Agent** dialog. Cursor stages receive those as MCP servers; OpenAI/DeepSeek stages use the same plugins as chat tools.
+- **Workspace (git repo):** each board has a checkout path and/or `https://github.com/org/repo`. Stage agents inherit the board repo; a column **Agent** can override with its own path/URL. Cursor stages then run in that checkout (local agent) instead of a throwaway `/tmp` directory; GitHub tools default to that repo. If neither board nor agent is set, Norns uses the git root of the process working directory.
+- Extra MCP servers: add an **MCP** connector in Settings (stdio command or HTTP URL), then enable it under Agent → Tools. Third-party Python plugins register the `norns.plugins` entry point.
+- `norns mcp --plugins norns,github,jira` runs the plugin MCP server on stdin/stdout (Cursor attaches this automatically when those tools are enabled).
 - `PUT /api/cards/{id}` updates title/body only; new cards always start on the first stage.
 - Change `SECRET_KEY` and `ADMIN_PASSWORD` before any shared deployment. Sessions expire after 8 hours.

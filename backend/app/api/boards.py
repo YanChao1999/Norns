@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..card_preview import latest_recommendation
 from ..database import get_session
 from ..models import AgentConfig, Board, Card, Stage, StageTransition
 from ..orchestrator.state_machine import TRANSITIONS, CardStatus
@@ -22,8 +23,11 @@ class AgentConfigRead(BaseModel):
     id: str
     system_prompt: str
     model: str
+    llm_provider: str = ""
     temperature: float
     tool_allowlist: list[str]
+    workspace_path: str = ""
+    git_url: str = ""
 
 
 class StageRead(BaseModel):
@@ -35,6 +39,7 @@ class StageRead(BaseModel):
     order: int
     lane: int = 0
     require_approval: bool
+    confirm_writes: bool = False
     agent_config: AgentConfigRead | None = None
 
 
@@ -49,6 +54,27 @@ class CardRead(BaseModel):
     current_stage_id: str | None = None
     parent_card_id: str | None = None
     status: str
+    recommendation: str | None = None
+    recommendation_reason: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def attach_latest_recommendation(cls, data: Any) -> Any:
+        if not isinstance(data, Card):
+            return data
+        recommendation, reason = latest_recommendation(data)
+        return {
+            "id": data.id,
+            "board_id": data.board_id,
+            "title": data.title,
+            "body": data.body,
+            "external_id": data.external_id,
+            "current_stage_id": data.current_stage_id,
+            "parent_card_id": data.parent_card_id,
+            "status": data.status,
+            "recommendation": recommendation,
+            "recommendation_reason": reason,
+        }
 
 
 class TransitionRead(BaseModel):
@@ -91,6 +117,8 @@ class BoardRead(BaseModel):
     id: str
     name: str
     description: str | None = None
+    workspace_path: str = ""
+    git_url: str = ""
     created_at: Any
     updated_at: Any
     stages: list[StageRead] = []
@@ -104,11 +132,15 @@ class BoardDetail(BoardRead):
 class BoardCreate(BaseModel):
     name: str = Field(min_length=1)
     description: str | None = None
+    workspace_path: str = ""
+    git_url: str = ""
 
 
 class BoardUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    workspace_path: str | None = None
+    git_url: str | None = None
 
 
 class StageCreate(BaseModel):
@@ -118,13 +150,17 @@ class StageCreate(BaseModel):
     parallel: bool = False
     from_stage_id: str | None = None
     require_approval: bool = True
+    confirm_writes: bool = False
     system_prompt: str = (
         "You are the stage agent. Produce a concise handoff. "
         "If this stage has a human gate, recommend DECISION: approve or reject; a human must confirm."
     )
     model: str = "gpt-4o"
+    llm_provider: str = ""
     temperature: float = 0.7
     tool_allowlist: list[str] = []
+    workspace_path: str = ""
+    git_url: str = ""
 
 
 class StageUpdate(BaseModel):
@@ -132,10 +168,14 @@ class StageUpdate(BaseModel):
     order: int | None = None
     lane: int | None = None
     require_approval: bool | None = None
+    confirm_writes: bool | None = None
     system_prompt: str | None = None
     model: str | None = None
+    llm_provider: str | None = None
     temperature: float | None = None
     tool_allowlist: list[str] | None = None
+    workspace_path: str | None = None
+    git_url: str | None = None
 
 
 class StageReorder(BaseModel):
@@ -161,7 +201,12 @@ async def list_boards(session: Annotated[AsyncSession, Depends(get_session)]) ->
 
 @router.post("/boards", response_model=BoardDetail, status_code=status.HTTP_201_CREATED)
 async def create_board(session: Annotated[AsyncSession, Depends(get_session)], payload: BoardCreate) -> Board:
-    board = Board(name=payload.name, description=payload.description)
+    board = Board(
+        name=payload.name,
+        description=payload.description,
+        workspace_path=payload.workspace_path.strip(),
+        git_url=payload.git_url.strip(),
+    )
     board.stages = [
         Stage(
             name="Urd",
@@ -179,7 +224,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=2,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Verdandi. Refine the active work using the approved handoff only. Recommend DECISION: approve or reject; a human must confirm.",
+                system_prompt="You are Verdandi. Do the approved work with tools (create tickets, update the card). Then hand off. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -190,7 +235,7 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             order=3,
             require_approval=True,
             agent_config=AgentConfig(
-                system_prompt="You are Skuld. Produce the final delivery handoff and highlight risks. Recommend DECISION: approve or reject; a human must confirm.",
+                system_prompt="You are Skuld. Finish delivery with tools if anything is still undone, then produce the final handoff and highlight risks. Recommend DECISION: approve or reject; a human must confirm.",
                 model="gpt-4o",
                 temperature=0.7,
                 tool_allowlist=[],
@@ -216,6 +261,8 @@ async def update_board(
 ) -> Board:
     board = await _get_board_or_404(session, board_id)
     for field, value in payload.model_dump(exclude_none=True).items():
+        if field in {"workspace_path", "git_url"} and isinstance(value, str):
+            value = value.strip()
         setattr(board, field, value)
     await session.commit()
     return await _get_board_or_404(session, board_id)
@@ -272,12 +319,16 @@ async def create_stage(
         order=order,
         lane=lane,
         require_approval=payload.require_approval,
+        confirm_writes=payload.confirm_writes,
     )
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,
         model=payload.model,
+        llm_provider=payload.llm_provider,
         temperature=payload.temperature,
         tool_allowlist=payload.tool_allowlist,
+        workspace_path=payload.workspace_path.strip(),
+        git_url=payload.git_url.strip(),
     )
     session.add(stage)
     await session.flush()
@@ -307,14 +358,31 @@ async def update_stage(
         raise HTTPException(status_code=404, detail="Stage not found")
 
     stage_fields = payload.model_dump(
-        exclude_none=True, exclude={"system_prompt", "model", "temperature", "tool_allowlist"}
+        exclude_none=True,
+        exclude={
+            "system_prompt",
+            "model",
+            "llm_provider",
+            "temperature",
+            "tool_allowlist",
+            "workspace_path",
+            "git_url",
+        },
     )
     for field, value in stage_fields.items():
         setattr(stage, field, value)
 
     if any(
         value is not None
-        for value in [payload.system_prompt, payload.model, payload.temperature, payload.tool_allowlist]
+        for value in [
+            payload.system_prompt,
+            payload.model,
+            payload.llm_provider,
+            payload.temperature,
+            payload.tool_allowlist,
+            payload.workspace_path,
+            payload.git_url,
+        ]
     ):
         if not stage.agent_config:
             stage.agent_config = AgentConfig(stage_id=stage.id)
@@ -322,10 +390,16 @@ async def update_stage(
             stage.agent_config.system_prompt = payload.system_prompt
         if payload.model is not None:
             stage.agent_config.model = payload.model
+        if payload.llm_provider is not None:
+            stage.agent_config.llm_provider = payload.llm_provider
         if payload.temperature is not None:
             stage.agent_config.temperature = payload.temperature
         if payload.tool_allowlist is not None:
             stage.agent_config.tool_allowlist = payload.tool_allowlist
+        if payload.workspace_path is not None:
+            stage.agent_config.workspace_path = payload.workspace_path.strip()
+        if payload.git_url is not None:
+            stage.agent_config.git_url = payload.git_url.strip()
 
     await session.commit()
     result = await session.execute(select(Stage).where(Stage.id == stage.id).options(selectinload(Stage.agent_config)))
@@ -448,7 +522,7 @@ async def _load_board(session: AsyncSession, board_id: str) -> Board | None:
         .where(Board.id == board_id)
         .options(
             selectinload(Board.stages).selectinload(Stage.agent_config),
-            selectinload(Board.cards),
+            selectinload(Board.cards).selectinload(Card.runs),
             selectinload(Board.transitions),
         )
     )
