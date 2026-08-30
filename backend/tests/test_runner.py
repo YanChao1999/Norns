@@ -337,6 +337,8 @@ async def test_execute_agent_includes_work_instruction(monkeypatch):
     assert WORK_INSTRUCTION.split(".")[0] in prompt
     assert "do not defer" in prompt.lower() or "Do not defer" in prompt
     assert "Empty search results" in prompt
+    assert "Search Jira before creating an issue" in prompt
+    assert "one Jira ticket" in prompt
 
 
 @pytest.mark.asyncio

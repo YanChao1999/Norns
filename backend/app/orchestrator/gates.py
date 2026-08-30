@@ -201,7 +201,7 @@ async def approve_pending_writes(
             await session.commit()
             raise ValueError(f"Write {name} failed: {result.get('error')}. Remaining writes were not executed.")
         confirmed.append({**dict(item), "arguments": arguments})
-        if isinstance(result, dict) and result.get("key"):
+        if isinstance(result, dict) and result.get("key") and not str(card.external_id or "").strip():
             card.external_id = str(result["key"])
 
     inputs["pending_writes"] = []

@@ -120,7 +120,11 @@ def jira_provider(connectors: list[Connector], default_project: str = "") -> lis
                         "type": "function",
                         "function": {
                             "name": f"jira_{suffix}_create_issue",
-                            "description": "Create a Jira issue (Task, Bug, Story, etc.) using the configured connector.",
+                            "description": (
+                                "Create a Jira issue only when search finds none for this work. "
+                                "If a ticket already tracks the same Polarion id or card, reuse it (comment or subtask). "
+                                "Do not create a second top-level issue for the same Polarion section."
+                            ),
                             "parameters": {
                                 "type": "object",
                                 "properties": {

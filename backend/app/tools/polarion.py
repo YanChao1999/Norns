@@ -83,8 +83,10 @@ def polarion_provider(connectors: list[Connector]) -> list[RuntimeTool]:
                             "description": (
                                 "Search Polarion work items in the connector project. "
                                 "Empty query lists requirements (type:requirement). "
-                                "Then create a Norns card with norns_create_card using title, body=description, external_id=id, "
-                                "or create a missing Polarion item with polarion create_workitem."
+                                "Then, if no Norns card already has that Polarion id as external_id, create one with "
+                                "norns_create_card (title, body=description, external_id=id). "
+                                "Search Jira for the Polarion id before filing a ticket; reuse the existing issue. "
+                                "Or create a missing Polarion item with polarion create_workitem."
                             ),
                             "parameters": {
                                 "type": "object",

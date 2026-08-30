@@ -401,4 +401,10 @@ async def test_norns_create_card(monkeypatch):
     from_context = await create_tool.execute({"title": "From Polarion", "body": "req text", "external_id": "PROJ-12"})
     assert from_context["title"] == "From Polarion"
     assert from_context["external_id"] == "PROJ-12"
+    reused = await create_tool.execute(
+        {"title": "Duplicate Polarion card", "body": "should not insert", "external_id": "PROJ-12"}
+    )
+    assert reused["reused"] is True
+    assert reused["id"] == from_context["id"]
+    assert reused["title"] == "From Polarion"
     await engine.dispose()

@@ -41,7 +41,11 @@ logger = logging.getLogger("norns")
 
 DECISION_INSTRUCTION = (
     "This stage has a human gate. The gate only blocks moving the card — it does not block tools. "
-    "Call tools now to finish the card work (create the Jira issue, write the key back with norns_update_card, and so on). "
+    "Call tools now to finish the card work. "
+    "If this card already has a Jira key as external_id, do not create another Jira issue. "
+    "If the work is Polarion-scoped (id like 5E96-147), search Jira for that id first and reuse the existing ticket "
+    "(comment or subtask). Create a Jira issue only when none exists, then write that key with norns_update_card. "
+    "Do not file a second ticket for the same Polarion section. "
     "Do not defer tool calls until after approval. An empty search result is not a reason to stop; create or update next. "
     "You may recommend approve or reject, but you cannot move the card. "
     "A human must confirm before any line fires. End your response with exactly two lines:\n"
@@ -404,9 +408,13 @@ async def _execute_agent(
         )
         attached = ", ".join(mcp_servers) if mcp_servers else "none"
         tool_hint = (
-            f" Attached Norns MCP servers: {attached}. Call those tools now to operate Jira/GitHub/Norns until the card work is done. "
-            "Empty search results mean nothing exists yet — create next, then verify. "
-            "Do not use Cursor IDE catalog tools (CreateGoal, GetDynamicTools, GenerateImage) for Jira — they are not the Norns connector."
+            (
+                f" Attached Norns MCP servers: {attached}. Call those tools now to operate Jira/GitHub/Norns until the card work is done. "
+                "Empty search results mean nothing exists yet — create next, then verify. "
+                "Search Jira before creating an issue. One Polarion work item (for example 5E96-147) maps to one Jira ticket; "
+                "do not open NOR-8 style duplicates of an existing section ticket. "
+                "Do not use Cursor IDE catalog tools (CreateGoal, GetDynamicTools, GenerateImage) for Jira — they are not the Norns connector."
+            )
             if mcp_servers
             else (
                 " This stage has no Norns plugins enabled (Agent → Tools allowlist is empty). "

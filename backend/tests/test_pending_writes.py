@@ -159,3 +159,57 @@ async def test_approve_pending_writes_stops_after_first_error(monkeypatch):
         assert run.inputs["confirmed_writes"][0]["name"] == "norns_update_card"
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_approve_pending_writes_keeps_existing_external_id(monkeypatch):
+    engine, SessionLocal = await _session_factory()
+
+    class FakeRegistry:
+        def get_runtime_tools(self, allowlist, connectors, context=None):
+            del allowlist, connectors, context
+
+            async def create_issue(arguments: dict) -> dict:
+                del arguments
+                return {"key": "NOR-99"}
+
+            return [RuntimeTool(name="jira_jira_create_issue", openai_tool={}, execute=create_issue)]
+
+    async def fake_enqueue(card_id: str, stage_id: str, run_id: str | None = None):
+        del card_id, stage_id
+        return run_id or "queued"
+
+    monkeypatch.setattr("backend.app.tools.registry.create_default_registry", FakeRegistry)
+    monkeypatch.setattr("backend.app.orchestrator.gates.enqueue_stage_run", fake_enqueue)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        stage = Stage(name="Urd", order=1, require_approval=True, confirm_writes=True)
+        stage.agent_config = AgentConfig(system_prompt="urd", model="gpt-4o", temperature=0.7, tool_allowlist=["jira"])
+        board.stages = [stage]
+        card = Card(
+            title="Software requirements",
+            body="Polarion section",
+            status=CardStatus.WAITING_TOOL_APPROVAL,
+            current_stage=stage,
+            external_id="5E96-147",
+        )
+        board.cards = [card]
+        run = AgentRun(
+            card=card,
+            stage=stage,
+            inputs={"pending_writes": [{"name": "jira_jira_create_issue", "arguments": {"summary": "Define SWR"}}]},
+            tool_calls=[],
+            model_output="queued write",
+            handoff={"summary": "queued write"},
+            status="waiting_tool",
+        )
+        session.add_all([board, run])
+        await session.commit()
+
+        approval = await approve_pending_writes(session, card.id, "admin")
+        await session.refresh(card)
+        assert approval.approved is True
+        assert card.external_id == "5E96-147"
+
+    await engine.dispose()

@@ -99,7 +99,8 @@ class NornsPlugin(Plugin):
                 name="norns_create_card",
                 description=(
                     "Create a workable Norns card on this board. "
-                    "For a Polarion requirement, set title, body to the description, and external_id to the Polarion id."
+                    "For a Polarion requirement, set title, body to the description, and external_id to the Polarion id. "
+                    "If a card on this board already has that external_id, this returns the existing card instead of a duplicate."
                 ),
                 input_schema={
                     "type": "object",
@@ -356,11 +357,21 @@ async def _create_card(arguments: dict[str, Any]) -> Any:
         stages = sorted(board.stages, key=lambda stage: stage.order)
         if not stages:
             return {"error": "Board has no stages"}
+        external_id = str(arguments["external_id"]).strip() if arguments.get("external_id") else None
+        if external_id:
+            existing = await session.execute(
+                select(Card).where(Card.board_id == board.id, Card.external_id == external_id)
+            )
+            found = existing.scalars().first()
+            if found:
+                payload = _card_payload(found)
+                payload["reused"] = True
+                return payload
         card = Card(
             board_id=board.id,
             title=str(arguments["title"]).strip(),
             body=str(arguments.get("body") or ""),
-            external_id=(str(arguments["external_id"]).strip() if arguments.get("external_id") else None),
+            external_id=external_id,
             current_stage_id=stages[0].id,
         )
         session.add(card)
