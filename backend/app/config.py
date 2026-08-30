@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     queue_backend: str = Field(default="redis", alias="QUEUE_BACKEND")
     environment: str = Field(default="local", alias="NORNS_ENV")
     stale_run_seconds: int = Field(default=1800, alias="STALE_RUN_SECONDS")
+    cursor_timeout_seconds: float = Field(default=1200.0, alias="CURSOR_TIMEOUT_SECONDS")
 
     @field_validator("encryption_key")
     @classmethod

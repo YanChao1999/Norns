@@ -429,6 +429,7 @@ async def _execute_agent(
             repo_url=getattr(workspace, "git_url", "") or repo_url,
             mcp_servers=mcp_servers or None,
             workspace_path=getattr(workspace, "path", "") or "",
+            timeout_seconds=float(getattr(settings, "cursor_timeout_seconds", 1200.0) or 1200.0),
         )
         identity = llm_identity(provider, model)
         content = with_llm_line(content, identity)

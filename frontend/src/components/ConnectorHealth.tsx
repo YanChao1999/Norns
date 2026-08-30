@@ -302,14 +302,30 @@ export function ConnectorHealth() {
           <>
             <label className="field">
               Server
-              <input className="input" value={form.server} onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))} />
+              <input
+                className="input"
+                value={form.server}
+                onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))}
+                placeholder="https://testdrive.polarion.com/polarion"
+              />
             </label>
             <label className="field">
               Username
               <input className="input" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
             </label>
             <label className="field">
-              Password
+              Token
+              <input
+                className="input"
+                type="password"
+                autoComplete="off"
+                value={form.token}
+                onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+                placeholder={editingId ? 'Leave blank to keep the saved token' : 'Access token (not the browser /#/home URL)'}
+              />
+            </label>
+            <label className="field">
+              Password (if not using a token)
               <input
                 className="input"
                 type="password"
@@ -320,8 +336,13 @@ export function ConnectorHealth() {
               />
             </label>
             <label className="field">
-              Project (optional)
-              <input className="input" value={form.project} onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))} />
+              Project
+              <input
+                className="input"
+                value={form.project}
+                onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))}
+                placeholder="5E96"
+              />
             </label>
           </>
         ) : null}
@@ -362,6 +383,7 @@ export function ConnectorHealth() {
           <div key={connector.id} className="connector-row">
             <span>
               {connector.name} · {labelFor(connector.connector_type)}
+              {connector.public_config?.project ? ` · ${connector.public_config.project}` : ''}
               {connector.config_keys.includes('api_key') ? ' · key saved' : null}
             </span>
             <span className="connector-actions">
@@ -438,7 +460,14 @@ function configFromForm(form: typeof EMPTY_FORM): Record<string, string> {
   if (form.connector_type === 'workspace') {
     return { path: form.workspace_path, git_url: form.git_url };
   }
-  return { server: form.server, username: form.username, password: form.password, project: form.project };
+  const config: Record<string, string> = {
+    server: form.server,
+    username: form.username,
+    password: form.password,
+    token: form.token,
+    project: form.project.trim()
+  };
+  return config;
 }
 
 function startEdit(connector: Connector, setEditingId: (id: string) => void, setForm: (form: typeof EMPTY_FORM) => void): void {

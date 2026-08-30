@@ -27,6 +27,77 @@ def test_polarion_client_requires_password_or_token():
         _polarion_client(connector)
 
 
+def test_polarion_client_prefers_token_auth(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_client(server, user, password=None, token=None, **kwargs):
+        captured.update(server=server, user=user, password=password, token=token)
+        return object()
+
+    monkeypatch.setattr("backend.app.tools.polarion.PolarionClient", fake_client)
+    connector = Connector(name="Polarion", connector_type=ConnectorType.POLARION, encrypted_config=b"", is_active=True)
+    connector.set_config(
+        {
+            "server": "https://polarion.example",
+            "username": "alice",
+            "password": "secret",
+            "token": "pat-1",
+            "project": "5E96",
+        }
+    )
+    _polarion_client(connector)
+    assert captured["token"] == "pat-1"
+    assert captured["password"] is None
+    assert captured["user"] == "alice"
+
+
+def test_polarion_password_jwt_uses_token_login(monkeypatch):
+    captured: dict[str, object] = {}
+    jwt = "a." + ("b" * 40) + "." + ("c" * 40)
+
+    def fake_client(server, user, password=None, token=None, **kwargs):
+        captured.update(server=server, user=user, password=password, token=token)
+        return object()
+
+    monkeypatch.setattr("backend.app.tools.polarion.PolarionClient", fake_client)
+    connector = Connector(name="Polarion", connector_type=ConnectorType.POLARION, encrypted_config=b"", is_active=True)
+    connector.set_config(
+        {
+            "server": "https://testdrive.polarion.com/polarion/#/home",
+            "username": "5e9628e6e8524472b8b92c47eb7e785a",
+            "password": jwt,
+            "project": "5E96",
+        }
+    )
+    _polarion_client(connector)
+    assert captured["server"] == "https://testdrive.polarion.com/polarion"
+    assert captured["token"] == jwt
+    assert captured["password"] is None
+
+
+def test_polarion_project_retries_workitem_prefix(monkeypatch):
+    from backend.app.tools.polarion import _polarion_project
+
+    calls: list[str] = []
+
+    class FakeClient:
+        def getProject(self, project_id: str):
+            calls.append(project_id)
+            if project_id == "5E96":
+                return SimpleNamespace(id=project_id)
+            raise Exception(f"Could not find project {project_id}")
+
+    monkeypatch.setattr("backend.app.tools.polarion._polarion_client", lambda connector: FakeClient())
+    user = "5e9628e6e8524472b8b92c47eb7e785a"
+    connector = Connector(name="Polarion", connector_type=ConnectorType.POLARION, encrypted_config=b"", is_active=True)
+    connector.set_config(
+        {"server": "https://testdrive.polarion.com/polarion", "username": user, "password": "secret", "project": user}
+    )
+    project = _polarion_project(connector, hint_id="5E96-147")
+    assert project.id == "5E96"
+    assert calls == [user, "5E96"]
+
+
 def test_polarion_create_workitem_tool_is_registered():
     names = {tool.name for tool in polarion_provider([_connector()])}
     assert "polarion_polarion_create_workitem" in names
@@ -63,7 +134,7 @@ async def test_polarion_create_workitem_sets_description_and_parent(monkeypatch)
     project = SimpleNamespace(
         createWorkitem=create_workitem, getWorkitem=lambda item_id: parent if item_id == "5E96-147" else created
     )
-    monkeypatch.setattr("backend.app.tools.polarion._polarion_project", lambda connector: project)
+    monkeypatch.setattr("backend.app.tools.polarion._polarion_project", lambda connector, hint_id="": project)
 
     tool = next(item for item in polarion_provider([_connector()]) if item.name.endswith("create_workitem"))
     result = await tool.execute(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 from ..models.connector import Connector, ConnectorType
 from .registry import RuntimeTool
@@ -219,31 +220,91 @@ def _connector_project(connector: Connector) -> str:
         return ""
 
 
+_HEX_ID = re.compile(r"^[0-9a-f]{32}$", re.I)
+
+
+def _normalize_polarion_server(server: str) -> str:
+    """Browser URLs like …/polarion/#/home are not the SOAP root."""
+    raw = (server or "").strip().split("#", 1)[0].strip()
+    parsed = urlparse(raw)
+    if not parsed.scheme or not parsed.netloc:
+        return raw.rstrip("/")
+    path = (parsed.path or "").rstrip("/")
+    for suffix in ("/home", "/login"):
+        if path.lower().endswith(suffix):
+            path = path[: -len(suffix)]
+    if not path:
+        path = "/polarion"
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", "")).rstrip("/")
+
+
+def _looks_like_jwt(value: str) -> bool:
+    return value.count(".") >= 2 and len(value) >= 80
+
+
 def _polarion_client(connector: Connector) -> Any:
     if PolarionClient is None:
         raise RuntimeError("polarion is not installed")
     config = connector.get_config()
-    server = str(config.get("server") or "").strip()
+    server = _normalize_polarion_server(str(config.get("server") or ""))
     if not server:
         raise ValueError("Set Server on the Polarion connector in Settings.")
     username = str(config.get("username") or "").strip()
-    password = config.get("password") or None
-    token = config.get("token") or None
-    if not password and not token:
+    password = str(config.get("password") or "").strip() or None
+    token = str(config.get("token") or "").strip() or None
+    secret = token or password
+    if not secret:
         raise ValueError("Set a Polarion password or token on the connector in Settings.")
-    return PolarionClient(
-        server,
-        username,
-        password,
-        token=token,
+    # Testdrive/browser JWTs live in Password; SOAP logIn(user, jwt) fails, logInWithToken works.
+    try_token_first = bool(token) or _looks_like_jwt(secret)
+    order = (True, False) if try_token_first else (False,)
+    last_error: BaseException | None = None
+    for use_token in order:
+        try:
+            if use_token:
+                return PolarionClient(server, username, token=secret)
+            return PolarionClient(server, username, secret)
+        except Exception as exc:
+            last_error = exc
+            continue
+    raise RuntimeError(_polarion_login_error(last_error)) from last_error
+
+
+def _workitem_project_prefix(workitem_id: str) -> str:
+    text = str(workitem_id or "").strip()
+    if "-" not in text:
+        return ""
+    prefix = text.split("-", 1)[0].strip()
+    if not prefix or _HEX_ID.fullmatch(prefix):
+        return ""
+    return prefix
+
+
+def _polarion_login_error(exc: BaseException | None) -> str:
+    detail = str(exc or "login failed").split("response headers")[0].strip() or "login failed"
+    return (
+        f"{detail}. SOAP login failed. Testdrive/browser tokens expire; paste a fresh access token. "
+        "Server should be the Polarion root (https://testdrive.polarion.com/polarion), not /#/home."
     )
 
 
-def _polarion_project(connector: Connector) -> Any:
-    project_id = _connector_project(connector)
-    if not project_id:
+def _polarion_project(connector: Connector, *, hint_id: str = "") -> Any:
+    configured = _connector_project(connector)
+    candidates: list[str] = []
+    for item in (configured, _workitem_project_prefix(hint_id)):
+        if item and item not in candidates:
+            candidates.append(item)
+    if not candidates:
         raise ValueError("Set Project on the Polarion connector in Settings.")
-    return _polarion_client(connector).getProject(project_id)
+    client = _polarion_client(connector)
+    errors: list[str] = []
+    for project_id in candidates:
+        try:
+            return client.getProject(project_id)
+        except Exception as exc:
+            errors.append(f"{project_id}: {str(exc).split('response headers')[0].strip()}")
+            continue
+    raise RuntimeError("Could not open Polarion project. Tried " + "; ".join(errors))
 
 
 def _make_search_workitems(connector: Connector):
@@ -270,7 +331,9 @@ def _make_search_workitems(connector: Connector):
 def _make_get_workitem(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
-            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            workitem = _polarion_project(connector, hint_id=str(arguments.get("workitem_id") or "")).getWorkitem(
+                arguments["workitem_id"]
+            )
             return workitem_payload(workitem)
 
         try:
@@ -291,7 +354,7 @@ def _make_create_workitem(connector: Connector):
             description = str(arguments.get("description") or "").strip()
             parent_id = str(arguments.get("parent_id") or "").strip()
             link_role = str(arguments.get("link_role") or "relates_to").strip() or "relates_to"
-            project = _polarion_project(connector)
+            project = _polarion_project(connector, hint_id=parent_id)
             workitem = project.createWorkitem(workitem_type, new_workitem_fields={"title": title})
             if description and hasattr(workitem, "setDescription"):
                 workitem.setDescription(description)
@@ -315,7 +378,9 @@ def _make_create_workitem(connector: Connector):
 def _make_add_comment(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
-            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            workitem = _polarion_project(connector, hint_id=str(arguments.get("workitem_id") or "")).getWorkitem(
+                arguments["workitem_id"]
+            )
             workitem.addComment("Norns", arguments["comment"])
             return {"id": arguments["workitem_id"], "comment_added": True}
 
@@ -331,7 +396,9 @@ def _make_update_field(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> dict[str, Any]:
             field = assert_writable_field(arguments["field"])
-            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            workitem = _polarion_project(connector, hint_id=str(arguments.get("workitem_id") or "")).getWorkitem(
+                arguments["workitem_id"]
+            )
             if field == "description" and hasattr(workitem, "setDescription"):
                 workitem.setDescription(arguments["value"])
             else:
@@ -350,7 +417,9 @@ def _make_update_field(connector: Connector):
 def _make_follow_links(connector: Connector):
     async def execute(arguments: dict[str, Any]) -> Any:
         def _call() -> list[dict[str, Any]] | dict[str, str]:
-            workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
+            workitem = _polarion_project(connector, hint_id=str(arguments.get("workitem_id") or "")).getWorkitem(
+                arguments["workitem_id"]
+            )
             linked = workitem.getLinkedItem() if hasattr(workitem, "getLinkedItem") else []
             return [workitem_payload(item) for item in linked or []]
 

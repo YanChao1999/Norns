@@ -54,7 +54,7 @@ async def run_cursor_cloud_agent(
     base_url: str = "",
     repo_url: str = "",
     poll_seconds: float = 2.0,
-    timeout_seconds: float = 600.0,
+    timeout_seconds: float = 1200.0,
     mcp_servers: Mapping[str, Mapping[str, Any]] | None = None,
     workspace_path: str = "",
 ) -> str:
