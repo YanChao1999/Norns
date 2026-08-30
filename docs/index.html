@@ -6,7 +6,7 @@
     <title>Norns · v0.0.2</title>
     <meta
       name="description"
-      content="Norns 0.0.2 is a local Control Room: each board column runs an isolated LLM agent and a human gate. Install norns-ide from PyPI or TestPyPI."
+      content="Norns is a Control Room for staged work. Agents run the columns. You decide what moves."
     />
     <meta name="theme-color" content="#0d1117" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -266,9 +266,9 @@
       <main id="top">
         <div class="site-hero">
           <span class="pill">v0.0.2 · norns-ide</span>
-          <h1>Control Room for staged agent work.</h1>
+          <h1>Agents work the columns. You decide what moves.</h1>
           <p class="site-lede">
-            Each column is an isolated LLM agent. A card only moves after a human gate, unless you mark that stage auto-advance. Board cards show a short agent recommend; the drawer keeps the full markdown handoff. Install <code>norns-ide</code> from PyPI or TestPyPI. The board below is the real UI, as a static preview.
+            Each stage has its own agent. A card waits until you approve. The board below is the real Control Room — try it.
           </p>
           <div class="site-actions">
             <a class="btn btn-primary" href="#install">Install 0.0.2</a>
@@ -277,7 +277,7 @@
         </div>
 
         <section id="look">
-          <p class="demo-note">Preview only — no agents run here. Click the waiting card, then Approve or Reject. Switch to Machine for the stage graph. Settings is in the real app.</p>
+          <p class="demo-note">Preview only — nothing runs here. Open the waiting card, then Approve or Reject. Machine shows how the stages connect.</p>
           <div class="app-frame" id="app">
             <header class="topbar">
               <div class="brand">
