@@ -8,7 +8,6 @@ import {
   diagramSvg,
   formatRunTime,
   handoffSummary,
-  isFinalizedRun,
   journeyStateLabel,
   latestFinalizedForStage,
   llmLabel,
