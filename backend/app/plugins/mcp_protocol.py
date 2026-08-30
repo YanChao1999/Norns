@@ -10,6 +10,8 @@ from typing import Any, TextIO
 
 from sqlalchemy.orm.attributes import flag_modified
 
+from norns import __version__ as norns_version
+
 from ..database import AsyncSessionLocal
 from ..faults import mcp_error_if_injected
 from ..models import AgentRun
@@ -95,7 +97,7 @@ async def _handle(
             {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "norns", "version": "0.0.1"},
+                "serverInfo": {"name": "norns", "version": norns_version},
             },
         )
     if method in {"ping", "tools/list"}:

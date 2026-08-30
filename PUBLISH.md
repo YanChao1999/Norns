@@ -43,7 +43,7 @@ norns --version
 3. GitHub environment named `pypi` (optional: require reviewers).
 4. Either:
    - **Actions → Publish → Run workflow**, target `pypi`, or
-   - Create a GitHub Release (tag `v0.0.1`). A published release uploads to PyPI automatically.
+   - Create a GitHub Release (tag `v0.0.2`). A published release uploads to PyPI automatically.
 
 Do not upload the same version twice. Bump `version` in `pyproject.toml` and `norns/__init__.py` for the next release.
 
