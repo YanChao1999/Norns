@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import tempfile
 from collections.abc import Mapping
+from functools import cache
 from typing import Any
 
 from cursor_sdk import (
@@ -135,6 +136,7 @@ def _is_git_dir(path: str) -> bool:
     return root.is_dir() and (root / ".git").exists()
 
 
+@cache
 def _bridge_workspace() -> str:
-    """Disposable workspace for the SDK bridge (cloud agents do not need a real repo checkout)."""
+    """Stable per-process workspace for the SDK bridge (cloud agents do not need a real repo checkout)."""
     return tempfile.mkdtemp(prefix="norns-cursor-bridge-")

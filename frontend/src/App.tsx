@@ -45,7 +45,7 @@ export default function App() {
   const { data: runtime } = useQuery({
     queryKey: ['health'],
     enabled: Boolean(username),
-    queryFn: () => apiClient.get<{ status: string; openai_configured?: boolean }>('/health')
+    queryFn: () => apiClient.get<{ status: string; llm_configured?: boolean; openai_configured?: boolean }>('/health')
   });
 
   const { data: boards = [], isLoading } = useQuery({
@@ -125,7 +125,7 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        {runtime?.openai_configured === false ? (
+        {(runtime?.llm_configured ?? runtime?.openai_configured) === false ? (
           <p className="notice" role="status">
             {NO_API_KEY_HINT}
           </p>

@@ -144,6 +144,7 @@ async def _load_card_for_writes(session: AsyncSession, card_id: str) -> Card:
         .where(Card.id == card_id)
         .options(
             selectinload(Card.current_stage).selectinload(Stage.agent_config),
+            selectinload(Card.current_stage).selectinload(Stage.board),
             selectinload(Card.runs),
         )
     )
