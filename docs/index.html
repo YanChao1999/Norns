@@ -6,7 +6,7 @@
     <title>Norns · v0.0.2</title>
     <meta
       name="description"
-      content="Norns 0.0.2 is a local Control Room: each board column runs an isolated LLM agent and a human gate. Install norns-ide from PyPI or TestPyPI."
+      content="Norns is a Control Room for staged work. Agents run the columns. You decide what moves."
     />
     <meta name="theme-color" content="#0d1117" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -105,7 +105,7 @@
         border-radius: var(--radius);
         overflow: hidden;
         background: var(--bg);
-        min-height: 680px;
+        min-height: 760px;
       }
 
       .app-frame .topbar {
@@ -222,7 +222,24 @@
         text-align: left;
       }
 
-      .preview-toast {
+      .app-frame .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .app-frame .links span {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-family: var(--mono);
+      }
+
+      .app-frame .settings {
+        max-width: none;
+      }
         position: absolute;
         bottom: 16px;
         left: 16px;
@@ -266,9 +283,9 @@
       <main id="top">
         <div class="site-hero">
           <span class="pill">v0.0.2 · norns-ide</span>
-          <h1>Control Room for staged agent work.</h1>
+          <h1>Agents work the columns. You decide what moves.</h1>
           <p class="site-lede">
-            Each column is an isolated LLM agent. A card only moves after a human gate, unless you mark that stage auto-advance. Board cards show a short agent recommend; the drawer keeps the full markdown handoff. Install <code>norns-ide</code> from PyPI or TestPyPI. The board below is the real UI, as a static preview.
+            Each stage has its own agent. Connect a model, Polarion, Jira, GitHub. A card waits until you approve. The board below is the real Control Room — try it.
           </p>
           <div class="site-actions">
             <a class="btn btn-primary" href="#install">Install 0.0.2</a>
@@ -277,7 +294,7 @@
         </div>
 
         <section id="look">
-          <p class="demo-note">Preview only — no agents run here. Click the waiting card, then Approve or Reject. Switch to Machine for the stage graph. Settings is in the real app.</p>
+          <p class="demo-note">Preview — open a card, Settings, or a column Agent. Nothing writes to Polarion or Jira from this page.</p>
           <div class="app-frame" id="app">
             <header class="topbar">
               <div class="brand">
@@ -289,10 +306,10 @@
               </nav>
               <div class="topbar-meta">
                 <span class="wait-count is-pulling" id="pull-count">1 pulling</span>
-                <span class="wait-count" id="wait-count">1 waiting</span>
+                <span class="wait-count" id="wait-count">2 waiting</span>
                 <button type="button" class="chip is-active" data-view="board">Board</button>
                 <button type="button" class="chip" data-view="machine">Machine</button>
-                <button type="button" class="chip" id="settings-chip">Settings</button>
+                <button type="button" class="chip" data-view="settings" id="settings-chip">Settings</button>
                 <span class="user-name">admin</span>
               </div>
             </header>
@@ -301,9 +318,12 @@
               <div class="board-head">
                 <div>
                   <h1>Delivery</h1>
-                  <p>Each column is a workflow step. Cards follow the lines you draw. Column and row only place stages on the board.</p>
+                  <p>Urd, Verdandi, and Skuld each run a real agent. Polarion and Jira ride along as tools. You still confirm before a card moves.</p>
                 </div>
-                <button type="button" class="btn" data-view="machine">Edit state machine</button>
+                <div class="board-head-actions">
+                  <span class="chip repo-chip" title="Board git repo">github.com/acme/checkout</span>
+                  <button type="button" class="btn" data-view="machine">Edit state machine</button>
+                </div>
               </div>
               <div
                 class="board-grid"
@@ -319,11 +339,11 @@
                     <header class="column-head">
                       <div>
                         <h2>Urd</h2>
-                        <p>Human gate</p>
+                        <p>Cursor · Jira</p>
                       </div>
                       <div class="column-actions">
                         <span class="column-count" id="count-urd">1</span>
-                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
+                        <button type="button" class="btn btn-icon" data-agent="Urd" title="Configure agent">Agent</button>
                       </div>
                     </header>
                     <button type="button" class="add-toggle" id="add-toggle">Add card to this station</button>
@@ -345,20 +365,21 @@
                     <header class="column-head">
                       <div>
                         <h2>Verdandi</h2>
-                        <p>Human gate</p>
+                        <p>Cursor · Polarion</p>
                       </div>
                       <div class="column-actions">
-                        <span class="column-count" id="count-verdandi">1</span>
-                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
+                        <button type="button" class="btn btn-icon" data-agent="Verdandi" title="Configure agent">Agent</button>
                       </div>
                     </header>
                     <div id="verdandi-cards">
-                      <button type="button" class="card status-running" disabled>
+                      <button type="button" class="card status-running" id="card-polarion" data-open="polarion">
                         <div class="card-top">
-                          <strong>Webhook retry</strong>
+                          <strong>Define software requirements</strong>
                           <span class="status status-running">running</span>
                         </div>
-                        <div class="card-live is-wait" id="webhook-wait">Talking to the model · 0:32</div>
+                        <div class="card-ext">5E96-147</div>
+                        <p class="card-body">Cursor is searching Polarion and will open one Jira ticket if none exists.</p>
+                        <div class="card-live is-wait" id="webhook-wait">Attaching Polarion · 0:32</div>
                       </button>
                     </div>
                   </section>
@@ -368,14 +389,24 @@
                     <header class="column-head">
                       <div>
                         <h2>Skuld</h2>
-                        <p>Human gate</p>
+                        <p>Confirm writes</p>
                       </div>
                       <div class="column-actions">
-                        <span class="column-count">0</span>
-                        <button type="button" class="btn btn-icon" title="Configure agent" disabled>Agent</button>
+                        <span class="column-count" id="count-skuld">1</span>
+                        <button type="button" class="btn btn-icon" data-agent="Skuld" title="Configure agent">Agent</button>
                       </div>
                     </header>
-                    <div class="empty-col">No cards in this station.</div>
+                    <div id="skuld-cards">
+                      <button type="button" class="card status-waiting_tool_approval" id="card-write" data-open="write">
+                        <div class="card-top">
+                          <strong>Create one software requirement</strong>
+                          <span class="status status-waiting_tool_approval">confirm write</span>
+                        </div>
+                        <div class="card-ext">NOR-8</div>
+                        <p class="card-body">Write is queued until you confirm. Polarion will get one new item under 5E96-147.</p>
+                        <div class="card-live">Your turn — confirm this write before it runs</div>
+                      </button>
+                    </div>
                   </section>
                 </div>
               </div>
@@ -404,27 +435,78 @@
                       <button type="button" class="machine-node is-gated is-selected">
                         <span class="machine-node-order">C1 R1</span>
                         <strong>Urd</strong>
-                        <span>Human gate</span>
+                        <span>Cursor · Jira</span>
                       </button>
                       <button type="button" class="machine-node is-gated">
                         <span class="machine-node-order">C2 R1</span>
                         <strong>Verdandi</strong>
-                        <span>Human gate</span>
+                        <span>Polarion · Cursor</span>
                       </button>
-                      <button type="button" class="machine-node is-gated">
+                      <button type="button" class="machine-node is-gated is-confirm-writes">
                         <span class="machine-node-order">C3 R1</span>
                         <strong>Skuld</strong>
-                        <span>Human gate</span>
+                        <span>Confirm writes</span>
                       </button>
                       <button type="button" class="machine-terminal is-done">Done</button>
                     </div>
                   </div>
                   <aside class="panel machine-inspector">
                     <h2>Urd</h2>
-                    <p class="muted">Human gate. The agent writes a handoff and may recommend approve or reject. A person still confirms. Approve moves the card to Verdandi.</p>
-                    <p class="muted">Two default lines from one stage split into parallel tracks. Lines into one stage join those tracks.</p>
+                    <p class="muted">Cursor agent. Plugins: norns, jira. The agent writes a handoff and may recommend approve or reject. You still confirm.</p>
+                    <p class="muted">Verdandi attaches Polarion. Skuld queues Polarion writes until you press Confirm writes.</p>
                   </aside>
                 </div>
+              </div>
+            </div>
+
+            <div class="workspace" id="view-settings" hidden>
+              <div class="settings">
+                <div class="board-head">
+                  <div>
+                    <h1>Settings</h1>
+                    <p>Connect a model so columns run for real. Polarion, Jira, and GitHub unlock as tools on each Agent.</p>
+                  </div>
+                </div>
+                <section class="panel">
+                  <h2>Connectors</h2>
+                  <p class="muted">Active in this preview. Install norns-ide to save your own keys.</p>
+                  <div class="connector-row">
+                    <div>
+                      <strong>Cursor</strong>
+                      <div class="muted">auto · cloud agent</div>
+                    </div>
+                    <span class="is-active-text">active</span>
+                  </div>
+                  <div class="connector-row">
+                    <div>
+                      <strong>DeepSeek</strong>
+                      <div class="muted">deepseek-v4-flash</div>
+                    </div>
+                    <span class="is-active-text">active</span>
+                  </div>
+                  <div class="connector-row">
+                    <div>
+                      <strong>Polarion</strong>
+                      <div class="muted">testdrive.polarion.com · project 5E96</div>
+                    </div>
+                    <span class="is-active-text">active</span>
+                  </div>
+                  <div class="connector-row">
+                    <div>
+                      <strong>Jira</strong>
+                      <div class="muted">project NOR</div>
+                    </div>
+                    <span class="is-active-text">active</span>
+                  </div>
+                  <div class="connector-row">
+                    <div>
+                      <strong>GitHub</strong>
+                      <div class="muted">acme/checkout</div>
+                    </div>
+                    <span class="is-active-text">active</span>
+                  </div>
+                  <button type="button" class="btn" id="add-connector">Add connector</button>
+                </section>
               </div>
             </div>
 
@@ -450,6 +532,13 @@
                     <p><strong>DECISION:</strong> approve<br /><strong>REASON:</strong> Cookie helper is a local change with a clear test.</p>
                   </div>
                 </section>
+                <section>
+                  <h3>Links</h3>
+                  <div class="links">
+                    <span>Jira NOR-14</span>
+                    <span>GitHub acme/checkout</span>
+                  </div>
+                </section>
                 <section class="agent-decision is-approve">
                   <h3>Agent recommendation</h3>
                   <p class="handoff">Approve — cookie helper is a local change with a clear test.</p>
@@ -461,19 +550,102 @@
                 <button type="button" class="btn btn-danger" id="reject">Reject</button>
               </footer>
             </aside>
+
+            <aside class="drawer" id="drawer-polarion" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-polarion-title">
+              <header class="drawer-head">
+                <div>
+                  <p class="drawer-kicker">5E96-147</p>
+                  <h2 id="drawer-polarion-title">Define software requirements</h2>
+                </div>
+                <button type="button" class="btn btn-ghost" data-close-drawer>Close</button>
+              </header>
+              <div class="drawer-body">
+                <span class="status status-running">running</span>
+                <p class="notice wait-banner" role="status">
+                  <strong id="polarion-banner-title">Attaching Polarion · 0:32</strong>
+                  <span>Verdandi is on Cursor with Polarion and Jira attached. One Polarion section maps to one Jira ticket.</span>
+                  <span class="wait-track" aria-hidden="true"><i></i></span>
+                </p>
+                <section>
+                  <h3>Run log · Verdandi · Cursor · auto</h3>
+                  <div class="handoff">
+                    <p>Searching Polarion for type:softwarerequirement under 5E96-147.</p>
+                    <p>Jira already has NOR-6 for this section. Reuse it. Do not file NOR-8 as a second ticket.</p>
+                  </div>
+                </section>
+                <section>
+                  <h3>Links</h3>
+                  <div class="links">
+                    <span>Polarion 5E96-147</span>
+                    <span>Jira NOR-6</span>
+                  </div>
+                </section>
+              </div>
+            </aside>
+
+            <aside class="drawer" id="drawer-write" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-write-title">
+              <header class="drawer-head">
+                <div>
+                  <p class="drawer-kicker">NOR-8</p>
+                  <h2 id="drawer-write-title">Create one software requirement</h2>
+                </div>
+                <button type="button" class="btn btn-ghost" data-close-drawer>Close</button>
+              </header>
+              <div class="drawer-body">
+                <span class="status status-waiting_tool_approval">confirm write</span>
+                <section>
+                  <h3>Queued write</h3>
+                  <p class="handoff">polarion_create_workitem · type softwarerequirement · parent 5E96-147</p>
+                  <p class="muted">Confirm writes is on for Skuld. Nothing hits Polarion until you say so.</p>
+                </section>
+              </div>
+              <footer class="drawer-foot">
+                <button type="button" class="btn btn-primary" id="confirm-write">Confirm writes</button>
+                <button type="button" class="btn btn-ghost" data-close-drawer>Not now</button>
+              </footer>
+            </aside>
+
+            <aside class="drawer" id="drawer-agent" hidden role="dialog" aria-modal="true" aria-labelledby="agent-title">
+              <header class="drawer-head">
+                <div>
+                  <p class="drawer-kicker">Column agent</p>
+                  <h2 id="agent-title">Urd</h2>
+                </div>
+                <button type="button" class="btn btn-ghost" data-close-drawer>Close</button>
+              </header>
+              <div class="drawer-body">
+                <label class="field">
+                  Model
+                  <input class="input" value="auto · Cursor" readonly />
+                </label>
+                <p class="muted" id="agent-blurb">This column runs a real Cursor agent. Empty plugin list means no tools.</p>
+                <div class="field">
+                  <span>Plugins</span>
+                  <div class="tool-row" id="agent-tools">
+                    <label><input type="checkbox" checked disabled /> norns</label>
+                    <label><input type="checkbox" checked disabled /> jira</label>
+                    <label><input type="checkbox" disabled /> polarion</label>
+                    <label><input type="checkbox" disabled /> github</label>
+                  </div>
+                </div>
+              </div>
+              <footer class="drawer-foot">
+                <button type="button" class="btn btn-primary" data-close-drawer>Save</button>
+              </footer>
+            </aside>
           </div>
           <div class="caption-row">
             <div>
-              <strong>1. Agent runs</strong>
-              Isolated per column. Verdandi only sees the approved handoff from Urd — no chat memory.
+              <strong>1. Real agents</strong>
+              Each column calls Cursor or DeepSeek. Open Agent to pick the model and tools.
             </div>
             <div>
-              <strong>2. Human gate</strong>
-              The yellow card is waiting. Open it. The agent may recommend; you still confirm.
+              <strong>2. Polarion, Jira, GitHub</strong>
+              Connect them in Settings. The running card is on Polarion 5E96-147 right now.
             </div>
             <div>
-              <strong>3. Machine</strong>
-              Stages and lines are the workflow. Parallel split/join is drawn here, not implied by the board.
+              <strong>3. You still approve</strong>
+              Yellow cards wait. Confirm writes keeps Polarion quiet until you press the button.
             </div>
           </div>
         </section>
@@ -488,8 +660,9 @@
                 <li>Visual state machine, including parallel split and join</li>
                 <li>Human approve/reject gates; agent recommendation is advisory</li>
                 <li>Short recommend on board cards; live pulling wait; markdown handoff and journey in the drawer</li>
-                <li>OpenAI, Cursor, and DeepSeek as Settings model connectors</li>
-                <li>Jira, Polarion, and GitHub plugins; optional confirm-writes on a column</li>
+                <li>Connect Cursor, DeepSeek, or OpenAI so a column actually runs</li>
+                <li>Polarion, Jira, and GitHub as tools on the column Agent</li>
+                <li>Confirm writes: Polarion and Jira wait for you before they land</li>
                 <li>Production refuses <code>admin</code>/<code>admin</code> and requires secure cookies</li>
               </ul>
             </div>
@@ -537,20 +710,37 @@ norns run</pre>
       const app = document.getElementById('app');
       const boardView = document.getElementById('view-board');
       const machineView = document.getElementById('view-machine');
-      const drawer = document.getElementById('drawer');
+      const settingsView = document.getElementById('view-settings');
       const backdrop = document.getElementById('backdrop');
-      const card = document.getElementById('card-checkout');
+      const drawers = {
+        checkout: document.getElementById('drawer'),
+        polarion: document.getElementById('drawer-polarion'),
+        write: document.getElementById('drawer-write'),
+        agent: document.getElementById('drawer-agent'),
+      };
+      const cards = {
+        checkout: document.getElementById('card-checkout'),
+        polarion: document.getElementById('card-polarion'),
+        write: document.getElementById('card-write'),
+      };
       const waitCount = document.getElementById('wait-count');
       const pullCount = document.getElementById('pull-count');
       const webhookWait = document.getElementById('webhook-wait');
+      const polarionBanner = document.getElementById('polarion-banner-title');
       const urdCards = document.getElementById('urd-cards');
       const verdandiCards = document.getElementById('verdandi-cards');
       const countUrd = document.getElementById('count-urd');
       const countVerdandi = document.getElementById('count-verdandi');
-      const drawerClose = document.getElementById('drawer-close');
       let gateOpen = true;
+      let writeOpen = true;
       let lastFocus = null;
+      let activeDrawer = null;
       const waitStarted = Date.now() - 32_000;
+      const agents = {
+        Urd: { blurb: 'This column runs a Cursor agent with Jira. It files or reuses a ticket, then waits for you.', tools: ['norns', 'jira'] },
+        Verdandi: { blurb: 'Cursor plus Polarion. One Polarion section maps to one Jira ticket.', tools: ['norns', 'jira', 'polarion'] },
+        Skuld: { blurb: 'Polarion writes stay queued until you press Confirm writes.', tools: ['norns', 'polarion'] },
+      };
 
       function formatElapsed(ms) {
         const total = Math.max(0, Math.floor(ms / 1000));
@@ -561,23 +751,25 @@ norns run</pre>
 
       function waitTitle(ms) {
         if (ms >= 45_000) {
-          return 'Still pulling';
+          return 'Searching Polarion';
         }
         if (ms >= 20_000) {
-          return 'Talking to the model';
+          return 'Talking to Cursor';
         }
         if (ms >= 8_000) {
-          return 'Pulling tools';
+          return 'Attaching Polarion';
         }
         return 'Starting this stage';
       }
 
       function tickWait() {
-        if (!webhookWait) {
-          return;
+        const label = `${waitTitle(Date.now() - waitStarted)} · ${formatElapsed(Date.now() - waitStarted)}`;
+        if (webhookWait) {
+          webhookWait.textContent = label;
         }
-        const ms = Date.now() - waitStarted;
-        webhookWait.textContent = `${waitTitle(ms)} · ${formatElapsed(ms)}`;
+        if (polarionBanner) {
+          polarionBanner.textContent = label;
+        }
       }
       tickWait();
       setInterval(tickWait, 1000);
@@ -585,33 +777,45 @@ norns run</pre>
       function showView(name) {
         boardView.hidden = name !== 'board';
         machineView.hidden = name !== 'machine';
+        settingsView.hidden = name !== 'settings';
         document.querySelectorAll('[data-view]').forEach((btn) => {
           btn.classList.toggle('is-active', btn.dataset.view === name);
         });
-        if (name === 'machine') {
+        if (name !== 'board') {
           closeDrawer();
         }
       }
 
-      function drawerFocusables() {
-        return [...drawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(
-          (el) => !el.disabled && el.offsetParent !== null
-        );
-      }
-
-      function openDrawer() {
-        lastFocus = document.activeElement;
-        drawer.hidden = false;
+      function openPanel(el, card) {
+        const prev = document.activeElement;
+        closeDrawer(true);
+        lastFocus = prev;
+        el.hidden = false;
         backdrop.hidden = false;
-        card.classList.add('is-open');
-        drawerClose.focus();
+        activeDrawer = el;
+        if (card) {
+          card.classList.add('is-open');
+        }
+        const closeBtn = el.querySelector('[data-close-drawer], #drawer-close');
+        if (closeBtn) {
+          closeBtn.focus();
+        }
       }
 
-      function closeDrawer() {
-        drawer.hidden = true;
+      function closeDrawer(skipRestore) {
+        Object.values(drawers).forEach((el) => {
+          if (el) {
+            el.hidden = true;
+          }
+        });
         backdrop.hidden = true;
-        card.classList.remove('is-open');
-        if (lastFocus && typeof lastFocus.focus === 'function') {
+        Object.values(cards).forEach((el) => {
+          if (el) {
+            el.classList.remove('is-open');
+          }
+        });
+        activeDrawer = null;
+        if (!skipRestore && lastFocus && typeof lastFocus.focus === 'function') {
           lastFocus.focus();
         }
       }
@@ -630,86 +834,101 @@ norns run</pre>
         setTimeout(() => note.remove(), 2400);
       }
 
+      function openAgent(name) {
+        const spec = agents[name] || agents.Urd;
+        document.getElementById('agent-title').textContent = name;
+        document.getElementById('agent-blurb').textContent = spec.blurb;
+        document.querySelectorAll('#agent-tools input').forEach((input) => {
+          const tool = input.parentElement.textContent.trim();
+          input.checked = spec.tools.includes(tool);
+        });
+        openPanel(drawers.agent);
+      }
+
       document.querySelectorAll('[data-view]').forEach((btn) => {
         btn.addEventListener('click', () => showView(btn.dataset.view));
       });
-      card.addEventListener('click', () => {
+      document.querySelectorAll('[data-agent]').forEach((btn) => {
+        btn.addEventListener('click', () => openAgent(btn.dataset.agent));
+      });
+      cards.checkout.addEventListener('click', () => {
         if (gateOpen) {
-          openDrawer();
+          openPanel(drawers.checkout, cards.checkout);
         }
       });
-      document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+      cards.polarion.addEventListener('click', () => openPanel(drawers.polarion, cards.polarion));
+      cards.write.addEventListener('click', () => {
+        if (writeOpen) {
+          openPanel(drawers.write, cards.write);
+        }
+      });
+      document.querySelectorAll('[data-close-drawer], #drawer-close').forEach((btn) => {
+        btn.addEventListener('click', closeDrawer);
+      });
       backdrop.addEventListener('click', closeDrawer);
       document.addEventListener('keydown', (event) => {
-        if (drawer.hidden) {
+        if (!activeDrawer) {
           return;
         }
         if (event.key === 'Escape') {
           closeDrawer();
-          return;
-        }
-        if (event.key !== 'Tab') {
-          return;
-        }
-        const nodes = drawerFocusables();
-        if (!nodes.length) {
-          return;
-        }
-        const first = nodes[0];
-        const last = nodes[nodes.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
         }
       });
       document.getElementById('add-toggle').addEventListener('click', () => {
         toast('Preview only. Install norns-ide to add real cards.');
       });
-      document.getElementById('settings-chip').addEventListener('click', () => {
-        toast('Preview only. Install norns-ide to open Settings.');
+      document.getElementById('add-connector').addEventListener('click', () => {
+        toast('Preview only. Install norns-ide to save Cursor, Polarion, or Jira.');
       });
       document.getElementById('approve').addEventListener('click', () => {
         gateOpen = false;
         closeDrawer();
-        card.className = 'card status-running';
-        card.querySelector('.status').className = 'status status-running';
-        card.querySelector('.status').textContent = 'running';
-        const live = card.querySelector('.card-live');
+        cards.checkout.className = 'card status-running';
+        cards.checkout.querySelector('.status').className = 'status status-running';
+        cards.checkout.querySelector('.status').textContent = 'running';
+        const live = cards.checkout.querySelector('.card-live');
         live.classList.add('is-wait');
         live.textContent = 'Starting this stage · 0:00';
-        const ext = card.querySelector('.card-ext');
-        if (ext) {
-          ext.remove();
-        }
-        verdandiCards.appendChild(card);
+        verdandiCards.appendChild(cards.checkout);
         countUrd.textContent = String(urdCards.querySelectorAll('.card').length);
         countVerdandi.textContent = String(verdandiCards.querySelectorAll('.card').length);
-        waitCount.textContent = '0 waiting';
-        waitCount.classList.add('is-clear');
-        if (pullCount) {
-          pullCount.textContent = '2 pulling';
+        waitCount.textContent = writeOpen ? '1 waiting' : '0 waiting';
+        if (!writeOpen) {
+          waitCount.classList.add('is-clear');
         }
+        pullCount.textContent = '2 pulling';
         if (!urdCards.querySelector('.card')) {
           const empty = document.createElement('div');
           empty.className = 'empty-col';
           empty.textContent = 'No cards in this station.';
           urdCards.appendChild(empty);
         }
-        toast('Preview: approved. In the real app Verdandi would run next.');
+        toast('Approved. In the real app Verdandi would run next on Cursor.');
       });
       document.getElementById('reject').addEventListener('click', () => {
         gateOpen = false;
         closeDrawer();
-        card.className = 'card status-blocked';
-        card.querySelector('.status').className = 'status status-blocked';
-        card.querySelector('.status').textContent = 'blocked';
-        card.querySelector('.card-live').textContent = 'Blocked — run again when ready';
-        waitCount.textContent = '0 waiting';
-        waitCount.classList.add('is-clear');
-        toast('Preview: rejected. The card stays on Urd, blocked.');
+        cards.checkout.className = 'card status-blocked';
+        cards.checkout.querySelector('.status').className = 'status status-blocked';
+        cards.checkout.querySelector('.status').textContent = 'blocked';
+        cards.checkout.querySelector('.card-live').textContent = 'Blocked — run again when ready';
+        waitCount.textContent = writeOpen ? '1 waiting' : '0 waiting';
+        toast('Rejected. The card stays on Urd.');
+      });
+      document.getElementById('confirm-write').addEventListener('click', () => {
+        writeOpen = false;
+        closeDrawer();
+        cards.write.className = 'card status-running';
+        cards.write.querySelector('.status').className = 'status status-running';
+        cards.write.querySelector('.status').textContent = 'running';
+        cards.write.querySelector('.card-live').className = 'card-live is-wait';
+        cards.write.querySelector('.card-live').textContent = 'Writing to Polarion · 0:00';
+        waitCount.textContent = gateOpen ? '1 waiting' : '0 waiting';
+        if (!gateOpen) {
+          waitCount.classList.add('is-clear');
+        }
+        pullCount.textContent = gateOpen ? '2 pulling' : '2 pulling';
+        toast('Write confirmed. In the real app Polarion would create the item.');
       });
     </script>
   </body>
