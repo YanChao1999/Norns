@@ -20,7 +20,7 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 ## Docs / install leftovers
 
-- [x] **Pages install snippet** — `docs/index.html` install path is `uv tool install .` / `norns run` (not the old `cursor/v0.0.1-first-production` checkout).
+- [x] **Pages install snippet** — `docs/index.html` install path is PyPI / TestPyPI `norns-ide` for 0.0.2 (checkout `uv tool install .` remains as a fallback).
 - [ ] **Sample board / card** — optional seeded work so the first session is not an empty board.
 
 ## After first use / publish
