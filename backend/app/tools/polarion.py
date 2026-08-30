@@ -8,9 +8,9 @@ from ..models.connector import Connector, ConnectorType
 from .registry import RuntimeTool
 
 try:
-    import polarion as polarion_module
+    from polarion.polarion import Polarion as PolarionClient
 except Exception:  # pragma: no cover - optional dependency
-    polarion_module = None
+    PolarionClient = None
 
 
 WRITABLE_FIELDS = frozenset(
@@ -82,7 +82,8 @@ def polarion_provider(connectors: list[Connector]) -> list[RuntimeTool]:
                             "description": (
                                 "Search Polarion work items in the connector project. "
                                 "Empty query lists requirements (type:requirement). "
-                                "Then create a Norns card with norns_create_card using title, body=description, external_id=id."
+                                "Then create a Norns card with norns_create_card using title, body=description, external_id=id, "
+                                "or create a missing Polarion item with polarion create_workitem."
                             ),
                             "parameters": {
                                 "type": "object",
@@ -113,6 +114,41 @@ def polarion_provider(connectors: list[Connector]) -> list[RuntimeTool]:
                         },
                     },
                     execute=_make_get_workitem(connector),
+                ),
+                RuntimeTool(
+                    name=f"polarion_{suffix}_create_workitem",
+                    openai_tool={
+                        "type": "function",
+                        "function": {
+                            "name": f"polarion_{suffix}_create_workitem",
+                            "description": (
+                                "Create a Polarion work item in the connector project. "
+                                "Use type softwarerequirement or systemrequirement. "
+                                "Optional parent_id links the new item to a heading such as 5E96-147."
+                            ),
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "type": {
+                                        "type": "string",
+                                        "description": "Polarion type id, default softwarerequirement",
+                                    },
+                                    "parent_id": {
+                                        "type": "string",
+                                        "description": "Existing Polarion id to link, e.g. 5E96-147",
+                                    },
+                                    "link_role": {
+                                        "type": "string",
+                                        "description": "Link role when parent_id is set, default relates_to",
+                                    },
+                                },
+                                "required": ["title"],
+                            },
+                        },
+                    },
+                    execute=_make_create_workitem(connector),
                 ),
                 RuntimeTool(
                     name=f"polarion_{suffix}_add_comment",
@@ -184,18 +220,22 @@ def _connector_project(connector: Connector) -> str:
 
 
 def _polarion_client(connector: Connector) -> Any:
-    if polarion_module is None:
+    if PolarionClient is None:
         raise RuntimeError("polarion is not installed")
     config = connector.get_config()
-    polarion_ns = getattr(polarion_module, "polarion", polarion_module)
-    client_class = getattr(polarion_ns, "Polarion", None) or getattr(polarion_module, "Polarion", None)
-    if client_class is None:
-        raise RuntimeError("Installed polarion package does not expose a Polarion client")
-    return client_class(
-        config["server"],
-        config["username"],
-        config.get("password") or None,
-        token=config.get("token") or None,
+    server = str(config.get("server") or "").strip()
+    if not server:
+        raise ValueError("Set Server on the Polarion connector in Settings.")
+    username = str(config.get("username") or "").strip()
+    password = config.get("password") or None
+    token = config.get("token") or None
+    if not password and not token:
+        raise ValueError("Set a Polarion password or token on the connector in Settings.")
+    return PolarionClient(
+        server,
+        username,
+        password,
+        token=token,
     )
 
 
@@ -232,6 +272,37 @@ def _make_get_workitem(connector: Connector):
         def _call() -> dict[str, Any]:
             workitem = _polarion_project(connector).getWorkitem(arguments["workitem_id"])
             return workitem_payload(workitem)
+
+        try:
+            return await asyncio.to_thread(_call)
+        except Exception as exc:
+            return {"error": str(exc).split("response headers")[0].strip() or exc.__class__.__name__}
+
+    return execute
+
+
+def _make_create_workitem(connector: Connector):
+    async def execute(arguments: dict[str, Any]) -> Any:
+        def _call() -> dict[str, Any]:
+            title = str(arguments.get("title") or "").strip()
+            if not title:
+                raise ValueError("title is required")
+            workitem_type = str(arguments.get("type") or "softwarerequirement").strip() or "softwarerequirement"
+            description = str(arguments.get("description") or "").strip()
+            parent_id = str(arguments.get("parent_id") or "").strip()
+            link_role = str(arguments.get("link_role") or "relates_to").strip() or "relates_to"
+            project = _polarion_project(connector)
+            workitem = project.createWorkitem(workitem_type, new_workitem_fields={"title": title})
+            if description and hasattr(workitem, "setDescription"):
+                workitem.setDescription(description)
+            if parent_id:
+                parent = project.getWorkitem(parent_id)
+                workitem.addLinkedItem(parent, link_role)
+            payload = workitem_payload(workitem)
+            if parent_id:
+                payload["parent_id"] = parent_id
+                payload["link_role"] = link_role
+            return payload
 
         try:
             return await asyncio.to_thread(_call)

@@ -151,6 +151,41 @@ async def test_execute_agent_uses_cursor_cloud_agent_for_native_host(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_cursor_confirm_writes_passes_cli_flags(monkeypatch):
+    seen: dict[str, object] = {}
+
+    async def fake_cursor(**kwargs):
+        seen.update(kwargs)
+        return "queued\nDECISION: approve\nREASON: waiting"
+
+    monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
+    await _execute_agent(
+        SimpleNamespace(openai_api_key=""),
+        SimpleNamespace(id="card-1", board_id="board-1", title="Work", body="Do it", runs=[]),
+        SimpleNamespace(
+            id="stage-1",
+            name="Urd",
+            require_approval=True,
+            confirm_writes=True,
+            agent_config=SimpleNamespace(
+                tool_allowlist=["norns", "jira"], system_prompt="Urd", model="auto", temperature=0.7
+            ),
+        ),
+        [],
+        api_key="crsr_test",
+        base_url="https://api.cursor.com/v1",
+        default_model="auto",
+        provider="cursor",
+        run_id="run-22",
+        confirm_writes=True,
+    )
+    args = seen["mcp_servers"]["norns"]["args"]
+    assert "--confirm-writes" in args
+    assert args[args.index("--run-id") + 1] == "run-22"
+    assert seen["mcp_servers"]["norns"]["env"]["NORNS_CONFIRM_WRITES"] == "1"
+
+
+@pytest.mark.asyncio
 async def test_openai_tool_loop_continues_after_empty_search():
     calls: list[dict[str, object]] = []
 
@@ -302,6 +337,32 @@ async def test_execute_agent_includes_work_instruction(monkeypatch):
     assert WORK_INSTRUCTION.split(".")[0] in prompt
     assert "do not defer" in prompt.lower() or "Do not defer" in prompt
     assert "Empty search results" in prompt
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_does_not_send_openai_key_to_cursor(monkeypatch):
+    called = {"cursor": False}
+
+    async def fake_cursor(**kwargs):
+        called["cursor"] = True
+        del kwargs
+        return "should not run"
+
+    monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
+    text, tools, handoff = await _execute_agent(
+        SimpleNamespace(openai_api_key="sk-openai", openai_base_url="https://api.openai.com/v1"),
+        SimpleNamespace(id="card-1", board_id="board-1", title="Work", body="Do it", runs=[]),
+        SimpleNamespace(id="stage-1", name="Urd", require_approval=True, agent_config=None),
+        [],
+        api_key="",
+        base_url="https://api.cursor.com/v1",
+        default_model="auto",
+        provider="cursor",
+    )
+    assert called["cursor"] is False
+    assert tools == []
+    assert handoff["placeholder"] is True
+    assert "practice run" in text.lower()
 
 
 @pytest.mark.asyncio

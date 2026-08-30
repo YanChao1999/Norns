@@ -14,6 +14,7 @@ import {
   llmLabel,
   pluginsSnapshot,
   runsForStage,
+  safeHttpUrl,
   stageName
 } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
@@ -21,6 +22,7 @@ import { PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { AgentRun, BoardDetail, Card } from '../types';
 import { Dialog } from './Dialog';
+import { MarkdownPreview } from './MarkdownPreview';
 import { WaitLive } from './WaitLive';
 
 interface Props {
@@ -44,7 +46,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
     enabled: Boolean(card),
     queryKey: ['runs', card?.id],
     queryFn: () => apiClient.get<AgentRun[]>(`/cards/${card?.id}/runs`),
-    refetchInterval: card?.status === 'running' ? 2000 : false
+    refetchInterval: card?.status === 'running' || card?.status === 'waiting_tool_approval' ? 2000 : false
   });
 
   useEffect(() => {
@@ -96,12 +98,10 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
     },
-    onError: (error) => {
+    onError: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
-      if (!runErrorMessage(error).includes('already running')) {
-        setRunStarted(false);
-      }
+      setRunStarted(false);
     }
   });
 
@@ -115,15 +115,15 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
   const currentStageRuns = runsForStage(runs, currentStageId);
   const latestCurrentRun = currentStageRuns.length ? currentStageRuns[currentStageRuns.length - 1] : undefined;
   const previousCurrentRun = currentStageRuns.length > 1 ? currentStageRuns[currentStageRuns.length - 2] : null;
-  const handoffRun = latestFinalizedForStage(runs, currentStageId);
-  const handoff = (handoffRun?.handoff ?? {}) as Handoff;
-  const plantuml = diagramSvg(handoff);
   const inProgress = card.status === 'running' || runStarted;
   const canRun = (card.status === 'idle' || card.status === 'blocked') && !runStarted;
   const waiting = card.status === 'waiting_approval';
   const waitingWrites = card.status === 'waiting_tool_approval';
-  const pendingWrites = pendingWriteCalls(latestCurrentRun);
   const joining = card.status === 'waiting_join';
+  const handoffRun = waitingWrites ? (latestCurrentRun ?? latestFinalizedForStage(runs, currentStageId)) : latestFinalizedForStage(runs, currentStageId);
+  const handoff = (handoffRun?.handoff ?? {}) as Handoff;
+  const plantuml = diagramSvg(handoff);
+  const pendingWrites = pendingWriteCalls(latestCurrentRun);
   const placeholderRun = isPlaceholderRun(handoffRun ?? latestCurrentRun);
   const summary = handoffSummary(handoffRun);
   const links = Array.isArray(handoff.links) ? handoff.links : [];
@@ -202,7 +202,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
 
         <section>
           <h3>Card body</h3>
-          <p className="handoff">{card.body || 'No markdown body provided.'}</p>
+          {card.body.trim() ? <MarkdownPreview source={card.body} /> : <p className="muted">No markdown body provided.</p>}
         </section>
 
         <section>
@@ -210,7 +210,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
             Current handoff · {currentStageLabel}
             {llm ? ` · ${llm}` : ''}
           </h3>
-          {summary ? <p className="handoff">{summary}</p> : <p className="muted">No stage run yet for this station. Run it to produce a handoff.</p>}
+          {summary ? <MarkdownPreview source={summary} /> : <p className="muted">No stage run yet for this station. Run it to produce a handoff.</p>}
         </section>
 
         {waitingWrites ? (
@@ -235,7 +235,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               {recommendationReason ? ` — ${recommendationReason}` : ''}
             </p>
             <p className="muted">Advisory only. A human still has to confirm before the card moves.</p>
-            {reasonCompare === 'same' ? (
+            {reasonCompare === 'same' && /jira/i.test(recommendationReason) ? (
               <p className="notice" role="status">
                 Same {recommendation} reason as the previous run on this column. Enabling jira on this column Agent (and an active Jira connector) is required
                 before a rerun can create a ticket.
@@ -253,11 +253,16 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
           <section>
             <h3>Links</h3>
             <div className="links">
-              {links.map((link) => (
-                <a key={link} href={link} target="_blank" rel="noreferrer">
-                  {link}
-                </a>
-              ))}
+              {links.map((link) => {
+                const href = safeHttpUrl(link);
+                return href ? (
+                  <a key={link} href={href} target="_blank" rel="noreferrer">
+                    {link}
+                  </a>
+                ) : (
+                  <span key={link}>{link}</span>
+                );
+              })}
             </div>
           </section>
         ) : null}
@@ -268,7 +273,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               Run log · {currentStageLabel}
               {llm ? ` · ${llm}` : ''}
             </h3>
-            <pre className="log">{latestCurrentRun.model_output}</pre>
+            {latestCurrentRun.model_output.trim() ? <MarkdownPreview source={latestCurrentRun.model_output} /> : <p className="muted">No model output.</p>}
           </section>
         ) : null}
 
@@ -291,6 +296,8 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
           </details>
         ) : null}
         {runMutation.isError ? <div className="error">{runErrorMessage(runMutation.error)}</div> : null}
+        {writeMutation.isError ? <div className="error">{runErrorMessage(writeMutation.error)}</div> : null}
+        {approvalMutation.isError ? <div className="error">{runErrorMessage(approvalMutation.error)}</div> : null}
       </div>
 
       <footer className="drawer-foot">
@@ -343,17 +350,18 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
         ) : null}
         {joining ? <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span> : null}
         {inProgress ? <WaitLive startedAt={latestCurrentRun?.created_at ?? card.updated_at} variant="footer" /> : null}
-        {!canRun && !waiting && !joining && !inProgress ? <span className="muted">No gate action on this card.</span> : null}
+        {!canRun && !waiting && !waitingWrites && !joining && !inProgress ? <span className="muted">No gate action on this card.</span> : null}
       </footer>
     </Dialog>
   );
 }
 
 function JourneyStageDetail({ stageId, board, runs }: { stageId: string; board?: BoardDetail; runs: AgentRun[] }) {
-  const finalized = runs.find(isFinalizedRun) ?? null;
+  const ordered = runsForStage(runs, stageId);
+  const finalized = latestFinalizedForStage(ordered, stageId);
   const summary = handoffSummary(finalized);
   const plantuml = finalized ? diagramSvg((finalized.handoff ?? {}) as Handoff) : undefined;
-  const latest = runs[0];
+  const latest = ordered.length ? ordered[ordered.length - 1] : undefined;
 
   return (
     <div className="journey-detail">
@@ -361,7 +369,7 @@ function JourneyStageDetail({ stageId, board, runs }: { stageId: string; board?:
         {stageName(board, stageId)}
         {finalized ? ` · ${formatRunTime(finalized.completed_at ?? finalized.created_at)}` : ''}
       </p>
-      {summary ? <p className="handoff">{summary}</p> : <p className="muted">No handoff for this stage.</p>}
+      {summary ? <MarkdownPreview source={summary} /> : <p className="muted">No handoff for this stage.</p>}
       {plantuml ? (
         <iframe
           sandbox=""

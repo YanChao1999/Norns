@@ -24,7 +24,10 @@ export function Board({ boardId, onEditMachine }: Props) {
   const { data: board, isLoading } = useQuery({
     queryKey: ['board', boardId],
     queryFn: () => apiClient.get<BoardDetail>(`/boards/${boardId}`),
-    refetchInterval: (query) => (query.state.data?.cards.some((card) => card.status === 'running' || card.status === 'waiting_join') ? 2000 : false)
+    refetchInterval: (query) =>
+      query.state.data?.cards.some((card) => card.status === 'running' || card.status === 'waiting_join' || card.status === 'waiting_tool_approval')
+        ? 2000
+        : false
   });
 
   const cardsByStage = useMemo(() => {

@@ -13,7 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from ..database import AsyncSessionLocal
 from ..faults import mcp_error_if_injected
 from ..models import AgentRun
-from .base import PluginContext, ToolSpec
+from .base import PluginContext, ToolSpec, apply_run_ids
 from .catalog import dump_mcp_tool_result, load_plugin_catalog_from_db
 from .tool_policy import is_write_tool
 
@@ -23,6 +23,8 @@ async def serve_stdio(
     *,
     stdin: TextIO | None = None,
     stdout: TextIO | None = None,
+    confirm_writes: bool = False,
+    run_id: str = "",
 ) -> None:
     catalog = await load_plugin_catalog_from_db()
     allowlist = plugin_names or [plugin.name for plugin in catalog.plugins if plugin.builtin]
@@ -43,7 +45,14 @@ async def serve_stdio(
             message = json.loads(line)
         except json.JSONDecodeError:
             continue
-        response = await _handle(message, tools, tool_map)
+        response = await _handle(
+            message,
+            tools,
+            tool_map,
+            context,
+            confirm_writes=confirm_writes,
+            run_id=run_id,
+        )
         if response is None:
             continue
         writer.write(json.dumps(response) + "\n")
@@ -67,7 +76,13 @@ def _stdio_plugin_context(catalog: Any) -> PluginContext:
 
 
 async def _handle(
-    message: dict[str, Any], tools: list[ToolSpec], tool_map: dict[str, ToolSpec]
+    message: dict[str, Any],
+    tools: list[ToolSpec],
+    tool_map: dict[str, ToolSpec],
+    context: PluginContext | None = None,
+    *,
+    confirm_writes: bool = False,
+    run_id: str = "",
 ) -> dict[str, Any] | None:
     method = str(message.get("method") or "")
     request_id = message.get("id")
@@ -90,6 +105,7 @@ async def _handle(
     if method == "tools/call":
         name = str(params.get("name") or "")
         arguments = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        arguments = apply_run_ids(arguments, context)
         tool = tool_map.get(name)
         if tool is None:
             return _ok(
@@ -103,8 +119,8 @@ async def _handle(
             injected = mcp_error_if_injected(name)
             if injected is not None:
                 result = injected
-            elif str(os.environ.get("NORNS_CONFIRM_WRITES") or "") == "1" and is_write_tool(name):
-                result = await _queue_pending_write(name, arguments)
+            elif _writes_need_confirmation(confirm_writes) and is_write_tool(name):
+                result = await _queue_pending_write(name, arguments, run_id=run_id)
             else:
                 result = await tool.execute(arguments)
             text = dump_mcp_tool_result(result)
@@ -122,17 +138,24 @@ async def _handle(
     }
 
 
+def _writes_need_confirmation(confirm_writes: bool = False) -> bool:
+    if confirm_writes:
+        return True
+    flag = str(os.environ.get("NORNS_CONFIRM_WRITES") or "").strip().lower()
+    return flag in {"1", "true", "yes", "on"}
+
+
 def _ok(request_id: Any, result: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
-async def _queue_pending_write(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    run_id = str(os.environ.get("NORNS_RUN_ID") or "").strip()
-    if not run_id:
+async def _queue_pending_write(name: str, arguments: dict[str, Any], *, run_id: str = "") -> dict[str, Any]:
+    resolved_run_id = str(run_id or os.environ.get("NORNS_RUN_ID") or "").strip()
+    if not resolved_run_id:
         return {"error": "Write confirmation is enabled but NORNS_RUN_ID is missing"}
     payload = {"name": name, "arguments": arguments, "status": "pending_approval"}
     async with AsyncSessionLocal() as session:
-        run = await session.get(AgentRun, run_id)
+        run = await session.get(AgentRun, resolved_run_id)
         if run is None:
             return {"error": "Stage run not found for write confirmation"}
         inputs = dict(run.inputs or {})

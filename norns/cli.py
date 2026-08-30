@@ -38,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Comma-separated plugin ids (norns,github,jira,polarion). Empty = all built-ins.",
     )
+    mcp_parser.add_argument("--confirm-writes", action="store_true")
+    mcp_parser.add_argument("--run-id", default="")
 
     args = parser.parse_args(argv)
     home = (args.home or default_home()).expanduser().resolve()
@@ -74,7 +76,14 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Norns home not initialized at {home}. Run: norns init", file=sys.stderr)
                 return 1
         names = [part.strip() for part in str(getattr(args, "plugins", "") or "").split(",") if part.strip()]
-        argv_mcp = ["--plugins", ",".join(names)] if names else []
+        argv_mcp: list[str] = []
+        if names:
+            argv_mcp.extend(["--plugins", ",".join(names)])
+        if getattr(args, "confirm_writes", False):
+            argv_mcp.append("--confirm-writes")
+        run_id = str(getattr(args, "run_id", "") or "").strip()
+        if run_id:
+            argv_mcp.extend(["--run-id", run_id])
         return mcp_main(argv_mcp)
 
     parser.print_help()

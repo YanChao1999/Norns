@@ -13,9 +13,11 @@ import {
   llmLabel,
   pluginsSnapshot,
   runDecision,
+  safeHttpUrl,
   stageName
 } from '../cardJourney';
 import { Handoff } from '../gateLabels';
+import { MarkdownPreview } from './MarkdownPreview';
 import { AgentRun, BoardDetail, Card } from '../types';
 
 interface Props {
@@ -130,17 +132,22 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
                     : ''}
                 </p>
                 {summary && summary !== decision.reason ? (
-                  <p className="handoff">{summary}</p>
+                  <MarkdownPreview source={summary} />
                 ) : !decision.reason ? (
                   <p className="muted">No handoff summary.</p>
                 ) : null}
                 {links.length ? (
                   <div className="links">
-                    {links.map((link) => (
-                      <a key={link} href={link} target="_blank" rel="noreferrer">
-                        {link}
-                      </a>
-                    ))}
+                    {links.map((link) => {
+                      const href = safeHttpUrl(link);
+                      return href ? (
+                        <a key={link} href={href} target="_blank" rel="noreferrer">
+                          {link}
+                        </a>
+                      ) : (
+                        <span key={link}>{link}</span>
+                      );
+                    })}
                   </div>
                 ) : null}
                 {plantuml ? (
@@ -154,7 +161,7 @@ export function CardHistory({ card, board, onBack, onOpenCard }: Props) {
                 {run.model_output ? (
                   <details className="disclosure">
                     <summary>Full run log</summary>
-                    <pre className="log">{run.model_output}</pre>
+                    <MarkdownPreview source={run.model_output} />
                   </details>
                 ) : null}
                 {run.tool_calls?.length ? (

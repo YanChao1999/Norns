@@ -1,3 +1,4 @@
+import { cardFaceSummary } from '../cardPreview';
 import { Card } from '../types';
 import { STATUS_LABEL } from '../status';
 import { WaitLive } from './WaitLive';
@@ -10,6 +11,10 @@ interface Props {
 }
 
 export function CardItem({ card, isOpen, isParallelLane = false, onOpen }: Props) {
+  const summary = cardFaceSummary(card.body, {
+    recommendation: card.recommendation,
+    reason: card.recommendation_reason
+  });
   return (
     <button type="button" className={`card status-${card.status}${isOpen ? ' is-open' : ''}`} onClick={() => onOpen(card)}>
       <div className="card-top">
@@ -17,6 +22,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, onOpen }: Props
         <span className={`status status-${card.status}`}>{STATUS_LABEL[card.status]}</span>
       </div>
       {card.external_id ? <div className="card-ext">{card.external_id}</div> : null}
+      {summary ? <p className="card-body">{summary}</p> : null}
       {card.status === 'running' ? <WaitLive startedAt={card.updated_at} /> : null}
       {card.status === 'waiting_approval' ? <div className="card-live">Your turn — confirm the agent&apos;s approve or reject</div> : null}
       {card.status === 'waiting_tool_approval' ? <div className="card-live">Your turn — confirm this write before it runs</div> : null}

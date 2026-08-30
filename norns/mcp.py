@@ -15,9 +15,15 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Comma-separated plugin ids (norns,github,jira,polarion). Empty = all built-ins.",
     )
+    parser.add_argument(
+        "--confirm-writes",
+        action="store_true",
+        help="Queue Jira/GitHub/Polarion/Norns writes until the Control Room confirms them.",
+    )
+    parser.add_argument("--run-id", default="", help="Agent run id used to queue pending writes.")
     args = parser.parse_args(argv)
     names = [part.strip() for part in str(args.plugins).split(",") if part.strip()]
-    asyncio.run(serve_stdio(names))
+    asyncio.run(serve_stdio(names, confirm_writes=args.confirm_writes, run_id=str(args.run_id or "").strip()))
     return 0
 
 

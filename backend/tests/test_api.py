@@ -133,6 +133,55 @@ def test_card_update_cannot_bypass_gates():
     asyncio.run(engine.dispose())
 
 
+def test_board_cards_include_latest_recommendation():
+    from datetime import datetime, timezone
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from backend.app.models import AgentRun
+
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post("/api/boards", json={"name": "Platform"}).json()
+        stage_id = board["stages"][0]["id"]
+        card = client.post(
+            f"/api/boards/{board['id']}/cards",
+            json={"title": "Polarion", "body": "## Urd handoff\n\n| Action | Result |\n|---|---|\n| search | failed |\n"},
+        ).json()
+
+        async def insert_run() -> None:
+            SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+            async with SessionLocal() as session:
+                session.add(
+                    AgentRun(
+                        card_id=card["id"],
+                        stage_id=stage_id,
+                        inputs={},
+                        tool_calls=[],
+                        model_output="## Urd handoff\n\n| Action | Result |\n",
+                        handoff={
+                            "summary": "## Urd handoff\n\n| Action | Result |\n|---|---|\n| Polarion search | Failed |\n",
+                            "recommendation": "reject",
+                            "recommendation_reason": "Polarion client is broken.",
+                        },
+                        status="completed",
+                        completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                    )
+                )
+                await session.commit()
+
+        asyncio.run(insert_run())
+        detail = client.get(f"/api/boards/{board['id']}").json()
+        listed = next(item for item in detail["cards"] if item["id"] == card["id"])
+        assert listed["recommendation"] == "reject"
+        assert listed["recommendation_reason"] == "Polarion client is broken."
+        assert listed["body"].startswith("## Urd handoff")
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
 def test_stage_machine_crud_and_guards():
     client, engine = _make_client()
     with client:

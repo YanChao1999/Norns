@@ -34,12 +34,12 @@ class ToolRegistry:
         if not allowlist:
             return []
         selected: list[RuntimeTool] = []
-        normalized_allowlist = set(allowlist)
+        normalized_allowlist = {str(name).strip().lower() for name in allowlist if str(name).strip()}
         plugin_context = context or PluginContext(connectors=connectors)
         if not plugin_context.connectors:
             plugin_context.connectors = connectors
         for provider_name, provider in self._providers.items():
-            if provider_name not in normalized_allowlist:
+            if provider_name.lower() not in normalized_allowlist:
                 continue
             selected.extend(_call_provider(provider, connectors, plugin_context))
         return selected

@@ -16,11 +16,10 @@ export function diagramSvg(handoff: Handoff): string | undefined {
 }
 
 export function isFinalizedRun(run: AgentRun): boolean {
-  if (run.status === 'completed' || run.status === 'failed' || Boolean(run.completed_at)) {
-    return true;
+  if (run.status === 'running' || run.status === 'pending' || run.status === 'waiting_tool') {
+    return false;
   }
-  const handoff = (run.handoff ?? {}) as Handoff;
-  return Boolean(handoff.summary || diagramSvg(handoff) || (Array.isArray(handoff.links) && handoff.links.length));
+  return run.status === 'completed' || run.status === 'failed' || Boolean(run.completed_at);
 }
 
 export function stageName(board: BoardDetail | undefined, stageId: string): string {
@@ -41,7 +40,25 @@ export function runsForStage(runs: AgentRun[], stageId: string): AgentRun[] {
 }
 
 export function latestFinalizedForStage(runs: AgentRun[], stageId: string): AgentRun | null {
-  return runs.filter((run) => run.stage_id === stageId).find(isFinalizedRun) ?? null;
+  const stageRuns = runsForStage(runs, stageId);
+  for (let index = stageRuns.length - 1; index >= 0; index -= 1) {
+    if (isFinalizedRun(stageRuns[index])) {
+      return stageRuns[index];
+    }
+  }
+  return null;
+}
+
+export function safeHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      return value;
+    }
+  } catch {
+    /* not an absolute URL */
+  }
+  return null;
 }
 
 export function handoffSummary(run: AgentRun | null | undefined): string {
@@ -133,8 +150,9 @@ export function buildJourney(card: Card, board: BoardDetail | undefined, runs: A
   const stages = orderedStages(board);
   const currentId = card.current_stage_id ?? '';
   const currentIndex = stages.findIndex((stage) => stage.id === currentId);
+  const current = currentIndex >= 0 ? stages[currentIndex] : undefined;
 
-  return stages.map((stage, index) => {
+  return stages.map((stage) => {
     const stageRuns = runsForStage(runs, stage.id);
     const latestRun = stageRuns.length ? stageRuns[stageRuns.length - 1] : null;
     let state: JourneyStepState = 'pending';
@@ -147,11 +165,11 @@ export function buildJourney(card: Card, board: BoardDetail | undefined, runs: A
       } else {
         state = 'current';
       }
-    } else if (latestRun?.status === 'failed' && (currentIndex < 0 || index < currentIndex)) {
+    } else if (latestRun?.status === 'failed' && (currentIndex < 0 || (current && stage.order < current.order))) {
       state = 'failed';
-    } else if (stageRuns.some((run) => run.status === 'completed' || isFinalizedRun(run))) {
+    } else if (stageRuns.some((run) => run.status === 'completed')) {
       state = 'done';
-    } else if (currentIndex >= 0 && index < currentIndex) {
+    } else if (current && stage.order < current.order) {
       state = 'done';
     } else if (latestRun?.status === 'running') {
       state = 'running';

@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..card_preview import latest_recommendation
 from ..database import get_session
 from ..models import AgentConfig, Board, Card, Stage, StageTransition
 from ..orchestrator.state_machine import TRANSITIONS, CardStatus
@@ -53,6 +54,27 @@ class CardRead(BaseModel):
     current_stage_id: str | None = None
     parent_card_id: str | None = None
     status: str
+    recommendation: str | None = None
+    recommendation_reason: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def attach_latest_recommendation(cls, data: Any) -> Any:
+        if not isinstance(data, Card):
+            return data
+        recommendation, reason = latest_recommendation(data)
+        return {
+            "id": data.id,
+            "board_id": data.board_id,
+            "title": data.title,
+            "body": data.body,
+            "external_id": data.external_id,
+            "current_stage_id": data.current_stage_id,
+            "parent_card_id": data.parent_card_id,
+            "status": data.status,
+            "recommendation": recommendation,
+            "recommendation_reason": reason,
+        }
 
 
 class TransitionRead(BaseModel):
@@ -500,7 +522,7 @@ async def _load_board(session: AsyncSession, board_id: str) -> Board | None:
         .where(Board.id == board_id)
         .options(
             selectinload(Board.stages).selectinload(Stage.agent_config),
-            selectinload(Board.cards),
+            selectinload(Board.cards).selectinload(Card.runs),
             selectinload(Board.transitions),
         )
     )

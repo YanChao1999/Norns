@@ -7,28 +7,14 @@ from sqlalchemy.orm import selectinload
 
 from ..database import AsyncSessionLocal
 from ..models import AgentConfig, Board, Card, Stage, StageTransition
-from .base import Plugin, PluginContext, ToolSpec
+from .base import Plugin, PluginContext, ToolSpec, apply_run_ids
 
 OBJECT = {"type": "object", "properties": {}}
 
 
-def _apply_run_ids(arguments: dict[str, Any], context: PluginContext | None) -> dict[str, Any]:
-    """Fill board/card/stage ids from the MCP/stage run when the model omits them."""
-    if context is None:
-        return dict(arguments)
-    merged = dict(arguments)
-    if not str(merged.get("board_id") or "").strip() and context.board_id:
-        merged["board_id"] = context.board_id
-    if not str(merged.get("card_id") or "").strip() and context.card_id:
-        merged["card_id"] = context.card_id
-    if not str(merged.get("stage_id") or "").strip() and context.stage_id:
-        merged["stage_id"] = context.stage_id
-    return merged
-
-
 def _bind(execute, context: PluginContext, *, with_context: bool = False, apply_ids: bool = True):
     async def bound(arguments: dict[str, Any]) -> Any:
-        args = _apply_run_ids(arguments, context) if apply_ids else dict(arguments)
+        args = apply_run_ids(arguments, context) if apply_ids else dict(arguments)
         if with_context:
             return await execute(args, context)
         return await execute(args)

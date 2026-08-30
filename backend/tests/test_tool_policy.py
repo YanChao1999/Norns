@@ -8,6 +8,8 @@ def test_write_tool_detection():
     assert is_write_tool("github_work_gh_open_pr")
     assert is_write_tool("norns_update_card")
     assert is_write_tool("norns_create_card")
+    assert is_write_tool("polarion_polarion_create_workitem")
+    assert is_write_tool("polarion_polarion_add_comment")
     assert not is_write_tool("jira_jira_search_issues")
     assert not is_write_tool("jira_jira_get_issue")
     assert not is_write_tool("norns_list_cards")

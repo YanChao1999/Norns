@@ -118,6 +118,7 @@ def cursor_mcp_servers(
     *,
     extra_env: Mapping[str, str] | None = None,
     cwd: str | None = None,
+    confirm_writes: bool = False,
 ) -> dict[str, Any]:
     """Cursor SDK mcp_servers mapping for the stage allowlist."""
     catalog = load_plugin_catalog(connectors)
@@ -125,7 +126,9 @@ def cursor_mcp_servers(
     servers: dict[str, Any] = {}
     builtin_names = [plugin.name for plugin in selected if plugin.builtin or not isinstance(plugin, ExternalMcpPlugin)]
     if builtin_names:
-        servers["norns"] = _stdio_norns_mcp(builtin_names, extra_env=extra_env, cwd=cwd)
+        servers["norns"] = _stdio_norns_mcp(builtin_names, extra_env=extra_env, cwd=cwd, confirm_writes=confirm_writes)
+    if confirm_writes:
+        return servers
     for plugin in selected:
         if not isinstance(plugin, ExternalMcpPlugin):
             continue
@@ -136,27 +139,100 @@ def cursor_mcp_servers(
             servers[plugin.name] = {
                 "command": launch["command"],
                 "args": launch.get("args") or [],
-                "env": _stdio_env(launch.get("env"), extra_env),
+                "env": _stdio_env(launch.get("env"), extra_env, inherit_norns=False),
                 "cwd": cwd or None,
             }
     return servers
 
 
 def _stdio_norns_mcp(
-    plugin_names: list[str], *, extra_env: Mapping[str, str] | None = None, cwd: str | None = None
+    plugin_names: list[str],
+    *,
+    extra_env: Mapping[str, str] | None = None,
+    cwd: str | None = None,
+    confirm_writes: bool = False,
 ) -> dict[str, Any]:
+    args = ["-m", "norns.mcp", "--plugins", ",".join(plugin_names)]
+    run_id = str((extra_env or {}).get("NORNS_RUN_ID") or "").strip()
+    if confirm_writes:
+        args.append("--confirm-writes")
+        if run_id:
+            args.extend(["--run-id", run_id])
     payload: dict[str, Any] = {
         "command": sys.executable,
-        "args": ["-m", "norns.mcp", "--plugins", ",".join(plugin_names)],
-        "env": _stdio_env(None, extra_env),
+        "args": args,
+        "env": _stdio_env(None, extra_env, inherit_norns=True),
     }
+    if confirm_writes:
+        payload["env"]["NORNS_CONFIRM_WRITES"] = "1"
     if cwd:
         payload["cwd"] = cwd
     return payload
 
 
-def _stdio_env(launch_env: Mapping[str, Any] | None, extra_env: Mapping[str, str] | None) -> dict[str, str]:
-    env = {key: value for key, value in os.environ.items() if value is not None}
+_NORNS_MCP_ENV_KEYS = frozenset(
+    {
+        "DATABASE_URL",
+        "ENCRYPTION_KEY",
+        "SECRET_KEY",
+        "NORNS_HOME",
+        "NORNS_ENV",
+        "QUEUE_BACKEND",
+        "SESSION_COOKIE_SECURE",
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "PYTHONNOUSERSITE",
+        "SSL_CERT_FILE",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+    }
+)
+
+_EXTERNAL_MCP_ENV_KEYS = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "VIRTUAL_ENV",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "NPM_CONFIG_CACHE",
+        "npm_config_cache",
+    }
+)
+
+
+def _filtered_process_env(allowed: frozenset[str]) -> dict[str, str]:
+    env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if value is None:
+            continue
+        if key in allowed or key.startswith("NORNS_"):
+            env[key] = value
+    return env
+
+
+def _stdio_env(
+    launch_env: Mapping[str, Any] | None,
+    extra_env: Mapping[str, str] | None,
+    *,
+    inherit_norns: bool,
+) -> dict[str, str]:
+    env = _filtered_process_env(_NORNS_MCP_ENV_KEYS if inherit_norns else _EXTERNAL_MCP_ENV_KEYS)
     if launch_env:
         env.update({str(key): str(value) for key, value in launch_env.items() if value is not None})
     if extra_env:

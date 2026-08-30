@@ -36,6 +36,20 @@ class ToolSpec:
         }
 
 
+def apply_run_ids(arguments: dict[str, Any], context: PluginContext | None) -> dict[str, Any]:
+    """Fill board/card/stage ids from the MCP/stage run when the model omits them."""
+    if context is None:
+        return dict(arguments)
+    merged = dict(arguments)
+    if not str(merged.get("board_id") or "").strip() and context.board_id:
+        merged["board_id"] = context.board_id
+    if not str(merged.get("card_id") or "").strip() and context.card_id:
+        merged["card_id"] = context.card_id
+    if not str(merged.get("stage_id") or "").strip() and context.stage_id:
+        merged["stage_id"] = context.stage_id
+    return merged
+
+
 @dataclass(slots=True)
 class PluginContext:
     connectors: list[Connector] = field(default_factory=list)

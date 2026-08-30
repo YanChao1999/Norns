@@ -13,6 +13,9 @@ from sqlalchemy.orm import selectinload
 
 from ..config import get_settings
 from ..connector_config import (
+    DEFAULT_CURSOR_BASE_URL,
+    DEFAULT_DEEPSEEK_BASE_URL,
+    DEFAULT_OPENAI_BASE_URL,
     credentials_for_provider,
     provider_label,
     resolve_llm_credentials,
@@ -167,7 +170,9 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             github_repo=workspace.github_repo,
         ),
     )
-    mcp_preview = cursor_mcp_servers(allowlist, connectors)
+    mcp_preview = cursor_mcp_servers(
+        allowlist, connectors, confirm_writes=bool(getattr(stage, "confirm_writes", False))
+    )
     run.inputs = {
         **dict(run.inputs or {}),
         "plugins": {
@@ -322,8 +327,7 @@ async def _execute_agent(
     run_id: str = "",
     confirm_writes: bool = False,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
-    resolved_key = api_key or str(getattr(settings, "openai_api_key", "") or "")
-    resolved_url = base_url or str(getattr(settings, "openai_base_url", "") or "https://api.openai.com/v1")
+    resolved_key, resolved_url = _bound_llm_credentials(settings, api_key=api_key, base_url=base_url, provider=provider)
     resolved_model = default_model or str(getattr(settings, "default_model", "") or "gpt-4o")
     if not resolved_key.strip():
         summary = (
@@ -396,6 +400,7 @@ async def _execute_agent(
             list(connectors or []),
             extra_env=extra_env or None,
             cwd=getattr(workspace, "path", "") or None,
+            confirm_writes=confirm_writes,
         )
         attached = ", ".join(mcp_servers) if mcp_servers else "none"
         tool_hint = (
@@ -482,7 +487,21 @@ async def _run_openai_tool_loop(
         pending_writes: list[dict[str, Any]] = []
         for tool_call in tool_calls:
             name = tool_call.function.name
-            arguments = json.loads(tool_call.function.arguments or "{}")
+            try:
+                parsed = json.loads(tool_call.function.arguments or "{}")
+                arguments = parsed if isinstance(parsed, dict) else {}
+            except json.JSONDecodeError:
+                result = {"error": "invalid JSON in tool arguments"}
+                executed_tool_calls.append({"round": _round + 1, "name": name, "arguments": {}, "result": result})
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": name,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
+                continue
             if confirm_writes and is_write_tool(name):
                 pending_writes.append({"name": name, "arguments": arguments})
                 messages.append(
@@ -565,6 +584,24 @@ def parse_agent_recommendation(model_output: str) -> tuple[str | None, str | Non
                 break
 
     return decision, reason
+
+
+def _bound_llm_credentials(settings: Any, *, api_key: str, base_url: str, provider: str) -> tuple[str, str]:
+    """Use only the bound provider's key. Never send an OpenAI key to Cursor Cloud Agents."""
+    provider_name = str(provider or "").strip().lower()
+    bound_key = str(api_key or "").strip()
+    bound_url = str(base_url or "").strip()
+    if uses_cursor_cloud_agent(provider_name, bound_url):
+        return bound_key, bound_url or DEFAULT_CURSOR_BASE_URL
+    if provider_name in {"", "openai"}:
+        key = bound_key or str(getattr(settings, "openai_api_key", "") or "").strip()
+        url = bound_url or str(getattr(settings, "openai_base_url", "") or "").strip() or DEFAULT_OPENAI_BASE_URL
+        return key, url
+    if provider_name == "deepseek":
+        key = bound_key or str(getattr(settings, "deepseek_api_key", "") or "").strip()
+        url = bound_url or str(getattr(settings, "deepseek_base_url", "") or "").strip() or DEFAULT_DEEPSEEK_BASE_URL
+        return key, url
+    return bound_key, bound_url or DEFAULT_OPENAI_BASE_URL
 
 
 async def _build_handoff(model_output: str) -> dict[str, Any]:

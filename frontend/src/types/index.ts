@@ -32,6 +32,8 @@ export interface Card {
   current_stage_id?: string | null;
   parent_card_id?: string | null;
   status: CardStatus;
+  recommendation?: string | null;
+  recommendation_reason?: string | null;
   created_at?: string;
   updated_at?: string;
 }

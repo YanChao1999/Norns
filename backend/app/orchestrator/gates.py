@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import Approval, Board, Card, Connector, Stage
+from ..plugins.base import PluginContext, apply_run_ids
 from .enqueue import EnqueueError, enqueue_stage_run
 from .progression import resolve_route, resolve_routes
 from .split import apply_forward_routes, load_family_cards
@@ -42,6 +43,19 @@ def _latest_stage_run(card: Card):
             if run.stage_id == card.current_stage_id
         ),
         None,
+    )
+
+
+def _write_plugin_context(card: Card, run, connectors: list[Connector]) -> PluginContext:
+    workspace = dict((run.inputs or {}).get("workspace") or {})
+    return PluginContext(
+        connectors=connectors,
+        board_id=card.board_id,
+        card_id=card.id,
+        stage_id=card.current_stage_id,
+        workspace_path=str(workspace.get("path") or ""),
+        git_url=str(workspace.get("git_url") or ""),
+        github_repo=str(workspace.get("github_repo") or ""),
     )
 
 
@@ -160,22 +174,38 @@ async def approve_pending_writes(
     connectors_result = await session.execute(select(Connector).where(Connector.is_active.is_(True)))
     connectors = list(connectors_result.scalars().all())
     allowlist = list(card.current_stage.agent_config.tool_allowlist) if card.current_stage.agent_config else []
-    tool_map = {tool.name: tool for tool in create_default_registry().get_runtime_tools(allowlist, connectors)}
+    context = _write_plugin_context(card, latest_run, connectors)
+    tool_map = {
+        tool.name: tool for tool in create_default_registry().get_runtime_tools(allowlist, connectors, context=context)
+    }
     executed = list(latest_run.tool_calls or [])
-    for item in pending:
+    confirmed: list[dict] = []
+    for index, item in enumerate(pending):
         name = str(item.get("name") or "")
-        arguments = item.get("arguments") if isinstance(item.get("arguments"), dict) else {}
+        raw_arguments = item.get("arguments") if isinstance(item.get("arguments"), dict) else {}
+        arguments = apply_run_ids(raw_arguments, context)
         runtime = tool_map.get(name)
         if runtime is None:
             result: object = {"error": f"Unknown or disallowed tool: {name}"}
         else:
             result = await runtime.execute(arguments)
         executed.append({"name": name, "arguments": arguments, "result": result})
+        if isinstance(result, dict) and result.get("error"):
+            remaining = list(pending[index:])
+            remaining[0] = {**dict(item), "arguments": arguments, "error": result.get("error"), "status": "failed"}
+            inputs["pending_writes"] = remaining
+            inputs["confirmed_writes"] = confirmed
+            latest_run.inputs = inputs
+            flag_modified(latest_run, "inputs")
+            latest_run.tool_calls = executed
+            await session.commit()
+            raise ValueError(f"Write {name} failed: {result.get('error')}. Remaining writes were not executed.")
+        confirmed.append({**dict(item), "arguments": arguments})
         if isinstance(result, dict) and result.get("key"):
             card.external_id = str(result["key"])
 
     inputs["pending_writes"] = []
-    inputs["confirmed_writes"] = pending
+    inputs["confirmed_writes"] = confirmed
     latest_run.inputs = inputs
     flag_modified(latest_run, "inputs")
     latest_run.tool_calls = executed
