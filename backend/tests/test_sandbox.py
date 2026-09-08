@@ -11,6 +11,7 @@ from backend.app.sandbox.providers import (
     GvisorSandboxProvider,
     MicroVmSandboxProvider,
     NoneSandboxProvider,
+    docker_run_command,
     run_in_sandbox,
 )
 from backend.app.sandbox.runtime import get_sandbox_provider, prepare_sandbox, serialize_sandbox
@@ -109,6 +110,30 @@ def test_docker_provider_falls_back_when_docker_missing(tmp_path: Path, monkeypa
     provider.cleanup(handle)
 
 
+def test_docker_run_command_is_hardened(tmp_path: Path):
+    host = tmp_path / "sandboxes" / "copy"
+    host.mkdir(parents=True)
+    cmd = docker_run_command(
+        "/usr/bin/docker",
+        image="python:3.12-slim",
+        host_path=str(host),
+        container_name="norns-sb-test",
+    )
+    assert cmd[0:3] == ["/usr/bin/docker", "run", "-d"]
+    assert "--read-only" in cmd
+    assert cmd[cmd.index("--cap-drop") + 1] == "ALL"
+    assert "no-new-privileges:true" in cmd
+    mount = cmd[cmd.index("--mount") + 1]
+    assert mount.startswith("type=bind,source=")
+    assert mount.endswith(",target=/workspace")
+    assert str(host.resolve()) in mount
+    # Only one host bind mount argument — no docker.sock / home / root mounts.
+    assert sum(1 for part in cmd if isinstance(part, str) and part.startswith("type=bind,")) == 1
+    assert "-v" not in cmd
+    assert any(part.startswith("/tmp:") for part in cmd)
+    assert "sleep" in cmd and "infinity" in cmd
+
+
 def test_docker_provider_starts_container(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     source = tmp_path / "repo"
     source.mkdir()
@@ -139,7 +164,12 @@ def test_docker_provider_starts_container(tmp_path: Path, monkeypatch: pytest.Mo
     assert handle.metadata is not None
     assert handle.metadata["container_id"] == "cid123"
     assert handle.metadata["workdir"] == "/workspace"
-    assert any(cmd[1] == "run" for cmd in calls)
+    assert handle.metadata["hardened"] is True
+    assert "cap-drop-all" in handle.metadata["policy"]
+    run_cmd = next(cmd for cmd in calls if cmd[1] == "run")
+    assert "--read-only" in run_cmd
+    assert "--cap-drop" in run_cmd
+    assert any(part.startswith("type=bind,source=") for part in run_cmd)
     provider.cleanup(handle)
     assert any(cmd[:3] == ["/usr/bin/docker", "rm", "-f"] for cmd in calls)
 

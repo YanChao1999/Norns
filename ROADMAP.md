@@ -26,7 +26,7 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 ## After first use / publish
 
-- [ ] **Hardened Docker sandbox** — for stronger governance (block host `rm -rf`): no host mounts except the sandbox copy, dropped capabilities, read-only rootfs (optional network policy). Current `docker` backend is copy + bind-mount only; OS/container policy is not enforced yet.
+- [x] **Hardened Docker sandbox** — only the sandbox copy bind-mounted, `--cap-drop ALL`, read-only rootfs, no-new-privileges, tmpfs for scratch (`sandbox.backend = "docker"`). Host-side agent tools still see the copy path; containerized `run_in_sandbox` is the hard jail.
 - [ ] **Sandbox microVM backend** — stronger isolation when containers are not enough (`sandbox.backend = "microvm"`). Prefer hardened `docker` until then.
 - [ ] **gVisor + agent runtime policy** — user-space kernel (gVisor or similar) plus a policy layer that controls what agents may exec, read, write, and reach on the network (`sandbox.backend = "gvisor"` reserved).
 - [ ] **Alembic** — in-place upgrades for `~/.norns` SQLite and Postgres after 0.0.1 is published.

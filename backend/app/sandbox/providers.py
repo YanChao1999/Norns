@@ -101,16 +101,16 @@ class DirectoryCopySandboxProvider:
 
 
 class DockerSandboxProvider:
-    """Directory copy plus a long-lived Docker container bind-mounting that copy.
+    """Directory copy plus a hardened long-lived Docker container.
 
-    Easy governance layer while Docker is already on the machine: host tools still
-    see ``handle.path``; test/shell work can use ``run_in_sandbox`` / ``docker exec``.
-    Falls back to directory-only when Docker is missing or ``docker run`` fails.
+    Host tools still see ``handle.path``; test/shell work can use ``run_in_sandbox``
+    / ``docker exec``. Falls back to directory-only when Docker is missing or
+    ``docker run`` fails.
 
-    Not yet hardened: the container still runs with a normal host bind mount and
-    default capabilities, so absolute host paths remain reachable if tools escape
-    the workdir. Next step is policy Docker — only the sandbox copy mounted,
-    dropped caps, read-only rootfs — then gVisor / microVM.
+    Container policy: only the sandbox copy is bind-mounted (rw at /workspace),
+    all Linux capabilities are dropped, rootfs is read-only, and no-new-privileges
+    is set. Writable scratch uses tmpfs (/tmp, /var/tmp, /run) — not host paths.
+    Absolute host paths outside the mount are not available inside the container.
     """
 
     name = "docker"
@@ -162,6 +162,8 @@ class DockerSandboxProvider:
                 "container_name": container_name,
                 "image": self.image,
                 "workdir": CONTAINER_WORKDIR,
+                "hardened": True,
+                "policy": list(DOCKER_HARDENING_POLICY),
             },
         )
 
@@ -294,21 +296,63 @@ def _directory_fallback(handle: SandboxHandle, *, reason: str) -> SandboxHandle:
     )
 
 
-def _docker_run(docker: str, *, image: str, host_path: str, container_name: str) -> str:
-    command = [
+# Flags recorded on the sandbox handle for observability / UI.
+DOCKER_HARDENING_POLICY = (
+    "bind-workspace-only",
+    "cap-drop-all",
+    "read-only-rootfs",
+    "no-new-privileges",
+)
+
+
+def docker_run_command(
+    docker: str,
+    *,
+    image: str,
+    host_path: str,
+    container_name: str,
+) -> list[str]:
+    """Build a hardened ``docker run`` argv for one sandbox container.
+
+    Only the sandbox copy is mounted from the host. Rootfs is read-only; caps are
+    dropped; writable areas are tmpfs, not additional host binds.
+    """
+    resolved = str(Path(host_path).resolve())
+    return [
         docker,
         "run",
         "-d",
         "--name",
         container_name,
-        "-v",
-        f"{Path(host_path).resolve()}:{CONTAINER_WORKDIR}:rw",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges:true",
+        # Single host bind: the sandbox copy only (rw so agents can edit files).
+        "--mount",
+        f"type=bind,source={resolved},target={CONTAINER_WORKDIR}",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,size=512m",
+        "--tmpfs",
+        "/var/tmp:rw,nosuid,nodev,size=64m",
+        "--tmpfs",
+        "/run:rw,nosuid,nodev,size=64m",
         "-w",
         CONTAINER_WORKDIR,
         image,
         "sleep",
         "infinity",
     ]
+
+
+def _docker_run(docker: str, *, image: str, host_path: str, container_name: str) -> str:
+    command = docker_run_command(
+        docker,
+        image=image,
+        host_path=host_path,
+        container_name=container_name,
+    )
     completed = subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
     container_id = (completed.stdout or "").strip()
     if not container_id:
