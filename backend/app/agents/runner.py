@@ -273,7 +273,11 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             parallel_targets=parallel_targets,
         )
         await session.refresh(run)
-        run.inputs = {**dict(run.inputs or {}), "llm": identity, "sandbox": serialize_sandbox(sandbox_handle, source=source_workspace)}
+        run.inputs = {
+            **dict(run.inputs or {}),
+            "llm": identity,
+            "sandbox": serialize_sandbox(sandbox_handle, source=source_workspace),
+        }
         pending = list((run.inputs or {}).get("pending_writes") or [])
         run.tool_calls = tool_calls
         run.model_output = with_llm_line(model_output, identity)
@@ -434,9 +438,7 @@ async def _execute_agent(
     if len(targets) >= 2:
         lines = "\n".join(f"- stage_id={item.id} name={item.name}" for item in targets)
         user_content = (
-            f"{user_content}\n\n"
-            f"{PARALLEL_SPLIT_INSTRUCTION.format(count=len(targets))}\n"
-            f"Next parallel stages:\n{lines}"
+            f"{user_content}\n\n{PARALLEL_SPLIT_INSTRUCTION.format(count=len(targets))}\nNext parallel stages:\n{lines}"
         )
     if confirm_writes:
         user_content = (
@@ -705,7 +707,9 @@ def _extract_tracks(text: str) -> list[dict[str, Any]]:
     blobs: list[str] = []
     if fenced:
         blobs.append(fenced.group(1).strip())
-    blobs.extend(match.group(0) for match in re.finditer(r"\{[^{}]*\"tracks\"[^{}]*\[.*?\][^{}]*\}", text, flags=re.DOTALL))
+    blobs.extend(
+        match.group(0) for match in re.finditer(r"\{[^{}]*\"tracks\"[^{}]*\[.*?\][^{}]*\}", text, flags=re.DOTALL)
+    )
     for blob in blobs:
         try:
             data = json.loads(blob)

@@ -49,9 +49,7 @@ class Settings(BaseSettings):
     def sandbox_backend_known(cls, value: str) -> str:
         name = str(value or "directory").strip().lower() or "directory"
         if name not in {"directory", "docker", "none", "microvm", "gvisor"}:
-            raise ValueError(
-                "SANDBOX_BACKEND must be one of: directory, docker, none, microvm, gvisor"
-            )
+            raise ValueError("SANDBOX_BACKEND must be one of: directory, docker, none, microvm, gvisor")
         return name
 
     @field_validator("encryption_key")

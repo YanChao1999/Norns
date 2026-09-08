@@ -190,7 +190,9 @@ class DockerSandboxProvider:
         return docker_executable()
 
 
-def run_in_sandbox(handle: SandboxHandle, command: list[str], *, timeout: float = 600.0) -> subprocess.CompletedProcess[str]:
+def run_in_sandbox(
+    handle: SandboxHandle, command: list[str], *, timeout: float = 600.0
+) -> subprocess.CompletedProcess[str]:
     """Run a command inside the sandbox container when present, else on the host path."""
     meta = dict(handle.metadata or {})
     container_id = str(meta.get("container_id") or "").strip()
@@ -248,9 +250,7 @@ class MicroVmSandboxProvider:
         source: Workspace,
     ) -> SandboxHandle | None:
         del run_id, card_id, board_id, source
-        logger.warning(
-            "sandbox.backend=microvm is not implemented yet; use backend=docker or directory until then"
-        )
+        logger.warning("sandbox.backend=microvm is not implemented yet; use backend=docker or directory until then")
         return None
 
     def cleanup(self, handle: SandboxHandle) -> None:
@@ -275,9 +275,7 @@ class GvisorSandboxProvider:
         source: Workspace,
     ) -> SandboxHandle | None:
         del run_id, card_id, board_id, source
-        logger.warning(
-            "sandbox.backend=gvisor is not implemented yet; use backend=docker or directory until then"
-        )
+        logger.warning("sandbox.backend=gvisor is not implemented yet; use backend=docker or directory until then")
         return None
 
     def cleanup(self, handle: SandboxHandle) -> None:

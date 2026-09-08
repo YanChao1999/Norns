@@ -408,11 +408,7 @@ async def test_join_stage_runs_independently_without_wait(monkeypatch):
         assert child.status == CardStatus.RUNNING
         assert queued == [(child.id, integration.id)]
         joined = list(
-            (
-                await session.execute(
-                    select(AgentRun).where(AgentRun.model_output == "Joined parallel tracks.")
-                )
-            )
+            (await session.execute(select(AgentRun).where(AgentRun.model_output == "Joined parallel tracks.")))
             .scalars()
             .all()
         )
