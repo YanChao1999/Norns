@@ -317,7 +317,10 @@ export function StateMachineEditor({ boardId }: Props) {
       <div className="board-head">
         <div>
           <h1>State machine · {board.name}</h1>
-          <p>Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage.</p>
+          <p>
+            Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage.
+            After parallel tracks, add your own later column (Review, Merge, …) and draw a line from each track into it — each card arrives and runs on its own as soon as it is ready (open a PR, merge to main, etc.). There is no wait-for-all barrier.
+          </p>
         </div>
       </div>
 
@@ -509,7 +512,7 @@ export function StateMachineEditor({ boardId }: Props) {
           ) : (
             <p className="muted">
               Select a stage, then Draw line and click another stage. Place only moves the stage on the grid. Add parallel row or a second default line to run
-              tracks at the same time.
+              tracks at the same time. The previous column agent plans the split into one card per track.
             </p>
           )}
         </aside>
@@ -698,7 +701,7 @@ function StageInspector({
         />
       </label>
       <p className="muted">
-        Adds a new row in the next column and a second default line so both tracks run. To join later, draw a line from each row into the same later column.
+        Adds a new row in the next column and a second default line so both tracks run. To review or merge later, create that column yourself and draw a line from each parallel row into it — each forked card runs there independently when it arrives (PR review, merge to main, …).
       </p>
       <div className="machine-inspector-actions">
         <button

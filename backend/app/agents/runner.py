@@ -27,15 +27,16 @@ from ..database import AsyncSessionLocal
 from ..faults import loop_tool_error_if_injected, runner_timeout_if_injected
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
-from ..orchestrator.progression import resolve_routes
+from ..orchestrator.progression import outgoing_parallel_targets, resolve_routes
 from ..orchestrator.split import apply_forward_routes, load_family_cards
 from ..orchestrator.state_machine import CardStatus, start_card_run, wait_for_approval, wait_for_tool_approval
 from ..plantuml.renderer import render_plantuml
 from ..plugins.base import PluginContext
 from ..plugins.catalog import cursor_mcp_servers
 from ..plugins.tool_policy import is_write_tool
+from ..sandbox import prepare_sandbox, serialize_sandbox
 from ..tools.registry import RuntimeTool, create_default_registry
-from ..workspace import resolve_workspace
+from ..workspace import Workspace, resolve_workspace
 
 logger = logging.getLogger("norns")
 
@@ -58,6 +59,21 @@ WORK_INSTRUCTION = (
     "Use your tools in this run until the requested work is done or blocked. "
     "Empty list results mean nothing matched yet — continue with create/update/verify. "
     "Do not end with a plan of tool calls you did not make."
+)
+
+PARALLEL_SPLIT_INSTRUCTION = (
+    "This stage fans out into {count} parallel next-stage agents. "
+    "Plan how to split this card into exactly {count} tracks — one per next stage. "
+    "End your response with a fenced JSON block labeled tracks, for example:\n"
+    "```tracks\n"
+    "{{\n"
+    '  "tracks": [\n'
+    '    {{"stage_id": "<id>", "title": "<short title>", "body": "<work for that agent>", "summary": "<one line>"}},\n'
+    '    {{"stage_id": "<id>", "title": "<short title>", "body": "<work for that agent>", "summary": "<one line>"}}\n'
+    "  ]\n"
+    "}}\n"
+    "```\n"
+    "Use the stage_id values listed below. Titles and bodies must be specific to each track."
 )
 
 MAX_TOOL_ROUNDS = 8
@@ -144,7 +160,29 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     card.current_stage_id = stage.id
 
     prior_handoff = _latest_handoff(card)
-    workspace = resolve_workspace(connectors, agent=stage.agent_config, board=card.board)
+    source_workspace = resolve_workspace(connectors, agent=stage.agent_config, board=card.board)
+    sandbox_provider, sandbox_handle = prepare_sandbox(
+        settings,
+        run_id=run_id,
+        card_id=card.id,
+        board_id=card.board_id,
+        source=source_workspace,
+    )
+    workspace = (
+        Workspace(
+            path=sandbox_handle.path,
+            git_url=source_workspace.git_url,
+            source=f"sandbox:{sandbox_handle.backend}",
+        )
+        if sandbox_handle is not None
+        else source_workspace
+    )
+    parallel_targets = outgoing_parallel_targets(
+        list(card.board.stages),
+        list(card.board.transitions),
+        stage.id,
+        event="approve",
+    )
     run = AgentRun(id=run_id, card_id=card.id, stage_id=stage.id, status="running")
     run.inputs = {
         "card": {"id": card.id, "title": card.title, "body": card.body, "external_id": card.external_id},
@@ -154,7 +192,15 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             "git_url": workspace.git_url,
             "github_repo": workspace.github_repo,
             "source": workspace.source,
+            "source_path": source_workspace.path or None,
         },
+        "sandbox": serialize_sandbox(sandbox_handle, source=source_workspace),
+        "parallel_targets": [
+            {"id": item.id, "name": item.name, "order": item.order, "lane": getattr(item, "lane", 0)}
+            for item in parallel_targets
+        ]
+        if len(parallel_targets) >= 2
+        else [],
     }
     session.add(run)
     await session.commit()
@@ -223,9 +269,10 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             workspace=workspace,
             run_id=run.id,
             confirm_writes=bool(getattr(stage, "confirm_writes", False)),
+            parallel_targets=parallel_targets,
         )
         await session.refresh(run)
-        run.inputs = {**dict(run.inputs or {}), "llm": identity}
+        run.inputs = {**dict(run.inputs or {}), "llm": identity, "sandbox": serialize_sandbox(sandbox_handle, source=source_workspace)}
         pending = list((run.inputs or {}).get("pending_writes") or [])
         run.tool_calls = tool_calls
         run.model_output = with_llm_line(model_output, identity)
@@ -262,6 +309,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
     except WriteConfirmationRequired as pending:
         inputs = dict(run.inputs or {})
         inputs["pending_writes"] = pending.pending
+        inputs["sandbox"] = serialize_sandbox(sandbox_handle, source=source_workspace)
         run.inputs = inputs
         identity = dict((run.inputs or {}).get("llm") or {})
         run.tool_calls = pending.executed
@@ -295,6 +343,13 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         await session.commit()
         logger.warning("Stage run stopped card=%s stage=%s: %s", card.id, stage.id, detail)
         return
+    finally:
+        should_cleanup = sandbox_handle is not None and getattr(run, "status", None) != "waiting_tool"
+        if should_cleanup:
+            try:
+                sandbox_provider.cleanup(sandbox_handle)
+            except Exception as cleanup_exc:  # pragma: no cover - best effort
+                logger.warning("Sandbox cleanup failed: %s", cleanup_exc)
 
     for card_id, next_stage_id in next_jobs:
         try:
@@ -330,6 +385,7 @@ async def _execute_agent(
     workspace: Any | None = None,
     run_id: str = "",
     confirm_writes: bool = False,
+    parallel_targets: list[Stage] | None = None,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     resolved_key, resolved_url = _bound_llm_credentials(settings, api_key=api_key, base_url=base_url, provider=provider)
     resolved_model = default_model or str(getattr(settings, "default_model", "") or "gpt-4o")
@@ -373,6 +429,14 @@ async def _execute_agent(
         f"Previous handoff:\n{json.dumps(_latest_handoff(card), indent=2)}\n\n"
         f"{WORK_INSTRUCTION}"
     )
+    targets = list(parallel_targets or [])
+    if len(targets) >= 2:
+        lines = "\n".join(f"- stage_id={item.id} name={item.name}" for item in targets)
+        user_content = (
+            f"{user_content}\n\n"
+            f"{PARALLEL_SPLIT_INSTRUCTION.format(count=len(targets))}\n"
+            f"Next parallel stages:\n{lines}"
+        )
     if confirm_writes:
         user_content = (
             f"{user_content}\n\n"
@@ -625,9 +689,48 @@ async def _build_handoff(model_output: str) -> dict[str, Any]:
         payload["recommendation"] = decision
         if reason:
             payload["recommendation_reason"] = reason
+    tracks = _extract_tracks(model_output)
+    if tracks:
+        payload["tracks"] = tracks
     if plantuml_source:
         payload["plantuml"] = {"source": plantuml_source, "svg": await render_plantuml(plantuml_source)}
     return payload
+
+
+def _extract_tracks(text: str) -> list[dict[str, Any]]:
+    if not text:
+        return []
+    fenced = re.search(r"```(?:tracks|json)\s*\n(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
+    blobs: list[str] = []
+    if fenced:
+        blobs.append(fenced.group(1).strip())
+    blobs.extend(match.group(0) for match in re.finditer(r"\{[^{}]*\"tracks\"[^{}]*\[.*?\][^{}]*\}", text, flags=re.DOTALL))
+    for blob in blobs:
+        try:
+            data = json.loads(blob)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict) and isinstance(data.get("tracks"), list):
+            return _coerce_tracks(data["tracks"])
+        if isinstance(data, list):
+            return _coerce_tracks(data)
+    return []
+
+
+def _coerce_tracks(raw: list[Any]) -> list[dict[str, Any]]:
+    tracks: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        tracks.append(
+            {
+                "stage_id": str(item.get("stage_id") or "").strip() or None,
+                "title": str(item.get("title") or "").strip(),
+                "body": item.get("body") if isinstance(item.get("body"), str) else "",
+                "summary": str(item.get("summary") or "").strip(),
+            }
+        )
+    return tracks
 
 
 def _extract_plantuml(text: str) -> str | None:

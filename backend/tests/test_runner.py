@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from backend.app.agents.runner import (
+    PARALLEL_SPLIT_INSTRUCTION,
     WORK_INSTRUCTION,
+    _build_handoff,
     _execute_agent,
     _run_openai_tool_loop,
     _run_stage,
@@ -339,6 +341,61 @@ async def test_execute_agent_includes_work_instruction(monkeypatch):
     assert "Empty search results" in prompt
     assert "Search Jira before creating an issue" in prompt
     assert "one Jira ticket" in prompt
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_includes_parallel_split_plan(monkeypatch):
+    seen: dict[str, object] = {}
+
+    async def fake_cursor(**kwargs):
+        seen.update(kwargs)
+        return (
+            "Split ready\n"
+            "```tracks\n"
+            '{"tracks":[{"stage_id":"t1","title":"Tests","body":"unit","summary":"t"},'
+            '{"stage_id":"t2","title":"Code","body":"impl","summary":"c"}]}\n'
+            "```\n"
+            "DECISION: approve\nREASON: planned"
+        )
+
+    monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
+    targets = [
+        SimpleNamespace(id="t1", name="Unit tests", order=2, lane=0),
+        SimpleNamespace(id="t2", name="Software", order=2, lane=1),
+    ]
+    _text, _tools, handoff = await _execute_agent(
+        SimpleNamespace(openai_api_key=""),
+        SimpleNamespace(id="card-1", board_id="board-1", title="Work", body="Do it", runs=[]),
+        SimpleNamespace(
+            id="stage-1",
+            name="Arch",
+            require_approval=True,
+            agent_config=SimpleNamespace(tool_allowlist=[], system_prompt="Arch", model="auto", temperature=0.7),
+        ),
+        [],
+        api_key="crsr_test",
+        base_url="https://api.cursor.com/v1",
+        default_model="auto",
+        provider="cursor",
+        parallel_targets=targets,
+    )
+    prompt = str(seen.get("prompt") or "")
+    assert PARALLEL_SPLIT_INSTRUCTION.format(count=2).split(".")[0] in prompt
+    assert "stage_id=t1 name=Unit tests" in prompt
+    assert "stage_id=t2 name=Software" in prompt
+    assert len(handoff["tracks"]) == 2
+    assert handoff["tracks"][0]["title"] == "Tests"
+
+
+@pytest.mark.asyncio
+async def test_build_handoff_parses_tracks_fence():
+    handoff = await _build_handoff(
+        "Plan\n```tracks\n"
+        '{"tracks":[{"stage_id":"a","title":"A","body":"one","summary":"s1"},'
+        '{"stage_id":"b","title":"B","body":"two","summary":"s2"}]}\n'
+        "```\n"
+    )
+    assert [item["stage_id"] for item in handoff["tracks"]] == ["a", "b"]
 
 
 @pytest.mark.asyncio
