@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
@@ -9,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..models import AgentRun, Card, Stage, StageTransition
+from ..utc import utc_now
 from .progression import Route, target_stage_ids
 from .state_machine import CardStatus, advance_card, auto_advance_card
 
@@ -51,7 +51,7 @@ async def apply_forward_routes(
                 model_output=f"Parallel track for {names.get(first_stage, 'track')}.",
                 handoff=seeded,
                 status="completed",
-                completed_at=datetime.utcnow(),
+                completed_at=utc_now(),
             )
         )
     spawned = [
@@ -212,7 +212,7 @@ def _fork_card(
             model_output=f"Parallel track for {stage_name}.",
             handoff=_track_seed_handoff(handoff, plan),
             status="completed",
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
         )
     )
     return child

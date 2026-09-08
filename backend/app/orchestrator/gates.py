@@ -9,6 +9,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import Approval, Board, Card, Connector, Stage
 from ..plugins.base import PluginContext, apply_run_ids
+from ..utc import utc_now
 from .enqueue import EnqueueError, enqueue_stage_run
 from .progression import resolve_route, resolve_routes
 from .split import apply_forward_routes, load_family_cards
@@ -219,7 +220,7 @@ async def approve_pending_writes(
     flag_modified(latest_run, "inputs")
     latest_run.tool_calls = executed
     latest_run.status = "completed"
-    latest_run.completed_at = datetime.utcnow()
+    latest_run.completed_at = utc_now()
     latest_run.handoff = {
         **(latest_run.handoff if isinstance(latest_run.handoff, dict) else {}),
         "summary": "Operator confirmed pending writes. Re-running this stage to verify.",
@@ -260,7 +261,7 @@ async def reject_pending_writes(
     latest_run.inputs = inputs
     flag_modified(latest_run, "inputs")
     latest_run.status = "completed"
-    latest_run.completed_at = datetime.utcnow()
+    latest_run.completed_at = utc_now()
     latest_run.handoff = {
         **(latest_run.handoff if isinstance(latest_run.handoff, dict) else {}),
         "summary": "Operator declined pending writes.",

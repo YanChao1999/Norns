@@ -36,6 +36,7 @@ from ..plugins.catalog import cursor_mcp_servers
 from ..plugins.tool_policy import is_write_tool
 from ..sandbox import prepare_sandbox, serialize_sandbox
 from ..tools.registry import RuntimeTool, create_default_registry
+from ..utc import utc_now
 from ..workspace import Workspace, resolve_workspace
 
 logger = logging.getLogger("norns")
@@ -283,7 +284,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             await session.commit()
             return
         run.status = "completed"
-        run.completed_at = datetime.utcnow()
+        run.completed_at = utc_now()
         if stage.require_approval:
             # Agent recommendation is advisory only; never skip the human gate.
             wait_for_approval(card)
@@ -338,7 +339,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             "links": [],
             "attachment_metadata": [],
         }
-        run.completed_at = datetime.utcnow()
+        run.completed_at = utc_now()
         card.status = CardStatus.IDLE
         await session.commit()
         logger.warning("Stage run stopped card=%s stage=%s: %s", card.id, stage.id, detail)

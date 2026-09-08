@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 
 import pytest
 from sqlalchemy import select
@@ -14,6 +13,7 @@ from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage, StageTransition
 from backend.app.orchestrator.gates import approve_card, reject_card
 from backend.app.orchestrator.state_machine import CardStatus
+from backend.app.utc import utc_now
 
 
 @pytest.mark.asyncio
@@ -100,7 +100,7 @@ async def test_gate_logic_creates_approval_and_moves_card(monkeypatch):
             model_output="done",
             handoff={"summary": "handoff"},
             status="completed",
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
         )
         session.add_all([board, run])
         await session.commit()
@@ -121,7 +121,7 @@ async def test_gate_logic_creates_approval_and_moves_card(monkeypatch):
             model_output="retry",
             handoff={"summary": "redo"},
             status="completed",
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
         )
         session.add(run2)
         await session.commit()
@@ -163,7 +163,7 @@ async def test_reject_line_returns_card_to_previous_stage():
             model_output="done",
             handoff={"summary": "handoff"},
             status="completed",
-            completed_at=datetime.utcnow(),
+            completed_at=utc_now(),
         )
         session.add_all([board, run])
         await session.flush()
@@ -200,7 +200,7 @@ def _completed_run(card: Card, stage: Stage, summary: str) -> AgentRun:
         model_output=summary,
         handoff={"summary": summary},
         status="completed",
-        completed_at=datetime.utcnow(),
+        completed_at=utc_now(),
     )
 
 
