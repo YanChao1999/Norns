@@ -106,6 +106,11 @@ class DockerSandboxProvider:
     Easy governance layer while Docker is already on the machine: host tools still
     see ``handle.path``; test/shell work can use ``run_in_sandbox`` / ``docker exec``.
     Falls back to directory-only when Docker is missing or ``docker run`` fails.
+
+    Not yet hardened: the container still runs with a normal host bind mount and
+    default capabilities, so absolute host paths remain reachable if tools escape
+    the workdir. Next step is policy Docker — only the sandbox copy mounted,
+    dropped caps, read-only rootfs — then gVisor / microVM.
     """
 
     name = "docker"
@@ -226,7 +231,8 @@ class NoneSandboxProvider:
 class MicroVmSandboxProvider:
     """Reserved backend for stronger AI governance (Firecracker / microVM).
 
-    Prefer ``docker`` until performance or isolation needs outgrow containers.
+    Prefer hardened ``docker`` (copy-only mount, dropped caps, read-only rootfs)
+    until containers are not enough. This backend is not implemented yet.
     """
 
     name = "microvm"
@@ -242,6 +248,33 @@ class MicroVmSandboxProvider:
         del run_id, card_id, board_id, source
         logger.warning(
             "sandbox.backend=microvm is not implemented yet; use backend=docker or directory until then"
+        )
+        return None
+
+    def cleanup(self, handle: SandboxHandle) -> None:
+        del handle
+
+
+class GvisorSandboxProvider:
+    """Reserved backend for gVisor (or similar) plus an agent runtime policy layer.
+
+    Intended to control what agents may exec, read, write, and reach on the network,
+    beyond ordinary Docker. Not implemented yet.
+    """
+
+    name = "gvisor"
+
+    def prepare(
+        self,
+        *,
+        run_id: str,
+        card_id: str,
+        board_id: str,
+        source: Workspace,
+    ) -> SandboxHandle | None:
+        del run_id, card_id, board_id, source
+        logger.warning(
+            "sandbox.backend=gvisor is not implemented yet; use backend=docker or directory until then"
         )
         return None
 

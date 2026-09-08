@@ -8,6 +8,7 @@ import pytest
 from backend.app.sandbox.providers import (
     DirectoryCopySandboxProvider,
     DockerSandboxProvider,
+    GvisorSandboxProvider,
     MicroVmSandboxProvider,
     NoneSandboxProvider,
     run_in_sandbox,
@@ -59,11 +60,13 @@ def test_none_and_microvm_providers():
     source = Workspace(path="/tmp/x", git_url="", source="test")
     assert NoneSandboxProvider().prepare(run_id="r", card_id="c", board_id="b", source=source) is None
     assert MicroVmSandboxProvider().prepare(run_id="r", card_id="c", board_id="b", source=source) is None
+    assert GvisorSandboxProvider().prepare(run_id="r", card_id="c", board_id="b", source=source) is None
 
 
 def test_get_sandbox_provider_from_settings(tmp_path: Path):
     assert get_sandbox_provider(SimpleNamespace(sandbox_backend="none")).name == "none"
     assert get_sandbox_provider(SimpleNamespace(sandbox_backend="microvm")).name == "microvm"
+    assert get_sandbox_provider(SimpleNamespace(sandbox_backend="gvisor")).name == "gvisor"
     assert get_sandbox_provider(SimpleNamespace(sandbox_backend="docker", sandbox_image="alpine:3")).name == "docker"
     provider = get_sandbox_provider(SimpleNamespace(sandbox_backend="directory", sandbox_root=str(tmp_path)))
     assert provider.name == "directory"

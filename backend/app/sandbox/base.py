@@ -17,7 +17,12 @@ class SandboxHandle:
 
 
 class SandboxProvider(Protocol):
-    """Prepare and tear down an isolated workspace for an agent run."""
+    """Prepare and tear down an isolated workspace for an agent run.
+
+    Current providers copy or bind-mount a workspace path. Stronger backends
+    (hardened Docker, gVisor, microVM) should enforce OS policy so host paths
+    outside the sandbox cannot be destroyed by agent shell/tools.
+    """
 
     name: str
 

@@ -9,6 +9,7 @@ from .providers import (
     DEFAULT_DOCKER_IMAGE,
     DirectoryCopySandboxProvider,
     DockerSandboxProvider,
+    GvisorSandboxProvider,
     MicroVmSandboxProvider,
     NoneSandboxProvider,
     run_in_sandbox,
@@ -30,6 +31,8 @@ def get_sandbox_provider(settings: Any | None = None, *, root: Any | None = None
         return NoneSandboxProvider()
     if backend == "microvm":
         return MicroVmSandboxProvider()
+    if backend == "gvisor":
+        return GvisorSandboxProvider()
 
     resolved_root = root
     if resolved_root is None and settings is not None:
