@@ -18,8 +18,10 @@ from .providers import (
 
 __all__ = [
     "get_sandbox_provider",
+    "cleanup_serialized_sandbox",
     "handle_from_context",
     "handle_from_env",
+    "handle_from_serialized",
     "prepare_sandbox",
     "resolve_under_root",
     "run_in_sandbox",
@@ -84,6 +86,34 @@ def serialize_sandbox(handle: SandboxHandle | None, *, source: Workspace | None 
         "source_path": handle.source_path or (getattr(source, "path", None) if source else None),
         "metadata": dict(handle.metadata or {}),
     }
+
+
+def handle_from_serialized(payload: dict[str, object] | None) -> SandboxHandle | None:
+    """Rebuild a handle from ``inputs.sandbox`` JSON persisted on an AgentRun."""
+    if not isinstance(payload, dict):
+        return None
+    path = str(payload.get("path") or "").strip()
+    if not path:
+        return None
+    backend = str(payload.get("backend") or "directory").strip() or "directory"
+    source_path = str(payload.get("source_path") or "").strip()
+    raw_meta = payload.get("metadata")
+    metadata = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+    return SandboxHandle(path=path, backend=backend, source_path=source_path, metadata=metadata)
+
+
+def cleanup_serialized_sandbox(payload: dict[str, object] | None) -> None:
+    """Best-effort teardown for a sandbox recorded on a prior run (e.g. after write confirm)."""
+    handle = handle_from_serialized(payload)
+    if handle is None:
+        return
+    meta = dict(handle.metadata or {})
+    root_raw = str(meta.get("root") or "").strip()
+    root = Path(root_raw).expanduser() if root_raw else None
+    if handle.backend == "docker":
+        DockerSandboxProvider(root=root).cleanup(handle)
+    else:
+        DirectoryCopySandboxProvider(root=root).cleanup(handle)
 
 
 def sandbox_env_vars(handle: SandboxHandle | None) -> dict[str, str]:

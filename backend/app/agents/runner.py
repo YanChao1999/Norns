@@ -77,6 +77,12 @@ PARALLEL_SPLIT_INSTRUCTION = (
     "Use the stage_id values listed below. Titles and bodies must be specific to each track."
 )
 
+DOCKER_SANDBOX_INSTRUCTION = (
+    "This run uses a Docker sandbox. Host file tools see the bind-mounted copy under the workspace path. "
+    "For shell, install, test, build, or reproduce commands, call sandbox_run (docker exec into the hardened "
+    "container). Do not rely on host-side shell for those steps — that bypasses container isolation."
+)
+
 MAX_TOOL_ROUNDS = 8
 
 
@@ -182,7 +188,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         list(card.board.stages),
         list(card.board.transitions),
         stage.id,
-        event="approve",
+        event="approve" if stage.require_approval else "auto",
     )
     run = AgentRun(id=run_id, card_id=card.id, stage_id=stage.id, status="running")
     run.inputs = {
@@ -459,6 +465,8 @@ async def _execute_agent(
         )
     if stage.require_approval:
         user_content = f"{user_content}\n\n{DECISION_INSTRUCTION}"
+    if sandbox_handle is not None and sandbox_handle.backend == "docker":
+        user_content = f"{user_content}\n\n{DOCKER_SANDBOX_INSTRUCTION}"
 
     if uses_cursor_cloud_agent(provider, resolved_url):
         extra_env = {

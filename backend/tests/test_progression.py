@@ -179,6 +179,22 @@ def test_outgoing_parallel_targets_lists_default_forwards():
     assert [item.id for item in targets] == ["tests", "software"]
 
 
+def test_outgoing_parallel_targets_prefers_auto_edges():
+    stages = [
+        SimpleNamespace(id="arch", name="Arch", order=1, lane=0),
+        SimpleNamespace(id="tests", name="Unit tests", order=2, lane=0),
+        SimpleNamespace(id="software", name="Software", order=2, lane=1),
+        SimpleNamespace(id="legacy", name="Legacy", order=2, lane=2),
+    ]
+    edges = [
+        _edge(from_stage_id="arch", to_stage_id="legacy", order=0, event="approve"),
+        _edge(from_stage_id="arch", to_stage_id="tests", order=0, event="auto"),
+        _edge(from_stage_id="arch", to_stage_id="software", order=1, event="auto"),
+    ]
+    targets = outgoing_parallel_targets(stages, edges, "arch", event="auto")
+    assert [item.id for item in targets] == ["tests", "software"]
+
+
 def test_boolean_handoff_matches_json_true():
     stages = [SimpleNamespace(id="a", order=1), SimpleNamespace(id="b", order=2), SimpleNamespace(id="c", order=3)]
     edges = [

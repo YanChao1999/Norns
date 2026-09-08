@@ -103,9 +103,10 @@ class DirectoryCopySandboxProvider:
 class DockerSandboxProvider:
     """Directory copy plus a hardened long-lived Docker container.
 
-    Host tools still see ``handle.path``; test/shell work can use ``run_in_sandbox``
-    / ``docker exec``. Falls back to directory-only when Docker is missing or
-    ``docker run`` fails.
+    The agent workspace path on the host is the bind-mounted copy (so Cursor/file
+    tools can edit it). Container isolation applies to commands run via
+    ``run_in_sandbox`` / ``sandbox_run`` (``docker exec``). Falls back to
+    directory-only when Docker is missing or ``docker run`` fails.
 
     Container policy: only the sandbox copy is bind-mounted (rw at /workspace),
     all Linux capabilities are dropped, rootfs is read-only, and no-new-privileges

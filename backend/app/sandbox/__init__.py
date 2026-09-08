@@ -21,9 +21,11 @@ from __future__ import annotations
 
 from .base import SandboxHandle, SandboxProvider
 from .runtime import (
+    cleanup_serialized_sandbox,
     get_sandbox_provider,
     handle_from_context,
     handle_from_env,
+    handle_from_serialized,
     prepare_sandbox,
     resolve_under_root,
     run_in_sandbox,
@@ -34,9 +36,11 @@ from .runtime import (
 __all__ = [
     "SandboxHandle",
     "SandboxProvider",
+    "cleanup_serialized_sandbox",
     "get_sandbox_provider",
     "handle_from_context",
     "handle_from_env",
+    "handle_from_serialized",
     "prepare_sandbox",
     "resolve_under_root",
     "run_in_sandbox",

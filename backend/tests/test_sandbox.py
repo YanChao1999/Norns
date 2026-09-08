@@ -197,14 +197,22 @@ def test_run_in_sandbox_uses_docker_exec(tmp_path: Path, monkeypatch: pytest.Mon
     assert seen[0] == ["/usr/bin/docker", "exec", "-w", "/workspace", "abc", "pytest", "-q"]
 
 
-def test_sandbox_env_and_handle_roundtrip(tmp_path: Path):
-    from backend.app.sandbox import SandboxHandle, handle_from_env, resolve_under_root, sandbox_env_vars
+def test_sandbox_env_and_handle_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from backend.app.sandbox import (
+        SandboxHandle,
+        cleanup_serialized_sandbox,
+        handle_from_env,
+        handle_from_serialized,
+        resolve_under_root,
+        sandbox_env_vars,
+        serialize_sandbox,
+    )
 
     handle = SandboxHandle(
         path=str(tmp_path / "copy"),
         backend="docker",
         source_path=str(tmp_path / "src"),
-        metadata={"container_id": "cid", "workdir": "/workspace", "hardened": True},
+        metadata={"container_id": "cid", "workdir": "/workspace", "hardened": True, "root": str(tmp_path)},
     )
     env = sandbox_env_vars(handle)
     assert env["NORNS_SANDBOX_PATH"] == handle.path
@@ -214,12 +222,28 @@ def test_sandbox_env_and_handle_roundtrip(tmp_path: Path):
     assert rebuilt.path == handle.path
     assert rebuilt.backend == "docker"
     assert rebuilt.metadata and rebuilt.metadata["container_id"] == "cid"
+    payload = serialize_sandbox(handle)
+    again = handle_from_serialized(payload)
+    assert again is not None
+    assert again.path == handle.path
     root = tmp_path / "copy"
     root.mkdir()
     (root / "ok.txt").write_text("x", encoding="utf-8")
     assert resolve_under_root(root, "ok.txt").name == "ok.txt"
     with pytest.raises(ValueError, match="escapes"):
         resolve_under_root(root, "../outside")
+
+    calls: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        calls.append(list(command))
+        return SimpleNamespace(stdout="", returncode=0)
+
+    monkeypatch.setattr("backend.app.sandbox.providers.subprocess.run", fake_run)
+    monkeypatch.setattr("backend.app.sandbox.providers.docker_executable", lambda: "/usr/bin/docker")
+    cleanup_serialized_sandbox(payload)
+    assert any(cmd[:3] == ["/usr/bin/docker", "rm", "-f"] for cmd in calls)
 
 
 @pytest.mark.asyncio

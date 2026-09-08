@@ -65,7 +65,7 @@ Human --> S3 : confirm
 ## How it works
 
 - **Boards / stages** — workflow and per-column agents. Two default lines from a stage **split** a card (`handoff.tracks`). Later columns (Review, Merge, …) are a **soft join**: each fork arrives and runs on its own. **Auto-start idle cards** on a column until a human gate (or write confirm) stops it.
-- **Sandbox** — local workspace runs copy under `~/.norns/sandboxes/` (`directory`, hardened `docker`, or `none`). Allowlist **sandbox** for reproduce / env-build tools (`sandbox_run` uses docker exec when the container is live).
+- **Sandbox** — local workspace runs copy under `~/.norns/sandboxes/` (`directory`, hardened `docker`, or `none`). Host/Cursor file tools use the bind-mounted copy path; **command** isolation for `docker` is via the **sandbox** plugin (`sandbox_run` → docker exec). Allowlist **sandbox** for reproduce / env-build.
 - **Handoffs** — the only structured context for the next stage. On a gate, `recommendation` is advisory until a person confirms.
 - **Connectors** — Python libraries only; agents never see raw credentials. Empty tool allowlist means no tools.
 

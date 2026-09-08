@@ -10,6 +10,7 @@ from backend.app.database import (
     assert_fresh_schema,
     ensure_agent_config_llm_provider,
     ensure_connector_types,
+    ensure_stage_auto_start,
     ensure_stage_confirm_writes,
     ensure_workspace_columns,
 )
@@ -112,6 +113,49 @@ def test_ensure_stage_confirm_writes_adds_column(tmp_path: Path):
         cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stages)"))}
     engine.dispose()
     assert "confirm_writes" in cols
+
+
+def test_ensure_stage_auto_start_adds_column(tmp_path: Path):
+    path = tmp_path / "auto.db"
+    raw = sqlite3.connect(path)
+    raw.execute(
+        'CREATE TABLE stages (id TEXT PRIMARY KEY, board_id TEXT, name TEXT, "order" INTEGER, lane INTEGER, require_approval INTEGER)'
+    )
+    raw.commit()
+    raw.close()
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as conn:
+        ensure_stage_auto_start(conn)
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stages)"))}
+        # SQLite stores the portable default; dialect helper uses 0 for non-Postgres.
+        default = conn.execute(text("SELECT sql FROM sqlite_master WHERE name='stages'")).scalar()
+    engine.dispose()
+    assert "auto_start" in cols
+    assert default is not None
+
+
+def test_sql_false_uses_false_for_postgresql():
+    from backend.app.database import _sql_false
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Conn:
+        dialect = _Dialect()
+
+    assert _sql_false(_Conn()) == "FALSE"
+
+
+def test_sql_false_uses_zero_for_sqlite():
+    from backend.app.database import _sql_false
+
+    class _Dialect:
+        name = "sqlite"
+
+    class _Conn:
+        dialect = _Dialect()
+
+    assert _sql_false(_Conn()) == "0"
 
 
 def test_ensure_connector_types_legacy_insert(tmp_path: Path):
