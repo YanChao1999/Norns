@@ -97,11 +97,15 @@ def _prepare_cache_worktree(frontend: Path) -> Path:
 
 
 def _build_frontend(frontend: Path) -> Path:
-    work = frontend if _can_build_in_place(frontend) else _prepare_cache_worktree(frontend)
     npm = _npm_executable()
     if npm is not None:
+        work = frontend if _can_build_in_place(frontend) else _prepare_cache_worktree(frontend)
         _run_npm(npm, work)
     else:
+        # Docker is Linux (often arm64 on Apple Silicon). Never bind-mount a Darwin
+        # node_modules — rollup's optional native binding then goes missing
+        # (npm/cli#4828). Copy sources and install inside the container.
+        work = _prepare_cache_worktree(frontend)
         _build_frontend_with_docker(work)
     dist = work / "dist"
     if not _web_ui_is_complete(dist):
@@ -200,7 +204,7 @@ def docker_build_command(work: Path) -> list[str]:
             _node_image(),
             "sh",
             "-c",
-            "npm ci && npm run build",
+            "rm -rf node_modules && npm install && npm run build",
         ]
     )
     return command

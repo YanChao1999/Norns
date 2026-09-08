@@ -105,7 +105,7 @@ norns run
 
 ### Developer checkout
 
-`uv run` is an editable install, so it does not run the wheel build that bakes the UI in. `norns run` compiles `frontend/` on first start with npm if it is on PATH (or `./.tools/node`), otherwise with Docker using the same `node:20` image as `docker compose up`. If docker compose left `frontend/node_modules` root-owned, the build uses `~/.cache/norns/ui-build` instead. Rebuild after UI source changes with `./scripts/stage-ui.sh` (same npm-or-Docker path; it always rebuilds, unlike `norns run`).
+`uv run` is an editable install, so it does not run the wheel build that bakes the UI in. `norns run` compiles `frontend/` on first start with npm if it is on PATH (or `./.tools/node`), otherwise with Docker using the same `node:20` image as `docker compose up`. The Docker path copies sources into `~/.cache/norns/ui-build` and runs `npm install` there so a macOS `node_modules` is not reused inside Linux. Rebuild after UI source changes with `./scripts/stage-ui.sh` (same npm-or-Docker path; it always rebuilds, unlike `norns run`).
 
 ```bash
 uv sync
