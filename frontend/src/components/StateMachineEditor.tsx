@@ -247,8 +247,14 @@ export function StateMachineEditor({ boardId }: Props) {
   });
 
   const updateStage = useMutation({
-    mutationFn: async (payload: { name?: string; require_approval?: boolean; confirm_writes?: boolean; order?: number; lane?: number }) =>
-      apiClient.put<Stage>(`/stages/${selected?.id}`, payload),
+    mutationFn: async (payload: {
+      name?: string;
+      require_approval?: boolean;
+      confirm_writes?: boolean;
+      auto_start?: boolean;
+      order?: number;
+      lane?: number;
+    }) => apiClient.put<Stage>(`/stages/${selected?.id}`, payload),
     onSuccess: invalidateBoard
   });
 
@@ -441,6 +447,7 @@ export function StateMachineEditor({ boardId }: Props) {
                     (stage.id === drawingFrom ? ' is-drawing' : '') +
                     (stage.require_approval ? ' is-gated' : ' is-auto') +
                     (stage.confirm_writes ? ' is-confirm-writes' : '') +
+                    (stage.auto_start ? ' is-auto-start' : '') +
                     (parallelColumns.has(stage.order) ? ' is-parallel' : '')
                   }
                   onClick={() => pickNode(stage.id)}
@@ -454,6 +461,7 @@ export function StateMachineEditor({ boardId }: Props) {
                   <span>
                     {stage.require_approval ? 'Human gate' : 'Auto-advance'}
                     {stage.confirm_writes ? ' · confirm writes' : ''}
+                    {stage.auto_start ? ' · auto-start' : ''}
                   </span>
                 </button>
               ))}
@@ -491,6 +499,7 @@ export function StateMachineEditor({ boardId }: Props) {
               onSaveName={(name) => updateStage.mutate({ name })}
               onToggleGate={(requireApproval) => updateStage.mutate({ require_approval: requireApproval })}
               onToggleWrites={(confirmWrites) => updateStage.mutate({ confirm_writes: confirmWrites })}
+              onToggleAutoStart={(autoStart) => updateStage.mutate({ auto_start: autoStart })}
               onDrawLine={() => {
                 setDrawingFrom(selected.id);
                 setSelectedLineId(null);
@@ -583,6 +592,7 @@ interface StageInspectorProps {
   onSaveName: (name: string) => void;
   onToggleGate: (requireApproval: boolean) => void;
   onToggleWrites: (confirmWrites: boolean) => void;
+  onToggleAutoStart: (autoStart: boolean) => void;
   onDrawLine: () => void;
   onEditAgent: () => void;
   onAddParallel: (name: string) => void;
@@ -601,6 +611,7 @@ function StageInspector({
   onSaveName,
   onToggleGate,
   onToggleWrites,
+  onToggleAutoStart,
   onDrawLine,
   onEditAgent,
   onAddParallel,
@@ -660,6 +671,18 @@ function StageInspector({
           Require human approval
         </label>
         <p className="muted">The agent may recommend approve or reject. The card still waits here until a human confirms.</p>
+        <label className="tool-row">
+          <input
+            type="checkbox"
+            checked={Boolean(stage.auto_start)}
+            disabled={busy}
+            onChange={(event) => onToggleAutoStart(event.target.checked)}
+          />
+          Auto-start idle cards
+        </label>
+        <p className="muted">
+          When a card becomes idle on this column, the agent runs it automatically until a human gate (or write confirm) stops it. Turning this on also picks up idle cards already here.
+        </p>
       </div>
       <div className="field">
         <span>Writes</span>

@@ -129,6 +129,14 @@ async def reject_card(session: AsyncSession, card_id: str, actor: str, comment: 
     )
     if route.found and route.stage_id:
         return_card_to_stage(card, route.stage_id)
+        await session.commit()
+        await session.refresh(approval)
+        target = next((stage for stage in board.stages if stage.id == route.stage_id), None)
+        from .auto_start import maybe_auto_start_card
+
+        await maybe_auto_start_card(session, card, target)
+        await session.refresh(card)
+        return approval
     elif route.found:
         card.status = CardStatus.DONE
     else:

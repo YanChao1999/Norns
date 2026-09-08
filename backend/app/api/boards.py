@@ -40,6 +40,7 @@ class StageRead(BaseModel):
     lane: int = 0
     require_approval: bool
     confirm_writes: bool = False
+    auto_start: bool = False
     agent_config: AgentConfigRead | None = None
 
 
@@ -151,6 +152,7 @@ class StageCreate(BaseModel):
     from_stage_id: str | None = None
     require_approval: bool = True
     confirm_writes: bool = False
+    auto_start: bool = False
     system_prompt: str = (
         "You are the stage agent. Produce a concise handoff. "
         "If this stage has a human gate, recommend DECISION: approve or reject; a human must confirm."
@@ -169,6 +171,7 @@ class StageUpdate(BaseModel):
     lane: int | None = None
     require_approval: bool | None = None
     confirm_writes: bool | None = None
+    auto_start: bool | None = None
     system_prompt: str | None = None
     model: str | None = None
     llm_provider: str | None = None
@@ -320,6 +323,7 @@ async def create_stage(
         lane=lane,
         require_approval=payload.require_approval,
         confirm_writes=payload.confirm_writes,
+        auto_start=payload.auto_start,
     )
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,
@@ -402,6 +406,10 @@ async def update_stage(
             stage.agent_config.git_url = payload.git_url.strip()
 
     await session.commit()
+    if payload.auto_start is True:
+        from ..orchestrator.auto_start import pickup_idle_cards_for_stage
+
+        await pickup_idle_cards_for_stage(session, stage.id)
     result = await session.execute(select(Stage).where(Stage.id == stage.id).options(selectinload(Stage.agent_config)))
     return result.scalar_one()
 
