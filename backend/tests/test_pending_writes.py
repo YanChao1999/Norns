@@ -230,7 +230,9 @@ async def test_reject_pending_writes_cleans_sandbox(monkeypatch):
         stage = Stage(name="Urd", order=1, require_approval=True, confirm_writes=True)
         stage.agent_config = AgentConfig(system_prompt="x", model="gpt", temperature=0.1, tool_allowlist=["norns"])
         board.stages = [stage]
-        card = Card(title="Card", body="Body", board=board, current_stage=stage, status=CardStatus.WAITING_TOOL_APPROVAL)
+        card = Card(
+            title="Card", body="Body", board=board, current_stage=stage, status=CardStatus.WAITING_TOOL_APPROVAL
+        )
         board.cards = [card]
         run = AgentRun(
             card=card,
