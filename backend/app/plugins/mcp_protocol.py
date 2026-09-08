@@ -74,6 +74,11 @@ def _stdio_plugin_context(catalog: Any) -> PluginContext:
         workspace_path=str(os.environ.get("NORNS_WORKSPACE") or "").strip() or workspace.path,
         git_url=str(os.environ.get("NORNS_GIT_URL") or "").strip() or workspace.git_url,
         github_repo=str(os.environ.get("NORNS_GITHUB_REPO") or "").strip() or workspace.github_repo,
+        sandbox_path=str(os.environ.get("NORNS_SANDBOX_PATH") or "").strip(),
+        sandbox_backend=str(os.environ.get("NORNS_SANDBOX_BACKEND") or "").strip(),
+        sandbox_source_path=str(os.environ.get("NORNS_SANDBOX_SOURCE") or "").strip(),
+        sandbox_container_id=str(os.environ.get("NORNS_SANDBOX_CONTAINER_ID") or "").strip(),
+        sandbox_workdir=str(os.environ.get("NORNS_SANDBOX_WORKDIR") or "").strip(),
     )
 
 

@@ -59,6 +59,12 @@ class PluginContext:
     workspace_path: str = ""
     git_url: str = ""
     github_repo: str = ""
+    # Populated when the stage run prepared a sandbox (also mirrored as NORNS_SANDBOX_* for MCP).
+    sandbox_path: str = ""
+    sandbox_backend: str = ""
+    sandbox_source_path: str = ""
+    sandbox_container_id: str = ""
+    sandbox_workdir: str = ""
 
 
 class Plugin:

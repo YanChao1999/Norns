@@ -14,7 +14,7 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 
 - [x] **Connector form in Settings** — add/edit/disable OpenAI, Cursor, DeepSeek, Jira, GitHub, Polarion. OpenAI / Cursor / DeepSeek are model connectors (`api_key`, optional `base_url` / `default_model`). Jira needs `server`, `username`, `token`. GitHub needs `token` (optional `base_url`). Polarion needs `server`, `username`, `password`, optional `project`.
 - [x] **API key in Settings** — OpenAI-compatible keys are encrypted connectors (OpenAI, Cursor, DeepSeek). Env/`config.toml` still works as a fallback.
-- [x] **Agent setup path** — explain that the column **Agent** button opens prompt / model / tools; an empty tool allowlist grants no tools; checking `norns` / `jira` / `github` / `polarion` (or an MCP connector) attaches those plugins. Cursor stages get MCP; OpenAI-compatible stages get function tools.
+- [x] **Agent setup path** — explain that the column **Agent** button opens prompt / model / tools; an empty tool allowlist grants no tools; checking `norns` / `sandbox` / `jira` / `github` / `polarion` (or an MCP connector) attaches those plugins. Cursor stages get MCP; OpenAI-compatible stages get function tools.
 - [ ] **Warn when tools have no connector** — do not silently grant nothing.
 - [ ] **Empty state after login** — with no boards, land in Settings (or a short checklist): create board → API key → connector if you need tools → open the board.
 - [ ] **Login copy** — username is `admin`; password was printed by `norns init` and is in `~/.norns/config.toml`.
@@ -27,6 +27,7 @@ This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-inst
 ## After first use / publish
 
 - [x] **Hardened Docker sandbox** — only the sandbox copy bind-mounted, `--cap-drop ALL`, read-only rootfs, no-new-privileges, tmpfs for scratch (`sandbox.backend = "docker"`). Host-side agent tools still see the copy path; containerized `run_in_sandbox` is the hard jail.
+- [x] **Sandbox MCP plugin** — allowlist `sandbox` for `sandbox_info` / `sandbox_run` / list-read-write / `sandbox_copy_in` so agents can reproduce issues and build envs inside the per-run copy (docker exec when hardened Docker is active).
 - [ ] **Sandbox microVM backend** — stronger isolation when containers are not enough (`sandbox.backend = "microvm"`). Prefer hardened `docker` until then.
 - [ ] **gVisor + agent runtime policy** — user-space kernel (gVisor or similar) plus a policy layer that controls what agents may exec, read, write, and reach on the network (`sandbox.backend = "gvisor"` reserved).
 - [ ] **Alembic** — in-place upgrades for `~/.norns` SQLite and Postgres after 0.0.1 is published.

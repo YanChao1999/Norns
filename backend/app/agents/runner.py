@@ -34,7 +34,7 @@ from ..plantuml.renderer import render_plantuml
 from ..plugins.base import PluginContext
 from ..plugins.catalog import cursor_mcp_servers
 from ..plugins.tool_policy import is_write_tool
-from ..sandbox import prepare_sandbox, serialize_sandbox
+from ..sandbox import prepare_sandbox, sandbox_env_vars, serialize_sandbox
 from ..tools.registry import RuntimeTool, create_default_registry
 from ..utc import utc_now
 from ..workspace import Workspace, resolve_workspace
@@ -208,18 +208,27 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
 
     registry = create_default_registry()
     allowlist = stage.agent_config.tool_allowlist if stage.agent_config else []
+    sandbox_meta = dict(sandbox_handle.metadata or {}) if sandbox_handle is not None else {}
+    plugin_context = PluginContext(
+        connectors=connectors,
+        board_id=card.board_id,
+        card_id=card.id,
+        stage_id=stage.id,
+        workspace_path=workspace.path,
+        git_url=workspace.git_url,
+        github_repo=workspace.github_repo,
+        sandbox_path=sandbox_handle.path if sandbox_handle is not None else "",
+        sandbox_backend=sandbox_handle.backend if sandbox_handle is not None else "",
+        sandbox_source_path=(sandbox_handle.source_path if sandbox_handle is not None else "")
+        or source_workspace.path
+        or "",
+        sandbox_container_id=str(sandbox_meta.get("container_id") or ""),
+        sandbox_workdir=str(sandbox_meta.get("workdir") or ""),
+    )
     runtime_tools = registry.get_runtime_tools(
         allowlist,
         connectors,
-        context=PluginContext(
-            connectors=connectors,
-            board_id=card.board_id,
-            card_id=card.id,
-            stage_id=stage.id,
-            workspace_path=workspace.path,
-            git_url=workspace.git_url,
-            github_repo=workspace.github_repo,
-        ),
+        context=plugin_context,
     )
     mcp_preview = cursor_mcp_servers(
         allowlist, connectors, confirm_writes=bool(getattr(stage, "confirm_writes", False))
@@ -268,6 +277,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             repo_url=creds.repo_url,
             connectors=connectors,
             workspace=workspace,
+            sandbox_handle=sandbox_handle,
             run_id=run.id,
             confirm_writes=bool(getattr(stage, "confirm_writes", False)),
             parallel_targets=parallel_targets,
@@ -388,6 +398,7 @@ async def _execute_agent(
     repo_url: str = "",
     connectors: list[Any] | None = None,
     workspace: Any | None = None,
+    sandbox_handle: Any | None = None,
     run_id: str = "",
     confirm_writes: bool = False,
     parallel_targets: list[Stage] | None = None,
@@ -465,6 +476,7 @@ async def _execute_agent(
                 extra_env["NORNS_GIT_URL"] = workspace.git_url
             if getattr(workspace, "github_repo", ""):
                 extra_env["NORNS_GITHUB_REPO"] = workspace.github_repo
+        extra_env.update(sandbox_env_vars(sandbox_handle))
         extra_env = {key: value for key, value in extra_env.items() if value}
         mcp_servers = cursor_mcp_servers(
             stage.agent_config.tool_allowlist if stage.agent_config else [],

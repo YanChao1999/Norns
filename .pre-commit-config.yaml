@@ -1,0 +1,19 @@
+# Local format, lint, and tests. Install: uv sync --extra dev && uv run pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(backend|worker|norns)/|^(norns_build\.py|scripts/check-dist\.py|scripts/check-served-ui\.py)$
+      - id: ruff-format
+        files: ^(backend|worker|norns)/|^(norns_build\.py|scripts/check-dist\.py|scripts/check-served-ui\.py)$
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest backend/tests/ -q
+        language: system
+        pass_filenames: false
+        files: ^(backend|worker|norns)/|\.py$

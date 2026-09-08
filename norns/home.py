@@ -61,6 +61,7 @@ def init_home(home: Path, *, force: bool = False) -> tuple[Path, str]:
                 "# directory = copy only (default; isolation by convention).",
                 "# docker = copy + hardened container (bind copy only, cap-drop ALL, read-only rootfs).",
                 "# none = shared path. Later: microvm / gvisor + policy layer (reserved stubs).",
+                "# Allowlist the sandbox plugin on a column Agent for MCP tools (sandbox_run, …).",
                 'backend = "directory"',
                 '# image = "public.ecr.aws/docker/library/python:3.12-slim"',
                 "",

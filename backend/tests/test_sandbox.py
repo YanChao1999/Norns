@@ -195,3 +195,77 @@ def test_run_in_sandbox_uses_docker_exec(tmp_path: Path, monkeypatch: pytest.Mon
     result = run_in_sandbox(handle, ["pytest", "-q"])
     assert result.returncode == 0
     assert seen[0] == ["/usr/bin/docker", "exec", "-w", "/workspace", "abc", "pytest", "-q"]
+
+
+def test_sandbox_env_and_handle_roundtrip(tmp_path: Path):
+    from backend.app.sandbox import SandboxHandle, handle_from_env, resolve_under_root, sandbox_env_vars
+
+    handle = SandboxHandle(
+        path=str(tmp_path / "copy"),
+        backend="docker",
+        source_path=str(tmp_path / "src"),
+        metadata={"container_id": "cid", "workdir": "/workspace", "hardened": True},
+    )
+    env = sandbox_env_vars(handle)
+    assert env["NORNS_SANDBOX_PATH"] == handle.path
+    assert env["NORNS_SANDBOX_CONTAINER_ID"] == "cid"
+    rebuilt = handle_from_env(env)
+    assert rebuilt is not None
+    assert rebuilt.path == handle.path
+    assert rebuilt.backend == "docker"
+    assert rebuilt.metadata and rebuilt.metadata["container_id"] == "cid"
+    root = tmp_path / "copy"
+    root.mkdir()
+    (root / "ok.txt").write_text("x", encoding="utf-8")
+    assert resolve_under_root(root, "ok.txt").name == "ok.txt"
+    with pytest.raises(ValueError, match="escapes"):
+        resolve_under_root(root, "../outside")
+
+
+@pytest.mark.asyncio
+async def test_sandbox_plugin_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from backend.app.plugins.base import PluginContext
+    from backend.app.plugins.sandbox import SandboxPlugin
+
+    source = tmp_path / "src"
+    source.mkdir()
+    (source / "fixture.txt").write_text("from-source", encoding="utf-8")
+    copy = tmp_path / "sandboxes" / "copy"
+    copy.mkdir(parents=True)
+    (copy / "readme.txt").write_text("hello", encoding="utf-8")
+
+    context = PluginContext(
+        sandbox_path=str(copy),
+        sandbox_backend="directory",
+        sandbox_source_path=str(source),
+        workspace_path=str(copy),
+    )
+    tools = {spec.name: spec for spec in SandboxPlugin().tools(context)}
+    info = await tools["sandbox_info"].execute({})
+    assert info["active"] is True
+    assert info["backend"] == "directory"
+    listed = await tools["sandbox_list"].execute({"path": "."})
+    assert any(entry["name"] == "readme.txt" for entry in listed["entries"])
+    read = await tools["sandbox_read_file"].execute({"path": "readme.txt"})
+    assert read["content"] == "hello"
+    written = await tools["sandbox_write_file"].execute({"path": "repro.sh", "content": "#!/bin/sh\necho ok\n"})
+    assert written["ok"] is True
+    assert (copy / "repro.sh").is_file()
+    copied = await tools["sandbox_copy_in"].execute({"source": "fixture.txt"})
+    assert copied["ok"] is True
+    assert (copy / "fixture.txt").read_text(encoding="utf-8") == "from-source"
+    escaped = await tools["sandbox_read_file"].execute({"path": "../src/fixture.txt"})
+    assert "error" in escaped
+
+    seen: list[list[str]] = []
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        seen.append(list(command))
+        return SimpleNamespace(stdout="ok\n", stderr="", returncode=0)
+
+    monkeypatch.setattr("backend.app.sandbox.providers.subprocess.run", fake_run)
+    ran = await tools["sandbox_run"].execute({"command": ["echo", "ok"]})
+    assert ran["returncode"] == 0
+    assert ran["command"] == ["echo", "ok"]
+    assert seen == [["echo", "ok"]]
