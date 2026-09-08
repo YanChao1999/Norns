@@ -276,9 +276,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               {sandbox ? ` · ${sandbox}` : ''}
             </h3>
             {sandbox && latestCurrentRun?.inputs?.sandbox && typeof latestCurrentRun.inputs.sandbox === 'object' ? (
-              <p className="muted">
-                Workspace copy: {String((latestCurrentRun.inputs.sandbox as Record<string, unknown>).path || '')}
-              </p>
+              <p className="muted">Workspace copy: {String((latestCurrentRun.inputs.sandbox as Record<string, unknown>).path || '')}</p>
             ) : null}
             {latestCurrentRun.model_output.trim() ? <MarkdownPreview source={latestCurrentRun.model_output} /> : <p className="muted">No model output.</p>}
           </section>
