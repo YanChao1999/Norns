@@ -170,7 +170,8 @@ def test_stage_control_room_uses_compose_node_image_when_npm_is_missing(
     assert 'rel="stylesheet"' in (dest / "index.html").read_text(encoding="utf-8")
     assert recorded["cmd"][0] == "/usr/bin/docker"
     assert COMPOSE_NODE_IMAGE in recorded["cmd"]
-    assert "rm -rf node_modules && npm install && npm run build" in recorded["cmd"]
+    assert "npm install --no-save --no-package-lock" in recorded["cmd"][-1]
+    assert "@rollup/rollup-" in recorded["cmd"][-1]
 
 
 def test_stage_control_room_force_rebuilds_when_web_is_already_complete(
