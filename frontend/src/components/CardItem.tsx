@@ -27,7 +27,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, onOpen }: Props
       {card.status === 'waiting_approval' ? <div className="card-live">Your turn — confirm the agent&apos;s approve or reject</div> : null}
       {card.status === 'waiting_tool_approval' ? <div className="card-live">Your turn — confirm this write before it runs</div> : null}
       {card.status === 'blocked' ? <div className="card-live">Blocked — run again when ready</div> : null}
-      {card.status === 'waiting_join' ? <div className="card-live">Waiting for other parallel tracks</div> : null}
+      {card.status === 'waiting_join' ? <div className="card-live">Legacy join wait (unused)</div> : null}
       {isParallelLane && card.parent_card_id ? <div className="card-live">Parallel track</div> : null}
     </button>
   );

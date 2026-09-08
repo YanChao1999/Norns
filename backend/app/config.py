@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     environment: str = Field(default="local", alias="NORNS_ENV")
     stale_run_seconds: int = Field(default=1800, alias="STALE_RUN_SECONDS")
     cursor_timeout_seconds: float = Field(default=1200.0, alias="CURSOR_TIMEOUT_SECONDS")
+    sandbox_backend: str = Field(default="directory", alias="SANDBOX_BACKEND")
+    sandbox_root: str = Field(default="", alias="NORNS_SANDBOX_ROOT")
+    sandbox_image: str = Field(default="", alias="NORNS_SANDBOX_IMAGE")
+
+    @field_validator("sandbox_backend")
+    @classmethod
+    def sandbox_backend_known(cls, value: str) -> str:
+        name = str(value or "directory").strip().lower() or "directory"
+        if name not in {"directory", "docker", "none", "microvm", "gvisor"}:
+            raise ValueError("SANDBOX_BACKEND must be one of: directory, docker, none, microvm, gvisor")
+        return name
 
     @field_validator("encryption_key")
     @classmethod

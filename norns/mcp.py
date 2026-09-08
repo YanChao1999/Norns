@@ -13,7 +13,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--plugins",
         default="",
-        help="Comma-separated plugin ids (norns,github,jira,polarion). Empty = all built-ins.",
+        help="Comma-separated plugin ids (norns,sandbox,github,jira,polarion). Empty = all built-ins.",
     )
     parser.add_argument(
         "--confirm-writes",

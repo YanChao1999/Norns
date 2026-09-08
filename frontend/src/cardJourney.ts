@@ -130,6 +130,20 @@ export function pluginsSnapshot(run: AgentRun | null | undefined): { allowlist: 
   return { allowlist, attached, jiraConnector };
 }
 
+export function sandboxLabel(run: AgentRun | null | undefined): string {
+  const sandbox = run?.inputs?.sandbox;
+  if (!sandbox || typeof sandbox !== 'object') {
+    return '';
+  }
+  const record = sandbox as Record<string, unknown>;
+  const backend = String(record.backend || '').trim();
+  const path = String(record.path || '').trim();
+  if (!path || backend === 'none') {
+    return '';
+  }
+  return backend ? `sandbox:${backend}` : 'sandbox';
+}
+
 export function formatRunTime(value: string | null | undefined): string {
   if (!value) {
     return '';

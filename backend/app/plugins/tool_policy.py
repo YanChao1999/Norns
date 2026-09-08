@@ -15,6 +15,9 @@ WRITE_FRAGMENTS = (
     "create_subtask",
     "create_card",
     "create_pull",
+    "sandbox_run",
+    "sandbox_write",
+    "sandbox_copy",
 )
 
 

@@ -247,7 +247,7 @@ export function StateMachineEditor({ boardId }: Props) {
   });
 
   const updateStage = useMutation({
-    mutationFn: async (payload: { name?: string; require_approval?: boolean; confirm_writes?: boolean; order?: number; lane?: number }) =>
+    mutationFn: async (payload: { name?: string; require_approval?: boolean; confirm_writes?: boolean; auto_start?: boolean; order?: number; lane?: number }) =>
       apiClient.put<Stage>(`/stages/${selected?.id}`, payload),
     onSuccess: invalidateBoard
   });
@@ -317,7 +317,11 @@ export function StateMachineEditor({ boardId }: Props) {
       <div className="board-head">
         <div>
           <h1>State machine · {board.name}</h1>
-          <p>Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage.</p>
+          <p>
+            Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage. After parallel
+            tracks, add your own later column (Review, Merge, …) and draw a line from each track into it — each card arrives and runs on its own as soon as it
+            is ready (open a PR, merge to main, etc.). There is no wait-for-all barrier.
+          </p>
         </div>
       </div>
 
@@ -438,6 +442,7 @@ export function StateMachineEditor({ boardId }: Props) {
                     (stage.id === drawingFrom ? ' is-drawing' : '') +
                     (stage.require_approval ? ' is-gated' : ' is-auto') +
                     (stage.confirm_writes ? ' is-confirm-writes' : '') +
+                    (stage.auto_start ? ' is-auto-start' : '') +
                     (parallelColumns.has(stage.order) ? ' is-parallel' : '')
                   }
                   onClick={() => pickNode(stage.id)}
@@ -451,6 +456,7 @@ export function StateMachineEditor({ boardId }: Props) {
                   <span>
                     {stage.require_approval ? 'Human gate' : 'Auto-advance'}
                     {stage.confirm_writes ? ' · confirm writes' : ''}
+                    {stage.auto_start ? ' · auto-start' : ''}
                   </span>
                 </button>
               ))}
@@ -488,6 +494,7 @@ export function StateMachineEditor({ boardId }: Props) {
               onSaveName={(name) => updateStage.mutate({ name })}
               onToggleGate={(requireApproval) => updateStage.mutate({ require_approval: requireApproval })}
               onToggleWrites={(confirmWrites) => updateStage.mutate({ confirm_writes: confirmWrites })}
+              onToggleAutoStart={(autoStart) => updateStage.mutate({ auto_start: autoStart })}
               onDrawLine={() => {
                 setDrawingFrom(selected.id);
                 setSelectedLineId(null);
@@ -509,7 +516,7 @@ export function StateMachineEditor({ boardId }: Props) {
           ) : (
             <p className="muted">
               Select a stage, then Draw line and click another stage. Place only moves the stage on the grid. Add parallel row or a second default line to run
-              tracks at the same time.
+              tracks at the same time. The previous column agent plans the split into one card per track.
             </p>
           )}
         </aside>
@@ -580,6 +587,7 @@ interface StageInspectorProps {
   onSaveName: (name: string) => void;
   onToggleGate: (requireApproval: boolean) => void;
   onToggleWrites: (confirmWrites: boolean) => void;
+  onToggleAutoStart: (autoStart: boolean) => void;
   onDrawLine: () => void;
   onEditAgent: () => void;
   onAddParallel: (name: string) => void;
@@ -598,6 +606,7 @@ function StageInspector({
   onSaveName,
   onToggleGate,
   onToggleWrites,
+  onToggleAutoStart,
   onDrawLine,
   onEditAgent,
   onAddParallel,
@@ -657,6 +666,14 @@ function StageInspector({
           Require human approval
         </label>
         <p className="muted">The agent may recommend approve or reject. The card still waits here until a human confirms.</p>
+        <label className="tool-row">
+          <input type="checkbox" checked={Boolean(stage.auto_start)} disabled={busy} onChange={(event) => onToggleAutoStart(event.target.checked)} />
+          Auto-start idle cards
+        </label>
+        <p className="muted">
+          When a card becomes idle on this column, the agent runs it automatically until a human gate (or write confirm) stops it. Turning this on also picks up
+          idle cards already here.
+        </p>
       </div>
       <div className="field">
         <span>Writes</span>
@@ -698,7 +715,8 @@ function StageInspector({
         />
       </label>
       <p className="muted">
-        Adds a new row in the next column and a second default line so both tracks run. To join later, draw a line from each row into the same later column.
+        Adds a new row in the next column and a second default line so both tracks run. To review or merge later, create that column yourself and draw a line
+        from each parallel row into it — each forked card runs there independently when it arrives (PR review, merge to main, …).
       </p>
       <div className="machine-inspector-actions">
         <button

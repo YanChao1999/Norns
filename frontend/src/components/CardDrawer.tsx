@@ -14,6 +14,7 @@ import {
   pluginsSnapshot,
   runsForStage,
   safeHttpUrl,
+  sandboxLabel,
   stageName
 } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
@@ -131,6 +132,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
   const reasonCompare = latestCurrentRun ? compareRunDecision(latestCurrentRun, previousCurrentRun) : 'first';
   const plugins = pluginsSnapshot(latestCurrentRun);
   const llm = llmLabel(latestCurrentRun);
+  const sandbox = sandboxLabel(latestCurrentRun);
   const outgoing = (board?.transitions ?? []).filter((edge) => edge.from_stage_id === card.current_stage_id);
   const approveLines = outgoing.filter((edge) => edge.event === 'approve');
   const rejectLines = outgoing.filter((edge) => edge.event === 'reject');
@@ -271,7 +273,11 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
             <h3>
               Run log · {currentStageLabel}
               {llm ? ` · ${llm}` : ''}
+              {sandbox ? ` · ${sandbox}` : ''}
             </h3>
+            {sandbox && latestCurrentRun?.inputs?.sandbox && typeof latestCurrentRun.inputs.sandbox === 'object' ? (
+              <p className="muted">Workspace copy: {String((latestCurrentRun.inputs.sandbox as Record<string, unknown>).path || '')}</p>
+            ) : null}
             {latestCurrentRun.model_output.trim() ? <MarkdownPreview source={latestCurrentRun.model_output} /> : <p className="muted">No model output.</p>}
           </section>
         ) : null}
@@ -347,7 +353,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
             </button>
           </>
         ) : null}
-        {joining ? <span className="muted">This track is in. Waiting for the other parallel stages to finish, then they merge.</span> : null}
+        {joining ? <span className="muted">Legacy waiting_join status — new boards run converging stages independently.</span> : null}
         {inProgress ? <WaitLive startedAt={latestCurrentRun?.created_at ?? card.updated_at} variant="footer" /> : null}
         {!canRun && !waiting && !waitingWrites && !joining && !inProgress ? <span className="muted">No gate action on this card.</span> : null}
       </footer>

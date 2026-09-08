@@ -20,6 +20,7 @@ export interface Stage {
   lane?: number;
   require_approval: boolean;
   confirm_writes?: boolean;
+  auto_start?: boolean;
   agent_config?: AgentConfig | null;
 }
 

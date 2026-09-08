@@ -81,6 +81,10 @@ def _prepare_cache_worktree(frontend: Path) -> Path:
     """Copy frontend sources to a writable cache when docker compose owns node_modules/dist."""
     work = _ui_build_cache()
     work.mkdir(parents=True, exist_ok=True)
+    for leftover in ("node_modules", "dist"):
+        stale = work / leftover
+        if stale.exists():
+            shutil.rmtree(stale)
     for item in frontend.iterdir():
         if item.name in {"node_modules", "dist"}:
             continue
@@ -97,11 +101,15 @@ def _prepare_cache_worktree(frontend: Path) -> Path:
 
 
 def _build_frontend(frontend: Path) -> Path:
-    work = frontend if _can_build_in_place(frontend) else _prepare_cache_worktree(frontend)
     npm = _npm_executable()
     if npm is not None:
+        work = frontend if _can_build_in_place(frontend) else _prepare_cache_worktree(frontend)
         _run_npm(npm, work)
     else:
+        # Docker is Linux (often arm64 on Apple Silicon). Never bind-mount a Darwin
+        # node_modules — rollup's optional native binding then goes missing
+        # (npm/cli#4828). Copy sources and install inside the container.
+        work = _prepare_cache_worktree(frontend)
         _build_frontend_with_docker(work)
     dist = work / "dist"
     if not _web_ui_is_complete(dist):
@@ -180,6 +188,16 @@ def _node_image() -> str:
     return override or COMPOSE_NODE_IMAGE
 
 
+DOCKER_NPM_BUILD = """
+set -e
+rm -rf node_modules
+npm install
+pkg=$(node -e 'const p=process.platform,a=process.arch; let s=""; if (p==="linux") { const g=process.report?.getReport?.().header?.glibcVersionRuntime; s=g?"-gnu":"-musl"; } process.stdout.write("@rollup/rollup-"+p+"-"+a+s);')
+npm install --no-save --no-package-lock "$pkg"
+npm run build
+""".strip()
+
+
 def docker_build_command(work: Path) -> list[str]:
     docker = _docker_executable()
     if docker is None:
@@ -200,7 +218,7 @@ def docker_build_command(work: Path) -> list[str]:
             _node_image(),
             "sh",
             "-c",
-            "npm ci && npm run build",
+            DOCKER_NPM_BUILD,
         ]
     )
     return command

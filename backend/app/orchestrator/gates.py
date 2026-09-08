@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import datetime
 
 from sqlalchemy import select
@@ -9,6 +10,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import Approval, Board, Card, Connector, Stage
 from ..plugins.base import PluginContext, apply_run_ids
+from ..sandbox import cleanup_serialized_sandbox
+from ..utc import utc_now
 from .enqueue import EnqueueError, enqueue_stage_run
 from .progression import resolve_route, resolve_routes
 from .split import apply_forward_routes, load_family_cards
@@ -48,15 +51,28 @@ def _latest_stage_run(card: Card):
 
 def _write_plugin_context(card: Card, run, connectors: list[Connector]) -> PluginContext:
     workspace = dict((run.inputs or {}).get("workspace") or {})
+    sandbox = dict((run.inputs or {}).get("sandbox") or {})
+    meta = dict(sandbox.get("metadata") or {}) if isinstance(sandbox.get("metadata"), dict) else {}
     return PluginContext(
         connectors=connectors,
         board_id=card.board_id,
         card_id=card.id,
         stage_id=card.current_stage_id,
-        workspace_path=str(workspace.get("path") or ""),
+        workspace_path=str(workspace.get("path") or sandbox.get("path") or ""),
         git_url=str(workspace.get("git_url") or ""),
         github_repo=str(workspace.get("github_repo") or ""),
+        sandbox_path=str(sandbox.get("path") or ""),
+        sandbox_backend=str(sandbox.get("backend") or ""),
+        sandbox_source_path=str(sandbox.get("source_path") or ""),
+        sandbox_container_id=str(meta.get("container_id") or ""),
+        sandbox_workdir=str(meta.get("workdir") or ""),
     )
+
+
+def _cleanup_run_sandbox(run) -> None:
+    """Tear down the sandbox kept alive while waiting for write confirmation."""
+    with suppress(Exception):
+        cleanup_serialized_sandbox(dict((run.inputs or {}).get("sandbox") or {}))
 
 
 async def approve_card(session: AsyncSession, card_id: str, actor: str, comment: str | None = None) -> Approval:
@@ -129,6 +145,14 @@ async def reject_card(session: AsyncSession, card_id: str, actor: str, comment: 
     )
     if route.found and route.stage_id:
         return_card_to_stage(card, route.stage_id)
+        await session.commit()
+        await session.refresh(approval)
+        target = next((stage for stage in board.stages if stage.id == route.stage_id), None)
+        from .auto_start import maybe_auto_start_card
+
+        await maybe_auto_start_card(session, card, target)
+        await session.refresh(card)
+        return approval
     elif route.found:
         card.status = CardStatus.DONE
     else:
@@ -211,12 +235,13 @@ async def approve_pending_writes(
     flag_modified(latest_run, "inputs")
     latest_run.tool_calls = executed
     latest_run.status = "completed"
-    latest_run.completed_at = datetime.utcnow()
+    latest_run.completed_at = utc_now()
     latest_run.handoff = {
         **(latest_run.handoff if isinstance(latest_run.handoff, dict) else {}),
         "summary": "Operator confirmed pending writes. Re-running this stage to verify.",
         "pending_writes": [],
     }
+    _cleanup_run_sandbox(latest_run)
     approval = Approval(
         card_id=card.id,
         stage_id=card.current_stage_id,
@@ -252,12 +277,13 @@ async def reject_pending_writes(
     latest_run.inputs = inputs
     flag_modified(latest_run, "inputs")
     latest_run.status = "completed"
-    latest_run.completed_at = datetime.utcnow()
+    latest_run.completed_at = utc_now()
     latest_run.handoff = {
         **(latest_run.handoff if isinstance(latest_run.handoff, dict) else {}),
         "summary": "Operator declined pending writes.",
         "pending_writes": [],
     }
+    _cleanup_run_sandbox(latest_run)
     approval = Approval(
         card_id=card.id,
         stage_id=card.current_stage_id,

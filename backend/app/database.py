@@ -30,6 +30,7 @@ async def init_db() -> None:
         await conn.run_sync(ensure_agent_config_llm_provider)
         await conn.run_sync(ensure_workspace_columns)
         await conn.run_sync(ensure_stage_confirm_writes)
+        await conn.run_sync(ensure_stage_auto_start)
         await conn.run_sync(assert_fresh_schema)
 
 
@@ -110,7 +111,28 @@ def ensure_stage_confirm_writes(sync_conn) -> None:
         return
     present = {column["name"] for column in inspector.get_columns("stages")}
     if "confirm_writes" not in present:
-        sync_conn.execute(text("ALTER TABLE stages ADD COLUMN confirm_writes BOOLEAN NOT NULL DEFAULT 0"))
+        sync_conn.execute(
+            text(f"ALTER TABLE stages ADD COLUMN confirm_writes BOOLEAN NOT NULL DEFAULT {_sql_false(sync_conn)}")
+        )
+
+
+def ensure_stage_auto_start(sync_conn) -> None:
+    inspector = inspect(sync_conn)
+    if not inspector.has_table("stages"):
+        return
+    present = {column["name"] for column in inspector.get_columns("stages")}
+    if "auto_start" not in present:
+        sync_conn.execute(
+            text(f"ALTER TABLE stages ADD COLUMN auto_start BOOLEAN NOT NULL DEFAULT {_sql_false(sync_conn)}")
+        )
+
+
+def _sql_false(sync_conn) -> str:
+    """Portable SQL false literal (PostgreSQL rejects integer 0 for BOOLEAN defaults)."""
+    dialect = getattr(getattr(sync_conn, "dialect", None), "name", "") or ""
+    if dialect == "postgresql":
+        return "FALSE"
+    return "0"
 
 
 def assert_fresh_schema(sync_conn) -> None:

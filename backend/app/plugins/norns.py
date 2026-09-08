@@ -377,6 +377,10 @@ async def _create_card(arguments: dict[str, Any]) -> Any:
         session.add(card)
         await session.commit()
         await session.refresh(card)
+        from ..orchestrator.auto_start import maybe_auto_start_card
+
+        await maybe_auto_start_card(session, card, stages[0])
+        await session.refresh(card)
         return _card_payload(card)
 
 

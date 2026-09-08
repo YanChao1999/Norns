@@ -57,6 +57,14 @@ def init_home(home: Path, *, force: bool = False) -> tuple[Path, str]:
                 "[queue]",
                 'backend = "inline"',
                 "",
+                "[sandbox]",
+                "# directory = copy only (default; isolation by convention).",
+                "# docker = copy + hardened container (bind copy only, cap-drop ALL, read-only rootfs).",
+                "# none = shared path. Later: microvm / gvisor + policy layer (reserved stubs).",
+                "# Allowlist the sandbox plugin on a column Agent for MCP tools (sandbox_run, …).",
+                'backend = "directory"',
+                '# image = "public.ecr.aws/docker/library/python:3.12-slim"',
+                "",
                 "[openai]",
                 'api_key = ""',
                 'base_url = "https://api.openai.com/v1"',
@@ -94,6 +102,7 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     server = data.get("server", {})
     auth = data.get("auth", {})
     queue = data.get("queue", {})
+    sandbox = data.get("sandbox", {})
     openai = data.get("openai", {})
     cursor = data.get("cursor", {})
     deepseek = data.get("deepseek", {})
@@ -102,6 +111,15 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     db_path = home / "norns.db"
     os.environ["DATABASE_URL"] = sqlite_url(db_path)
     os.environ["QUEUE_BACKEND"] = str(queue.get("backend", "inline"))
+    os.environ["SANDBOX_BACKEND"] = str(sandbox.get("backend", "directory"))
+    sandbox_root = str(sandbox.get("root", "") or "").strip()
+    if sandbox_root:
+        os.environ["NORNS_SANDBOX_ROOT"] = sandbox_root
+    else:
+        os.environ["NORNS_SANDBOX_ROOT"] = str((home / "sandboxes").resolve())
+    sandbox_image = str(sandbox.get("image", "") or "").strip()
+    if sandbox_image:
+        os.environ["NORNS_SANDBOX_IMAGE"] = sandbox_image
     os.environ["SECRET_KEY"] = str(auth.get("secret_key", ""))
     os.environ["ENCRYPTION_KEY"] = str(auth.get("encryption_key", ""))
     os.environ["ADMIN_USERNAME"] = str(auth.get("admin_username", "admin"))

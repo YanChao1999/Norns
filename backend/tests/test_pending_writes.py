@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.app.database import Base
 from backend.app.models import AgentConfig, AgentRun, Board, Card, Stage
-from backend.app.orchestrator.gates import approve_pending_writes
+from backend.app.orchestrator.gates import approve_pending_writes, reject_pending_writes
 from backend.app.orchestrator.state_machine import CardStatus
 from backend.app.plugins.base import PluginContext
 from backend.app.tools.registry import RuntimeTool
@@ -211,5 +211,46 @@ async def test_approve_pending_writes_keeps_existing_external_id(monkeypatch):
         await session.refresh(card)
         assert approval.approved is True
         assert card.external_id == "5E96-147"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_reject_pending_writes_cleans_sandbox(monkeypatch):
+    engine, SessionLocal = await _session_factory()
+    cleaned: list[dict] = []
+
+    def fake_cleanup(payload):
+        cleaned.append(dict(payload or {}))
+
+    monkeypatch.setattr("backend.app.orchestrator.gates.cleanup_serialized_sandbox", fake_cleanup)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        stage = Stage(name="Urd", order=1, require_approval=True, confirm_writes=True)
+        stage.agent_config = AgentConfig(system_prompt="x", model="gpt", temperature=0.1, tool_allowlist=["norns"])
+        board.stages = [stage]
+        card = Card(
+            title="Card", body="Body", board=board, current_stage=stage, status=CardStatus.WAITING_TOOL_APPROVAL
+        )
+        board.cards = [card]
+        run = AgentRun(
+            card=card,
+            stage=stage,
+            inputs={
+                "pending_writes": [{"name": "norns_update_card", "arguments": {"title": "Nope"}}],
+                "sandbox": {"backend": "docker", "path": "/tmp/sb", "metadata": {"container_id": "cid"}},
+            },
+            tool_calls=[],
+            model_output="queued",
+            handoff={"summary": "queued"},
+            status="waiting_tool",
+        )
+        session.add_all([board, run])
+        await session.commit()
+
+        approval = await reject_pending_writes(session, card.id, "admin")
+        assert approval.approved is False
+        assert cleaned and cleaned[0]["path"] == "/tmp/sb"
 
     await engine.dispose()

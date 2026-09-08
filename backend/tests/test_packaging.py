@@ -148,14 +148,17 @@ def test_stage_control_room_uses_compose_node_image_when_npm_is_missing(
     frontend.mkdir()
     (frontend / "package.json").write_text("{}", encoding="utf-8")
     (tmp_path / "norns" / "web").mkdir(parents=True)
+    cache = tmp_path / "ui-build"
+    monkeypatch.setenv("NORNS_UI_BUILD_DIR", str(cache))
     monkeypatch.setattr("norns_build._npm_executable", lambda: None)
     monkeypatch.setattr("norns_build._docker_executable", lambda: "/usr/bin/docker")
-    monkeypatch.setattr("norns_build._can_build_in_place", lambda _frontend: True)
     recorded: dict[str, list[str]] = {}
 
     def fake_run(cmd, cwd=None, check=False, **_kwargs):
         recorded["cmd"] = list(cmd)
-        dist = frontend / "dist"
+        volume = next(part for i, part in enumerate(cmd) if i and cmd[i - 1] == "-v")
+        work = Path(volume.split(":", 1)[0])
+        dist = work / "dist"
         dist.mkdir(parents=True, exist_ok=True)
         (dist / "index.html").write_text(_complete_index(), encoding="utf-8")
         (dist / "assets").mkdir(exist_ok=True)
@@ -167,7 +170,8 @@ def test_stage_control_room_uses_compose_node_image_when_npm_is_missing(
     assert 'rel="stylesheet"' in (dest / "index.html").read_text(encoding="utf-8")
     assert recorded["cmd"][0] == "/usr/bin/docker"
     assert COMPOSE_NODE_IMAGE in recorded["cmd"]
-    assert "npm ci && npm run build" in recorded["cmd"]
+    assert "npm install --no-save --no-package-lock" in recorded["cmd"][-1]
+    assert "@rollup/rollup-" in recorded["cmd"][-1]
 
 
 def test_stage_control_room_force_rebuilds_when_web_is_already_complete(

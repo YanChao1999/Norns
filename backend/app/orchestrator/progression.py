@@ -92,7 +92,37 @@ def is_join_stage(
     stage_id: str,
     stages: Sequence[Stage] | None = None,
 ) -> bool:
+    """True when multiple default forward lines enter a stage (soft join — no wait/merge)."""
     return len(incoming_join_sources(transitions, stage_id, stages)) >= 2
+
+
+def outgoing_parallel_targets(
+    stages: Sequence[Stage],
+    transitions: Sequence[StageTransition],
+    from_stage_id: str,
+    *,
+    event: str = "approve",
+) -> list[Stage]:
+    """Default forward targets that would fan out from this stage (ignore handoff Ifs)."""
+    matching = [edge for edge in transitions if edge.from_stage_id == from_stage_id and edge.event == event]
+    if event == "auto" and not matching:
+        matching = [edge for edge in transitions if edge.from_stage_id == from_stage_id and edge.event == "approve"]
+    defaults = sorted(
+        [edge for edge in matching if not edge.condition_key.strip()],
+        key=lambda edge: edge.order,
+    )
+    forward = [edge for edge in defaults if _is_forward(stages, from_stage_id, edge.to_stage_id)]
+    chosen = forward or defaults
+    by_id = {stage.id: stage for stage in stages}
+    targets: list[Stage] = []
+    seen: set[str] = set()
+    for edge in chosen:
+        stage = by_id.get(edge.to_stage_id)
+        if stage is None or stage.id in seen:
+            continue
+        seen.add(stage.id)
+        targets.append(stage)
+    return targets
 
 
 def _stage_order(stages: Sequence[Stage], stage_id: str | None) -> int | None:

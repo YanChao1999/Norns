@@ -15,6 +15,7 @@ from ..models.connector import Connector, ConnectorType
 from .adapters import ExternalMcpPlugin, github_plugin, jira_plugin, polarion_plugin
 from .base import Plugin, PluginContext, ToolSpec
 from .norns import NornsPlugin
+from .sandbox import SandboxPlugin
 
 ENTRY_POINT_GROUP = "norns.plugins"
 
@@ -62,7 +63,7 @@ class PluginCatalog:
 
 
 def builtin_plugins() -> list[Plugin]:
-    return [NornsPlugin(), github_plugin(), jira_plugin(), polarion_plugin()]
+    return [NornsPlugin(), SandboxPlugin(), github_plugin(), jira_plugin(), polarion_plugin()]
 
 
 def load_entry_point_plugins() -> list[Plugin]:

@@ -17,6 +17,8 @@ def test_init_creates_config(tmp_path: Path):
     assert "encryption_key" in text
     assert "secret_key" in text
     assert 'backend = "inline"' in text
+    assert "[sandbox]" in text
+    assert 'backend = "directory"' in text
     assert "[cursor]" in text
     assert "[deepseek]" in text
     assert password
@@ -57,6 +59,8 @@ def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
     assert runtime["host"] == "127.0.0.1"
     assert runtime["port"] == 8765
     assert os.environ["QUEUE_BACKEND"] == "inline"
+    assert os.environ["SANDBOX_BACKEND"] == "directory"
+    assert os.environ["NORNS_SANDBOX_ROOT"] == str((home / "sandboxes").resolve())
     assert os.environ["DATABASE_URL"] == sqlite_url(home / "norns.db")
     assert os.environ["NORNS_HOME"] == str(home.resolve())
     assert os.environ["NORNS_ENV"] == "local"

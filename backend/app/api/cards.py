@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_session
 from ..models import AgentRun, Approval, Board, Card
+from ..orchestrator.auto_start import maybe_auto_start_card
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.gates import approve_card, approve_pending_writes, reject_card, reject_pending_writes
 from ..orchestrator.state_machine import CardStatus, start_card_run
@@ -108,6 +109,8 @@ async def create_card(
     )
     session.add(card)
     await session.commit()
+    await session.refresh(card)
+    await maybe_auto_start_card(session, card, stages[0])
     await session.refresh(card)
     return card
 

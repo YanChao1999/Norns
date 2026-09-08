@@ -5,7 +5,7 @@ import { apiClient } from '../api/client';
 import { Stage } from '../types';
 import { Dialog } from './Dialog';
 
-const FALLBACK_PLUGINS = ['norns', 'github', 'jira', 'polarion'];
+const FALLBACK_PLUGINS = ['norns', 'sandbox', 'github', 'jira', 'polarion'];
 
 interface PluginInfo {
   name: string;
@@ -257,8 +257,9 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
       <div className="field">
         <span>Plugins / MCP — empty allowlist grants none</span>
         <p className="muted">
-          Enable norns (cards, stages, prompts, git workspace), github, jira, polarion, or an MCP connector from Settings. Cursor stages receive these as MCP
-          servers; OpenAI/DeepSeek stages use the same tools as functions. Confirm writes is per stage on Machine, not bound to column names.
+          Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build: run commands in the jail, read/write the copy), github, jira,
+          polarion, or an MCP connector from Settings. Cursor stages receive these as MCP servers; OpenAI/DeepSeek stages use the same tools as functions.
+          Confirm writes is per stage on Machine, not bound to column names.
         </p>
         <div className="tool-row">
           {availableTools.map((tool) => {

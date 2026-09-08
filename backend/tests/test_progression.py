@@ -1,6 +1,12 @@
 from types import SimpleNamespace
 
-from backend.app.orchestrator.progression import is_join_stage, next_stage_after, resolve_route, resolve_routes
+from backend.app.orchestrator.progression import (
+    is_join_stage,
+    next_stage_after,
+    outgoing_parallel_targets,
+    resolve_route,
+    resolve_routes,
+)
 from backend.app.orchestrator.state_machine import CardStatus, auto_advance_card, return_card_to_stage
 
 
@@ -157,6 +163,36 @@ def test_join_stage_has_two_incoming_default_lines():
     ]
     assert is_join_stage(edges, "integration", stages) is True
     assert is_join_stage(edges, "tests", stages) is False
+
+
+def test_outgoing_parallel_targets_lists_default_forwards():
+    stages = [
+        SimpleNamespace(id="arch", name="Arch", order=1, lane=0),
+        SimpleNamespace(id="tests", name="Unit tests", order=2, lane=0),
+        SimpleNamespace(id="software", name="Software", order=2, lane=1),
+    ]
+    edges = [
+        _edge(from_stage_id="arch", to_stage_id="tests", order=0),
+        _edge(from_stage_id="arch", to_stage_id="software", order=1),
+    ]
+    targets = outgoing_parallel_targets(stages, edges, "arch")
+    assert [item.id for item in targets] == ["tests", "software"]
+
+
+def test_outgoing_parallel_targets_prefers_auto_edges():
+    stages = [
+        SimpleNamespace(id="arch", name="Arch", order=1, lane=0),
+        SimpleNamespace(id="tests", name="Unit tests", order=2, lane=0),
+        SimpleNamespace(id="software", name="Software", order=2, lane=1),
+        SimpleNamespace(id="legacy", name="Legacy", order=2, lane=2),
+    ]
+    edges = [
+        _edge(from_stage_id="arch", to_stage_id="legacy", order=0, event="approve"),
+        _edge(from_stage_id="arch", to_stage_id="tests", order=0, event="auto"),
+        _edge(from_stage_id="arch", to_stage_id="software", order=1, event="auto"),
+    ]
+    targets = outgoing_parallel_targets(stages, edges, "arch", event="auto")
+    assert [item.id for item in targets] == ["tests", "software"]
 
 
 def test_boolean_handoff_matches_json_true():

@@ -35,6 +35,7 @@ dev = [
   "pytest-asyncio>=0.23.8",
   "pytest-cov>=5.0.0",
   "ruff>=0.8.0",
+  "pre-commit>=4.0.0",
   "build>=1.2.0",
   "twine>=6.0.0",
 ]
@@ -44,6 +45,7 @@ norns = "norns.cli:main"
 
 [project.entry-points."norns.plugins"]
 norns = "backend.app.plugins.norns:NornsPlugin"
+sandbox = "backend.app.plugins.sandbox:SandboxPlugin"
 github = "backend.app.plugins.adapters:github_plugin"
 jira = "backend.app.plugins.adapters:jira_plugin"
 polarion = "backend.app.plugins.adapters:polarion_plugin"

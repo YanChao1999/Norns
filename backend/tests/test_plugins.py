@@ -21,7 +21,7 @@ from backend.app.tools.registry import create_default_registry
 
 def test_catalog_includes_builtin_plugins():
     catalog = load_plugin_catalog([])
-    assert {plugin.name for plugin in catalog.plugins} >= {"norns", "github", "jira", "polarion"}
+    assert {plugin.name for plugin in catalog.plugins} >= {"norns", "sandbox", "github", "jira", "polarion"}
     norns = catalog.by_name()["norns"]
     assert norns.available([]) is True
     assert catalog.by_name()["jira"].available([]) is False
@@ -29,6 +29,15 @@ def test_catalog_includes_builtin_plugins():
     assert "norns_create_card" in norns_names
     assert "norns_get_workspace" in norns_names
     assert "norns_update_card" in norns_names
+    sandbox_names = {spec.name for spec in catalog.tools(["sandbox"], PluginContext())}
+    assert sandbox_names >= {
+        "sandbox_info",
+        "sandbox_list",
+        "sandbox_read_file",
+        "sandbox_write_file",
+        "sandbox_copy_in",
+        "sandbox_run",
+    }
 
 
 def test_default_registry_includes_norns():
