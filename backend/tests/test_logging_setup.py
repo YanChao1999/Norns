@@ -18,7 +18,9 @@ def test_compact_error_strips_cursor_model_catalog():
 
 def test_quiet_access_filter_drops_health_and_polls():
     filt = QuietAccessFilter()
-    health = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s" %s', ("127.0.0.1:1", "GET /api/health HTTP/1.1", "200"), None)
+    health = logging.LogRecord(
+        "uvicorn.access", logging.INFO, "", 0, '%s - "%s" %s', ("127.0.0.1:1", "GET /api/health HTTP/1.1", "200"), None
+    )
     # uvicorn AccessFormatter builds getMessage from args; set msg already formatted for the filter
     health.msg = '127.0.0.1:1 - "GET /api/health HTTP/1.1" 200'
     health.args = ()
