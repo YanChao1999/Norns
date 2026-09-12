@@ -38,6 +38,10 @@ def test_quiet_access_filter_drops_health_and_polls():
     run.msg = '127.0.0.1:1 - "POST /api/cards/abc/run HTTP/1.1" 202 Accepted'
     assert filt.filter(run) is True
 
+    health_fail = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, "%s", (), None)
+    health_fail.msg = '127.0.0.1:1 - "GET /api/health HTTP/1.1" 500'
+    assert filt.filter(health_fail) is True
+
 
 def test_uvicorn_log_config_wires_norns_logger():
     config = uvicorn_log_config()

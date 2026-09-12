@@ -119,16 +119,23 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
     setForm((current) => {
       const savedProvider = stage.agent_config?.llm_provider?.trim() || '';
       const savedModel = stage.agent_config?.model || '';
-      // Keep an explicit user/provider-bound choice (anything other than the legacy board default).
-      if (savedProvider && savedModel && savedModel !== 'gpt-4o') {
+      const isLegacyCursorGpt4o = savedModel === 'gpt-4o' && savedProvider === 'cursor';
+      const isUnboundGpt4o = savedModel === 'gpt-4o' && !savedProvider;
+      // Keep explicit provider-bound choices (including OpenAI gpt-4o). Only rewrite
+      // unbound board defaults and Cursor-bound legacy gpt-4o.
+      if (savedProvider && savedModel && !isLegacyCursorGpt4o) {
         return current;
       }
-      // Upgrade legacy gpt-4o defaults — including Cursor-bound stages that still send gpt-4o.
-      if (current.model === 'gpt-4o' || (!savedProvider && current.model === preferred.id)) {
-        if (current.model === preferred.id && current.llm_provider === preferred.provider) {
+      if (isLegacyCursorGpt4o || isUnboundGpt4o || (!savedProvider && current.model === preferred.id)) {
+        const next = isLegacyCursorGpt4o
+          ? entries.find((entry) => entry.usable && entry.provider === 'cursor' && entry.id === 'auto') ||
+            entries.find((entry) => entry.usable && entry.provider === 'cursor') ||
+            preferred
+          : preferred;
+        if (current.model === next.id && current.llm_provider === next.provider) {
           return current;
         }
-        return { ...current, model: preferred.id, llm_provider: preferred.provider };
+        return { ...current, model: next.id, llm_provider: next.provider };
       }
       if (!current.llm_provider && preferred.provider) {
         return { ...current, llm_provider: preferred.provider };

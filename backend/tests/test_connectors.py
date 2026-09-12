@@ -207,3 +207,28 @@ async def test_fetch_cursor_catalog_uses_http_models_and_labels(monkeypatch):
     labels = {entry.id: entry.label for entry in catalog.entries}
     assert labels["composer-2.5"] == "Composer 2.5 · Cursor"
     assert labels["grok-4.6"] == "Grok 4.6 · Cursor"
+
+
+@pytest.mark.asyncio
+async def test_fetch_cursor_catalog_drops_stale_gpt4o_default(monkeypatch):
+    from backend.app.connector_config import LlmCredentials, fetch_llm_model_catalog
+    from backend.app.cursor_api import CursorModelInfo
+
+    async def fake_infos(api_key: str, *, base_url: str = ""):
+        return [
+            CursorModelInfo(id="composer-2.5", display_name="Composer 2.5"),
+            CursorModelInfo(id="auto", display_name="Auto"),
+        ]
+
+    monkeypatch.setattr("backend.app.cursor_api.list_cursor_model_infos", fake_infos)
+    catalog = await fetch_llm_model_catalog(
+        LlmCredentials(
+            api_key="crsr_test",
+            base_url="https://api.cursor.com/v1",
+            default_model="gpt-4o",
+            provider="cursor",
+        )
+    )
+    assert catalog.source == "api"
+    assert "gpt-4o" not in catalog.models
+    assert catalog.default_model == "auto"

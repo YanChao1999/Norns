@@ -17,17 +17,24 @@ _QUIET_ACCESS_PARTS = (
     "/assets/",
 )
 _QUIET_POLL_RE = re.compile(r'"GET /(?:api/boards/[^"\s]+|api/cards/[^"\s]+/runs) HTTP/[^"]*" 200\b')
+_ACCESS_STATUS_RE = re.compile(r'"\s+(\d{3})\b')
+
+
+def _is_success_access(message: str) -> bool:
+    match = _ACCESS_STATUS_RE.search(message)
+    return bool(match and match.group(1).startswith("2"))
 
 
 class QuietAccessFilter(logging.Filter):
-    """Drop routine Control Room polling and static asset hits from the access log."""
+    """Drop routine successful Control Room polling and static asset hits from the access log."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             message = record.getMessage()
         except Exception:  # noqa: BLE001 — never break logging
             return True
-        if any(part in message for part in _QUIET_ACCESS_PARTS):
+        # Keep failed health/static/poll requests visible; only quiet 2xx noise.
+        if _is_success_access(message) and any(part in message for part in _QUIET_ACCESS_PARTS):
             return False
         return not _QUIET_POLL_RE.search(message)
 

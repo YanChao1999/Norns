@@ -404,10 +404,20 @@ async def fetch_llm_model_catalog(creds: LlmCredentials) -> LlmModelCatalog:
             remote = await cursor_api_mod.list_cursor_model_infos(creds.api_key, base_url=creds.base_url)
             remote_ids = [item.id for item in remote]
             display_names = {item.id: item.display_name for item in remote if item.display_name}
-            models = filter_chat_model_ids(creds.provider, remote_ids, default_model=creds.default_model)
+            # Only keep the connector default when the live catalog actually includes it
+            # (a stale gpt-4o default must not appear as an API-sourced Cursor model).
+            configured = str(creds.default_model or "").strip()
+            default_in_catalog = configured if configured in remote_ids else ""
+            models = filter_chat_model_ids(creds.provider, remote_ids, default_model=default_in_catalog)
+            if default_in_catalog:
+                default_model = default_in_catalog
+            elif DEFAULT_CURSOR_MODEL in models:
+                default_model = DEFAULT_CURSOR_MODEL
+            else:
+                default_model = models[0] if models else fallback[0]
             catalog = LlmModelCatalog(
                 provider=creds.provider,
-                default_model=creds.default_model or (models[0] if models else fallback[0]),
+                default_model=default_model,
                 models=models or fallback,
                 source="api",
             )
