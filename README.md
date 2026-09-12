@@ -17,8 +17,6 @@ Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Bac
 
 ## Downloads
 
-Daily PyPI trend for `norns-ide` (refreshed from [pypistats](https://pypistats.org/packages/norns-ide); more history on [pepy.tech](https://pepy.tech/projects/norns-ide)):
-
 ![norns-ide PyPI downloads trend](assets/downloads-trend.svg)
 
 ## Install
