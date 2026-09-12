@@ -65,4 +65,5 @@ async def health(session: Annotated[AsyncSession, Depends(get_session)]) -> dict
         "status": "ok",
         "llm_configured": llm_configured,
         "openai_configured": llm_configured,
+        "cursor_timeout_seconds": float(settings.cursor_timeout_seconds),
     }

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from .models.connector import SECRET_CONFIG_KEYS, Connector, ConnectorType
+
+logger = logging.getLogger("norns")
 
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_OPENAI_MODEL = "gpt-4o"
@@ -43,11 +46,35 @@ FALLBACK_MODELS: dict[ConnectorType, tuple[str, ...]] = {
         "deepseek-chat",
         "deepseek-reasoner",
     ),
-    ConnectorType.CURSOR: ("auto", "auto-smart", "composer-2", "composer-2.5"),
+    # Curated when cursor-sdk list_models fails; keep in sync with Cursor.models.list() favorites.
+    ConnectorType.CURSOR: (
+        "auto",
+        "auto-smart",
+        "composer-2",
+        "composer-2.5",
+        "grok-4.6",
+        "claude-sonnet-4-5",
+        "claude-opus-4-6",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gemini-3-flash",
+        "kimi-k2.7-code",
+    ),
 }
 
 # Model ids that only make sense on Cursor Cloud Agents / Cursor Router.
 CURSOR_ONLY_MODEL_IDS = frozenset({"auto", "auto-smart", "default"})
+
+# OpenAI / DeepSeek chat ids that Cursor Cloud Agents reject (e.g. legacy board default gpt-4o).
+_NON_CURSOR_CHAT_MODEL_IDS = frozenset(
+    {
+        *(m.lower() for m in FALLBACK_MODELS[ConnectorType.OPENAI]),
+        *(m.lower() for m in FALLBACK_MODELS[ConnectorType.DEEPSEEK]),
+        "gpt-4",
+        "gpt-3.5-turbo",
+        "chatgpt-4o-latest",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,6 +109,16 @@ def uses_cursor_cloud_agent(provider: str, base_url: str) -> bool:
     return "api.cursor.com" in url
 
 
+def _is_foreign_to_cursor(model: str) -> bool:
+    """True for OpenAI/DeepSeek chat ids that Cursor Cloud Agents reject."""
+    name = str(model or "").strip().lower()
+    if not name or name in CURSOR_ONLY_MODEL_IDS:
+        return False
+    if name.startswith("deepseek"):
+        return True
+    return name in _NON_CURSOR_CHAT_MODEL_IDS
+
+
 def resolve_stage_model(
     *,
     provider: str,
@@ -92,12 +129,16 @@ def resolve_stage_model(
     """Pick a model id that the selected provider can actually call.
 
     Stages often keep Cursor's ``auto`` after switching the provider to DeepSeek/OpenAI;
-    OpenAI-compatible APIs reject that id (DeepSeek 400).
+    OpenAI-compatible APIs reject that id (DeepSeek 400). Conversely, board defaults like
+    ``gpt-4o`` must be remapped when the stage runs on Cursor Cloud Agents.
     """
     fallback = str(default_model or "").strip()
     model = str(stage_model or "").strip() or fallback
     if uses_cursor_cloud_agent(provider, base_url):
-        return model or DEFAULT_CURSOR_MODEL
+        if not model or _is_foreign_to_cursor(model):
+            cursor_default = fallback if fallback and not _is_foreign_to_cursor(fallback) else DEFAULT_CURSOR_MODEL
+            return cursor_default
+        return model
     if not model or model.lower() in CURSOR_ONLY_MODEL_IDS:
         return fallback or model
     return model
@@ -255,7 +296,12 @@ def fallback_models_for(provider: str) -> list[str]:
 
 
 def filter_chat_model_ids(provider: str, model_ids: list[str], *, default_model: str = "") -> list[str]:
-    """Keep chat-oriented ids; OpenAI /v1/models returns hundreds of embeddings/audio rows."""
+    """Keep chat-oriented ids; OpenAI /v1/models returns hundreds of embeddings/audio rows.
+
+    When the remote list is empty (or fully filtered), pad with the curated provider fallback
+    list. Previously, inserting ``default_model`` first left ``preferred`` non-empty so Cursor
+    collapsed to only ``auto`` whenever list_models failed.
+    """
     preferred: list[str] = []
     seen: set[str] = set()
 
@@ -268,10 +314,14 @@ def filter_chat_model_ids(provider: str, model_ids: list[str], *, default_model:
 
     if default_model.strip():
         add(default_model.strip())
-    for model_id in sorted(model_ids):
+    added_from_remote = False
+    # Preserve Cursor API order (recommended catalog); sort OpenAI/DeepSeek for stability.
+    remote_ids = model_ids if provider == "cursor" else sorted(model_ids)
+    for model_id in remote_ids:
         if _is_chat_model_id(provider, model_id):
             add(model_id)
-    if not preferred:
+            added_from_remote = True
+    if not added_from_remote:
         for model_id in fallback_models_for(provider):
             add(model_id)
     return preferred
@@ -305,17 +355,23 @@ def _is_chat_model_id(provider: str, model_id: str) -> bool:
     return name.startswith("ft:") and "gpt" in name
 
 
-def _catalog_entries(catalog: LlmModelCatalog, creds: LlmCredentials) -> list[LlmModelEntry]:
+def _catalog_entries(
+    catalog: LlmModelCatalog,
+    creds: LlmCredentials,
+    *,
+    display_names: dict[str, str] | None = None,
+) -> list[LlmModelEntry]:
     try:
         label_prefix = LLM_LABELS[ConnectorType(catalog.provider)]
     except ValueError:
         label_prefix = catalog.provider
     usable = supports_chat_completions(creds)
+    names = display_names or {}
     return [
         LlmModelEntry(
             id=model_id,
             provider=catalog.provider,
-            label=f"{model_id} · {label_prefix}",
+            label=f"{names.get(model_id) or model_id} · {label_prefix}",
             usable=usable,
             source=catalog.source,
         )
@@ -343,9 +399,11 @@ async def fetch_llm_model_catalog(creds: LlmCredentials) -> LlmModelCatalog:
         )
     try:
         if uses_cursor_cloud_agent(creds.provider, creds.base_url):
-            from ..cursor_api import list_cursor_models
+            from . import cursor_api as cursor_api_mod
 
-            remote_ids = await list_cursor_models(creds.api_key, base_url=creds.base_url)
+            remote = await cursor_api_mod.list_cursor_model_infos(creds.api_key, base_url=creds.base_url)
+            remote_ids = [item.id for item in remote]
+            display_names = {item.id: item.display_name for item in remote if item.display_name}
             models = filter_chat_model_ids(creds.provider, remote_ids, default_model=creds.default_model)
             catalog = LlmModelCatalog(
                 provider=creds.provider,
@@ -353,12 +411,17 @@ async def fetch_llm_model_catalog(creds: LlmCredentials) -> LlmModelCatalog:
                 models=models or fallback,
                 source="api",
             )
+            logger.info(
+                "Loaded %d Cursor models from API for agent selection (default=%s)",
+                len(catalog.models),
+                catalog.default_model,
+            )
             return LlmModelCatalog(
                 provider=catalog.provider,
                 default_model=catalog.default_model,
                 models=catalog.models,
                 source=catalog.source,
-                entries=_catalog_entries(catalog, creds),
+                entries=_catalog_entries(catalog, creds, display_names=display_names),
             )
 
         from openai import AsyncOpenAI
@@ -381,12 +444,19 @@ async def fetch_llm_model_catalog(creds: LlmCredentials) -> LlmModelCatalog:
             entries=_catalog_entries(catalog, creds),
         )
     except Exception as exc:  # noqa: BLE001 — any provider/network error falls back to curated list
+        err = str(exc)[:240]
+        logger.warning(
+            "LLM model list failed for %s (%s); using curated fallback (%d models)",
+            creds.provider,
+            err,
+            len(fallback),
+        )
         catalog = LlmModelCatalog(
             provider=creds.provider,
             default_model=creds.default_model or fallback[0],
             models=fallback,
             source="fallback",
-            error=str(exc)[:240],
+            error=err,
         )
         return LlmModelCatalog(
             provider=catalog.provider,

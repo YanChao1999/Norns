@@ -25,6 +25,7 @@ from ..connector_config import (
 from ..cursor_api import run_cursor_cloud_agent
 from ..database import AsyncSessionLocal
 from ..faults import loop_tool_error_if_injected, runner_timeout_if_injected
+from ..logging_setup import compact_error_for_log
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.progression import outgoing_parallel_targets, resolve_routes
@@ -362,7 +363,12 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         run.completed_at = utc_now()
         card.status = CardStatus.IDLE
         await session.commit()
-        logger.warning("Stage run stopped card=%s stage=%s: %s", card.id, stage.id, detail)
+        logger.error(
+            "Stage run failed card=%s stage=%s: %s",
+            card.id,
+            stage.id,
+            compact_error_for_log(detail),
+        )
         return
     finally:
         should_cleanup = sandbox_handle is not None and getattr(run, "status", None) != "waiting_tool"
@@ -429,6 +435,24 @@ async def _execute_agent(
         stage_model=stage_model,
         default_model=resolved_model,
     )
+    provider_name = str(provider or "").strip().lower() or "unknown"
+    if str(stage_model or "").strip() != str(model or "").strip():
+        logger.warning(
+            "Stage model remapped card=%s stage=%s %s -> %s (provider=%s)",
+            getattr(card, "id", ""),
+            getattr(stage, "id", ""),
+            stage_model or "(empty)",
+            model,
+            provider_name,
+        )
+    else:
+        logger.info(
+            "Stage run start card=%s stage=%s provider=%s model=%s",
+            getattr(card, "id", ""),
+            getattr(stage, "id", ""),
+            provider_name,
+            model,
+        )
     temperature = config.temperature if config else 0.7
     workspace_bits = ""
     if workspace and (getattr(workspace, "path", "") or getattr(workspace, "git_url", "")):

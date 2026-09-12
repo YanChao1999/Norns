@@ -49,9 +49,16 @@ def run_ide(*, host: str, port: int, open_window: bool = True) -> int:
     except Exception as exc:
         print(f"Could not build Control Room UI: {exc}", file=sys.stderr)
         return 1
+    from backend.app.logging_setup import uvicorn_log_config
     from backend.app.main import app
 
-    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    config = uvicorn.Config(
+        app,
+        host=host,
+        port=port,
+        log_level="info",
+        log_config=uvicorn_log_config(),
+    )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()

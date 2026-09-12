@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
-from backend.app.cursor_api import _bridge_workspace, list_cursor_models, run_cursor_cloud_agent
+from backend.app.cursor_api import (
+    _bridge_workspace,
+    list_cursor_model_infos,
+    list_cursor_models,
+    run_cursor_cloud_agent,
+)
 
 
 class _FakeBridgeClient:
@@ -13,7 +19,7 @@ class _FakeBridgeClient:
 
     async def list_models(self, *, api_key: str):
         assert api_key == "crsr_test"
-        return [SimpleNamespace(id="composer-2"), SimpleNamespace(id="auto")]
+        return [SimpleNamespace(id="composer-2", display_name="Composer 2"), SimpleNamespace(id="auto")]
 
     async def __aenter__(self):
         return self
@@ -28,13 +34,67 @@ def test_bridge_workspace_reuses_one_directory():
 
 
 @pytest.mark.asyncio
-async def test_list_cursor_models_uses_sdk_bridge(monkeypatch):
+async def test_list_cursor_models_uses_http_api(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return {
+                "items": [
+                    {"id": "composer-2.5", "displayName": "Composer 2.5"},
+                    {"id": "default", "displayName": "Auto"},
+                    {"id": "grok-4.6", "displayName": "Grok 4.6"},
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, **kwargs):
+            assert url.endswith("/v1/models")
+            assert kwargs.get("auth") == ("crsr_test", "")
+            return FakeResponse()
+
+    monkeypatch.setattr("httpx.AsyncClient", FakeClient)
+    infos = await list_cursor_model_infos("crsr_test")
+    assert [item.id for item in infos] == ["composer-2.5", "auto", "grok-4.6"]
+    assert infos[0].display_name == "Composer 2.5"
+    models = await list_cursor_models("crsr_test")
+    assert models == ["composer-2.5", "auto", "grok-4.6"]
+
+
+@pytest.mark.asyncio
+async def test_list_cursor_models_falls_back_to_sdk_bridge(monkeypatch):
     client = _FakeBridgeClient()
+
+    class BoomClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, *args, **kwargs):
+            raise httpx.ConnectError("offline")
 
     async def fake_launch_bridge(*, workspace: str):
         assert workspace
         return client
 
+    monkeypatch.setattr("httpx.AsyncClient", BoomClient)
     monkeypatch.setattr(
         "backend.app.cursor_api.AsyncClient.launch_bridge",
         staticmethod(fake_launch_bridge),
@@ -91,6 +151,48 @@ async def test_run_cursor_cloud_agent_uses_sdk_bridge(monkeypatch):
     assert created["prompt"] == "Do the stage"
     assert created["closed"] is True
     assert client.closed is True
+
+
+@pytest.mark.asyncio
+async def test_run_cursor_cloud_agent_remaps_gpt4o(monkeypatch):
+    seen: dict[str, object] = {}
+    client = _FakeBridgeClient()
+
+    class FakeRun:
+        async def wait(self) -> None:
+            return None
+
+        async def text(self) -> str:
+            return "ok"
+
+    class FakeAgent:
+        async def send(self, prompt: str):
+            return FakeRun()
+
+        async def aclose(self) -> None:
+            return None
+
+    async def fake_launch_bridge(*, workspace: str):
+        return client
+
+    async def fake_create(*, client, model, api_key, name, cloud):
+        seen["model"] = model
+        return FakeAgent()
+
+    monkeypatch.setattr(
+        "backend.app.cursor_api.AsyncClient.launch_bridge",
+        staticmethod(fake_launch_bridge),
+    )
+    monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
+
+    text = await run_cursor_cloud_agent(
+        api_key="crsr_test",
+        prompt="Do the stage",
+        model="gpt-4o",
+        timeout_seconds=5.0,
+    )
+    assert text == "ok"
+    assert seen["model"] == "auto"
 
 
 @pytest.mark.asyncio

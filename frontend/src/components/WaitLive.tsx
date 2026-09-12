@@ -1,13 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
-import { waitCopy } from '../waitProgress';
+import { apiClient } from '../api/client';
+import { DEFAULT_CURSOR_TIMEOUT_MS, waitCopy } from '../waitProgress';
 
 interface Props {
   startedAt?: string | null;
   variant?: 'card' | 'banner' | 'footer';
+  timeoutMs?: number;
 }
 
-export function WaitLive({ startedAt, variant = 'card' }: Props) {
+function useCursorTimeoutMs(overrideMs?: number): number {
+  const { data } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => apiClient.get<{ cursor_timeout_seconds?: number }>('/health'),
+    staleTime: 60_000
+  });
+  if (typeof overrideMs === 'number' && overrideMs > 0) {
+    return overrideMs;
+  }
+  const seconds = data?.cursor_timeout_seconds;
+  if (typeof seconds === 'number' && seconds > 0) {
+    return Math.round(seconds * 1000);
+  }
+  return DEFAULT_CURSOR_TIMEOUT_MS;
+}
+
+export function WaitLive({ startedAt, variant = 'card', timeoutMs }: Props) {
+  const limitMs = useCursorTimeoutMs(timeoutMs);
   const [now, setNow] = useState(() => Date.now());
   const startMs = useMemo(() => {
     const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
@@ -20,7 +40,7 @@ export function WaitLive({ startedAt, variant = 'card' }: Props) {
     return () => window.clearInterval(timer);
   }, [startMs]);
 
-  const copy = waitCopy(now - startMs);
+  const copy = waitCopy(now - startMs, limitMs);
 
   if (variant === 'footer') {
     return (

@@ -71,7 +71,7 @@ def test_deepseek_connector_credentials_are_used_for_runs():
 
 
 def test_resolve_stage_model_replaces_cursor_auto_for_deepseek():
-    from backend.app.connector_config import DEFAULT_DEEPSEEK_MODEL, resolve_stage_model
+    from backend.app.connector_config import DEFAULT_CURSOR_MODEL, DEFAULT_DEEPSEEK_MODEL, resolve_stage_model
 
     assert (
         resolve_stage_model(
@@ -91,6 +91,24 @@ def test_resolve_stage_model_replaces_cursor_auto_for_deepseek():
         )
         == "auto"
     )
+    assert (
+        resolve_stage_model(
+            provider="cursor",
+            base_url="https://api.cursor.com/v1",
+            stage_model="gpt-4o",
+            default_model="auto",
+        )
+        == DEFAULT_CURSOR_MODEL
+    )
+    assert (
+        resolve_stage_model(
+            provider="cursor",
+            base_url="https://api.cursor.com/v1",
+            stage_model="composer-2.5",
+            default_model="auto",
+        )
+        == "composer-2.5"
+    )
 
 
 def test_filter_chat_model_ids_keeps_provider_defaults():
@@ -105,6 +123,11 @@ def test_filter_chat_model_ids_keeps_provider_defaults():
     assert "whisper-1" not in openai
     deepseek = filter_chat_model_ids("deepseek", ["deepseek-v4-flash", "other"], default_model="deepseek-v4-flash")
     assert deepseek == ["deepseek-v4-flash"]
+    cursor_empty = filter_chat_model_ids("cursor", [], default_model="auto")
+    assert cursor_empty[0] == "auto"
+    assert "composer-2.5" in cursor_empty
+    assert "grok-4.6" in cursor_empty
+    assert len(cursor_empty) > 1
 
 
 def test_merge_connector_config_keeps_blank_secrets():
@@ -155,3 +178,32 @@ async def test_fetch_llm_model_catalog_uses_remote_list():
     assert catalog.source == "api"
     assert catalog.models[0] == "deepseek-v4-flash"
     assert "deepseek-v4-pro" in catalog.models
+
+
+@pytest.mark.asyncio
+async def test_fetch_cursor_catalog_uses_http_models_and_labels(monkeypatch):
+    from backend.app.connector_config import LlmCredentials, fetch_llm_model_catalog
+    from backend.app.cursor_api import CursorModelInfo
+
+    async def fake_infos(api_key: str, *, base_url: str = ""):
+        assert api_key == "crsr_test"
+        return [
+            CursorModelInfo(id="composer-2.5", display_name="Composer 2.5"),
+            CursorModelInfo(id="auto", display_name="Auto"),
+            CursorModelInfo(id="grok-4.6", display_name="Grok 4.6"),
+        ]
+
+    monkeypatch.setattr("backend.app.cursor_api.list_cursor_model_infos", fake_infos)
+    catalog = await fetch_llm_model_catalog(
+        LlmCredentials(
+            api_key="crsr_test",
+            base_url="https://api.cursor.com/v1",
+            default_model="auto",
+            provider="cursor",
+        )
+    )
+    assert catalog.source == "api"
+    assert catalog.models == ["auto", "composer-2.5", "grok-4.6"]
+    labels = {entry.id: entry.label for entry in catalog.entries}
+    assert labels["composer-2.5"] == "Composer 2.5 · Cursor"
+    assert labels["grok-4.6"] == "Grok 4.6 · Cursor"
