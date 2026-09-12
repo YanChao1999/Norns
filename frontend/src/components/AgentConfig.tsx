@@ -63,7 +63,8 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
     queryKey: ['llm-models'],
     enabled: Boolean(stage),
     queryFn: () => apiClient.get<LlmModelCatalog>('/connectors/llm-models'),
-    staleTime: 60_000
+    staleTime: 30_000,
+    refetchOnMount: 'always'
   });
   const { data: plugins = [] } = useQuery({
     queryKey: ['plugins'],
@@ -118,16 +119,23 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
     setForm((current) => {
       const savedProvider = stage.agent_config?.llm_provider?.trim() || '';
       const savedModel = stage.agent_config?.model || '';
-      // Keep an explicit user/provider-bound choice.
-      if (savedProvider && savedModel && savedModel !== 'gpt-4o') {
+      const isLegacyCursorGpt4o = savedModel === 'gpt-4o' && savedProvider === 'cursor';
+      const isUnboundGpt4o = savedModel === 'gpt-4o' && !savedProvider;
+      // Keep explicit provider-bound choices (including OpenAI gpt-4o). Only rewrite
+      // unbound board defaults and Cursor-bound legacy gpt-4o.
+      if (savedProvider && savedModel && !isLegacyCursorGpt4o) {
         return current;
       }
-      // Upgrade legacy gpt-4o defaults to the active provider’s default, labeled by API.
-      if (!savedProvider && (current.model === 'gpt-4o' || current.model === preferred.id)) {
-        if (current.model === preferred.id && current.llm_provider === preferred.provider) {
+      if (isLegacyCursorGpt4o || isUnboundGpt4o || (!savedProvider && current.model === preferred.id)) {
+        const next = isLegacyCursorGpt4o
+          ? entries.find((entry) => entry.usable && entry.provider === 'cursor' && entry.id === 'auto') ||
+            entries.find((entry) => entry.usable && entry.provider === 'cursor') ||
+            preferred
+          : preferred;
+        if (current.model === next.id && current.llm_provider === next.provider) {
           return current;
         }
-        return { ...current, model: preferred.id, llm_provider: preferred.provider };
+        return { ...current, model: next.id, llm_provider: next.provider };
       }
       if (!current.llm_provider && preferred.provider) {
         return { ...current, llm_provider: preferred.provider };
@@ -210,8 +218,15 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
         {modelsLoading
           ? 'Loading models from your LLM connectors…'
           : catalog
-            ? `Models are labeled by API (e.g. auto · Cursor vs deepseek-v4-flash · DeepSeek). ${catalog.error ? catalog.error : ''}`.trim()
-            : 'Add a DeepSeek or OpenAI connector in Settings to load models.'}
+            ? [
+                catalog.source === 'api' || catalog.source === 'mixed'
+                  ? `Loaded ${options.length} model${options.length === 1 ? '' : 's'} from connector APIs for real agent runs.`
+                  : `Using curated fallback models (${options.length}). Fix the connector key or network to load the live API catalog.`,
+                catalog.error ? catalog.error : ''
+              ]
+                .filter(Boolean)
+                .join(' ')
+            : 'Add a DeepSeek, OpenAI, or Cursor connector in Settings to load models.'}
       </p>
 
       <label className="field">

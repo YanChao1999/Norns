@@ -53,7 +53,8 @@ export function ConnectorHealth() {
     queryKey: ['llm-models', form.connector_type],
     enabled: isLlmType(form.connector_type),
     queryFn: () => apiClient.get<LlmModelCatalog>(`/connectors/llm-models?provider=${form.connector_type}`),
-    staleTime: 60_000
+    staleTime: 30_000,
+    refetchOnMount: 'always'
   });
   const modelOptions = useMemo(() => {
     if (!isLlmType(form.connector_type)) {
@@ -81,6 +82,7 @@ export function ConnectorHealth() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connectors'] });
       queryClient.invalidateQueries({ queryKey: ['health'] });
+      queryClient.invalidateQueries({ queryKey: ['llm-models'] });
       setEditingId(null);
       setForm({ ...EMPTY_FORM, name: defaultName(form.connector_type), connector_type: form.connector_type, ...llmDefaults(form.connector_type) });
     }
@@ -170,6 +172,13 @@ export function ConnectorHealth() {
                 ))}
               </select>
             </label>
+            {isLlmType(form.connector_type) && modelCatalog ? (
+              <p className="muted">
+                {modelCatalog.source === 'api'
+                  ? `Live catalog: ${modelCatalog.models.length} models from ${form.connector_type} API.`
+                  : `Fallback catalog (${modelCatalog.models.length} models).${modelCatalog.error ? ` ${modelCatalog.error}` : ''}`}
+              </p>
+            ) : null}
             {form.connector_type === 'cursor' ? (
               <label className="field">
                 GitHub repo URL (optional)
@@ -185,8 +194,8 @@ export function ConnectorHealth() {
         ) : null}
         {form.connector_type === 'cursor' ? (
           <p className="muted">
-            Stage runs call Cursor only through <code>cursor-sdk</code> (no direct REST). Model ids like <code>auto</code> are Cursor-specific. Optional GitHub
-            repo URL attaches a repository to the cloud agent.
+            Model dropdown loads from Cursor <code>GET /v1/models</code> for this API key. Stage runs still execute through <code>cursor-sdk</code>. Pick only
+            ids from that live list (e.g. <code>auto</code>, <code>composer-2.5</code>). Optional GitHub repo URL attaches a repository to the cloud agent.
           </p>
         ) : null}
         {form.connector_type === 'github' ? (

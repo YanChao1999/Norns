@@ -340,6 +340,7 @@ def test_health_reports_whether_openai_is_configured():
         assert body["status"] == "ok"
         assert isinstance(body["llm_configured"], bool)
         assert body["openai_configured"] is body["llm_configured"]
+        assert body["cursor_timeout_seconds"] == 1200.0
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
