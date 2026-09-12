@@ -1,6 +1,6 @@
 # Norns
 
-Agents work the columns. You decide what moves. Local Kanban orchestration with human gates.
+Agents work the columns. You decide what moves. Kanban orchestration with human gates.
 
 Named after Urd, Verdandi, and Skuld.
 
