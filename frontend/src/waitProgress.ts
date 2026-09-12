@@ -17,7 +17,11 @@ const STEPS: Array<{ afterMs: number; title: string; detail: string }> = [
   { afterMs: 45_000, title: 'Still pulling', detail: 'The agent is working. Cursor cloud runs often take a few minutes.' },
   { afterMs: 90_000, title: 'Waiting on tools', detail: 'Search, create, and MCP calls can sit here for a while. You can leave this card open.' },
   { afterMs: 180_000, title: 'Long wait', detail: 'Still going. No need to click Run again — extra clicks are ignored.' },
-  { afterMs: 720_000, title: 'Near the time limit', detail: 'Cursor stages stop when this countdown hits 00:00:00. Hang on, or use DeepSeek/OpenAI next time.' },
+  {
+    afterMs: 720_000,
+    title: 'Near the time limit',
+    detail: 'Cursor stages stop when this countdown hits 00:00:00. Hang on, or use DeepSeek/OpenAI next time.'
+  },
   {
     afterMs: 1_200_000,
     title: 'Past the Cursor wait',

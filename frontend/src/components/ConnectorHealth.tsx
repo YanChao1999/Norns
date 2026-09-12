@@ -194,9 +194,8 @@ export function ConnectorHealth() {
         ) : null}
         {form.connector_type === 'cursor' ? (
           <p className="muted">
-            Model dropdown loads from Cursor <code>GET /v1/models</code> for this API key. Stage runs still execute through{' '}
-            <code>cursor-sdk</code>. Pick only ids from that live list (e.g. <code>auto</code>, <code>composer-2.5</code>). Optional GitHub
-            repo URL attaches a repository to the cloud agent.
+            Model dropdown loads from Cursor <code>GET /v1/models</code> for this API key. Stage runs still execute through <code>cursor-sdk</code>. Pick only
+            ids from that live list (e.g. <code>auto</code>, <code>composer-2.5</code>). Optional GitHub repo URL attaches a repository to the cloud agent.
           </p>
         ) : null}
         {form.connector_type === 'github' ? (
