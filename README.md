@@ -4,7 +4,9 @@ Kanban orchestration: each column is an isolated LLM agent, and a human gate dec
 
 [![CI](https://github.com/YanChao1999/Norns/actions/workflows/tests.yml/badge.svg)](https://github.com/YanChao1999/Norns/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/norns-ide.svg)](https://pypi.org/project/norns-ide/)
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/norns-ide.svg)](https://pypi.org/project/norns-ide/)
+[![Downloads / day](https://img.shields.io/pypi/dd/norns-ide.svg)](https://pepy.tech/projects/norns-ide?timeRange=ONE_MONTH)
+[![Downloads / month](https://img.shields.io/pypi/dm/norns-ide.svg)](https://pepy.tech/projects/norns-ide?timeRange=ONE_MONTH)
+[![Downloads total](https://static.pepy.tech/badge/norns-ide)](https://pepy.tech/projects/norns-ide)
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 [![Tests](https://img.shields.io/badge/tests-pytest-green.svg)](https://github.com/YanChao1999/Norns/actions/workflows/tests.yml)
 [![Coverage](https://img.shields.io/badge/coverage-pytest--cov-informational.svg)](https://github.com/YanChao1999/Norns/blob/main/pyproject.toml)
@@ -12,6 +14,16 @@ Kanban orchestration: each column is an isolated LLM agent, and a human gate dec
 [![License: MIT](https://img.shields.io/github/license/YanChao1999/Norns.svg)](LICENSE)
 
 Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
+
+## Downloads
+
+Daily and monthly PyPI install counts for `norns-ide` (with mirrors). The chart refreshes from [pypistats](https://pypistats.org/packages/norns-ide); interactive history is on [pepy.tech](https://pepy.tech/projects/norns-ide).
+
+[![Downloads / day](https://img.shields.io/pypi/dd/norns-ide.svg)](https://pypistats.org/packages/norns-ide)
+[![Downloads / month](https://img.shields.io/pypi/dm/norns-ide.svg)](https://pypistats.org/packages/norns-ide)
+[![Downloads total](https://static.pepy.tech/badge/norns-ide)](https://pepy.tech/projects/norns-ide)
+
+![norns-ide PyPI downloads trend](assets/downloads-trend.svg)
 
 ## Install
 

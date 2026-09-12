@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="220" viewBox="0 0 720 220" role="img" aria-label="norns-ide PyPI downloads trend">
+  <title>norns-ide PyPI downloads (daily)</title>
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="48" y="18" font-size="13" font-weight="600" fill="#0f172a" font-family="ui-sans-serif,system-ui,sans-serif">norns-ide PyPI downloads · daily</text>
+  <text x="704" y="18" text-anchor="end" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">last day 6 · ~30d 385 · updated 2026-09-12 UTC</text>
+  <text x="40" y="32.0" text-anchor="end" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">256</text><line x1="48" y1="28.0" x2="704" y2="28.0" stroke="#e2e8f0" stroke-width="1"/><text x="40" y="108.0" text-anchor="end" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">128</text><line x1="48" y1="104.0" x2="704" y2="104.0" stroke="#e2e8f0" stroke-width="1"/><text x="40" y="184.0" text-anchor="end" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">0</text><line x1="48" y1="180.0" x2="704" y2="180.0" stroke="#e2e8f0" stroke-width="1"/>
+  <polygon points="48.0,180.0 48.0,28.0 102.7,159.2 157.3,168.7 212.0,169.3 266.7,177.0 321.3,175.8 376.0,176.4 430.7,177.0 485.3,172.3 540.0,175.8 594.7,176.4 649.3,178.8 704.0,176.4 704.0,180.0" fill="#38bdf8" fill-opacity="0.18"/>
+  <polyline points="48.0,28.0 102.7,159.2 157.3,168.7 212.0,169.3 266.7,177.0 321.3,175.8 376.0,176.4 430.7,177.0 485.3,172.3 540.0,175.8 594.7,176.4 649.3,178.8 704.0,176.4" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="704.0" cy="176.4" r="3.5" fill="#0284c7"/>
+  <line x1="48.0" y1="180.0" x2="48.0" y2="186.0" stroke="#94a3b8" stroke-width="1"/><text x="48.0" y="208" text-anchor="middle" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">Aug 30</text><line x1="157.3" y1="180.0" x2="157.3" y2="186.0" stroke="#94a3b8" stroke-width="1"/><text x="157.3" y="208" text-anchor="middle" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">Sep 01</text><line x1="704.0" y1="180.0" x2="704.0" y2="186.0" stroke="#94a3b8" stroke-width="1"/><text x="704.0" y="208" text-anchor="middle" font-size="11" fill="#64748b" font-family="ui-sans-serif,system-ui,sans-serif">Sep 11</text>
+</svg>
