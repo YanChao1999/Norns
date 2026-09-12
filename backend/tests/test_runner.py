@@ -469,7 +469,7 @@ async def test_empty_timeout_does_not_crash_the_stage(monkeypatch):
         await session.refresh(card)
         run = (await session.execute(select(AgentRun).where(AgentRun.id == "run-timeout"))).scalar_one()
 
-        assert card.status == CardStatus.IDLE
+        assert card.status == CardStatus.BLOCKED
         assert run.status == "failed"
         assert "timed out" in (run.model_output or "").lower()
         assert "timed out" in str(run.handoff.get("summary") or "").lower()

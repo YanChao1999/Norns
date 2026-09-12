@@ -1,13 +1,42 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from backend.app.connector_config import LlmModelCatalog, LlmModelEntry
 from backend.app.database import Base, get_session
 from backend.app.main import app
+
+
+def _usable_catalog(*, provider: str = "openai", model: str = "gpt-4o") -> LlmModelCatalog:
+    return LlmModelCatalog(
+        provider=provider,
+        default_model=model,
+        models=[model],
+        source="api",
+        error="",
+        entries=[
+            LlmModelEntry(id=model, provider=provider, label=f"{model} · OpenAI", usable=True, source="api"),
+        ],
+    )
+
+
+def _failed_catalog(*, provider: str = "openai", error: str = "Error code: 401") -> LlmModelCatalog:
+    model = "gpt-4o"
+    return LlmModelCatalog(
+        provider=provider,
+        default_model=model,
+        models=[model],
+        source="fallback",
+        error=error,
+        entries=[
+            LlmModelEntry(id=model, provider=provider, label=f"{model} · OpenAI", usable=False, source="fallback"),
+        ],
+    )
 
 
 def _make_client() -> tuple[TestClient, object]:
@@ -365,7 +394,11 @@ def test_openai_connector_can_be_created_from_settings_api():
         assert "api_key" not in body["public_config"]
         assert body["public_config"]["default_model"] == "gpt-4o"
         assert "sk-test" not in created.text
-        health = client.get("/api/health").json()
+        with patch(
+            "backend.app.connector_config.fetch_llm_model_catalog",
+            new=AsyncMock(return_value=_usable_catalog()),
+        ):
+            health = client.get("/api/health").json()
         assert health["llm_configured"] is True
         assert health["openai_configured"] is True
         missing = client.post("/api/connectors", json={"name": "Empty", "connector_type": "openai", "config": {}})
@@ -405,9 +438,39 @@ def test_openai_connector_can_be_created_from_settings_api():
         )
         assert updated.status_code == 200, updated.text
         assert updated.json()["public_config"]["default_model"] == "gpt-4o-mini"
-        later = client.get("/api/health").json()
+        with patch(
+            "backend.app.connector_config.fetch_llm_model_catalog",
+            new=AsyncMock(return_value=_usable_catalog(provider="deepseek", model="deepseek-v4-flash")),
+        ):
+            later = client.get("/api/health").json()
         assert later["llm_configured"] is True
         assert later["openai_configured"] is True
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_health_false_when_model_list_auth_fails():
+    """Fake/invalid API keys must not report llm_configured (#30/#34)."""
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        created = client.post(
+            "/api/connectors",
+            json={
+                "name": "OpenAI",
+                "connector_type": "openai",
+                "config": {"api_key": "sk-fake", "base_url": "https://api.openai.com/v1", "default_model": "gpt-4o"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        with patch(
+            "backend.app.connector_config.fetch_llm_model_catalog",
+            new=AsyncMock(return_value=_failed_catalog(error="Error code: 401 - Incorrect API key")),
+        ):
+            health = client.get("/api/health").json()
+        assert health["llm_configured"] is False
+        assert health["openai_configured"] is False
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
@@ -454,7 +517,29 @@ def test_llm_models_endpoint_labels_models_by_provider():
                 "config": {"api_key": "crsr_test", "base_url": "https://api.cursor.com/v1", "default_model": "auto"},
             },
         )
-        response = client.get("/api/connectors/llm-models")
+
+        async def fake_catalog(creds):
+            provider = creds.provider
+            model = "auto" if provider == "cursor" else "deepseek-v4-flash"
+            label = "Cursor" if provider == "cursor" else "DeepSeek"
+            return LlmModelCatalog(
+                provider=provider,
+                default_model=model,
+                models=[model],
+                source="api",
+                entries=[
+                    LlmModelEntry(
+                        id=model,
+                        provider=provider,
+                        label=f"{model} · {label}",
+                        usable=True,
+                        source="api",
+                    )
+                ],
+            )
+
+        with patch("backend.app.connector_config.fetch_llm_model_catalog", new=AsyncMock(side_effect=fake_catalog)):
+            response = client.get("/api/connectors/llm-models")
         assert response.status_code == 200, response.text
         body = response.json()
         labels = {entry["label"] for entry in body["entries"]}

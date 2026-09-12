@@ -30,7 +30,13 @@ from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.progression import outgoing_parallel_targets, resolve_routes
 from ..orchestrator.split import apply_forward_routes, load_family_cards
-from ..orchestrator.state_machine import CardStatus, start_card_run, wait_for_approval, wait_for_tool_approval
+from ..orchestrator.state_machine import (
+    CardStatus,
+    reject_card_state,
+    start_card_run,
+    wait_for_approval,
+    wait_for_tool_approval,
+)
 from ..plantuml.renderer import render_plantuml
 from ..plugins.base import PluginContext
 from ..plugins.catalog import cursor_mcp_servers
@@ -361,7 +367,8 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             "attachment_metadata": [],
         }
         run.completed_at = utc_now()
-        card.status = CardStatus.IDLE
+        # Failed model/tool runs block the card (same as human reject), not idle (#31).
+        reject_card_state(card)
         await session.commit()
         logger.error(
             "Stage run failed card=%s stage=%s: %s",
