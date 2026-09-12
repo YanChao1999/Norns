@@ -1,6 +1,8 @@
 # Norns
 
-Kanban orchestration: each column is an isolated LLM agent, and a human gate decides what moves next. Named after Urd, Verdandi, and Skuld.
+Agents work the columns. You decide what moves. Local Kanban orchestration with human gates.
+
+Named after Urd, Verdandi, and Skuld.
 
 [![CI](https://github.com/YanChao1999/Norns/actions/workflows/tests.yml/badge.svg)](https://github.com/YanChao1999/Norns/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/norns-ide.svg)](https://pypi.org/project/norns-ide/)
