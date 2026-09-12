@@ -31,9 +31,7 @@ class QuietAccessFilter(logging.Filter):
             return True
         if any(part in message for part in _QUIET_ACCESS_PARTS):
             return False
-        if _QUIET_POLL_RE.search(message):
-            return False
-        return True
+        return not _QUIET_POLL_RE.search(message)
 
 
 def compact_error_for_log(detail: str, *, limit: int = 200) -> str:
