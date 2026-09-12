@@ -16,9 +16,7 @@ _QUIET_ACCESS_PARTS = (
     "/json/version",
     "/assets/",
 )
-_QUIET_POLL_RE = re.compile(
-    r'"GET /(?:api/boards/[^"\s]+|api/cards/[^"\s]+/runs) HTTP/[^"]*" 200\b'
-)
+_QUIET_POLL_RE = re.compile(r'"GET /(?:api/boards/[^"\s]+|api/cards/[^"\s]+/runs) HTTP/[^"]*" 200\b')
 
 
 class QuietAccessFilter(logging.Filter):

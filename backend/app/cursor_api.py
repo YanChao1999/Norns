@@ -50,12 +50,7 @@ class CursorModelInfo:
 def _model_for_sdk(model: str) -> str:
     model_id = str(model or "").strip()
     lower = model_id.lower()
-    if (
-        not model_id
-        or lower in {"default"}
-        or lower.startswith("deepseek")
-        or lower in _NON_CURSOR_CHAT_MODEL_IDS
-    ):
+    if not model_id or lower in {"default"} or lower.startswith("deepseek") or lower in _NON_CURSOR_CHAT_MODEL_IDS:
         return DEFAULT_CURSOR_MODEL
     return model_id
 
@@ -91,9 +86,7 @@ def _cursor_models_from_items(items: list[Any]) -> list[CursorModelInfo]:
             display = str(item.get("displayName") or item.get("display_name") or "").strip()
         else:
             raw_id = getattr(item, "id", "") or ""
-            display = str(
-                getattr(item, "display_name", None) or getattr(item, "displayName", None) or ""
-            ).strip()
+            display = str(getattr(item, "display_name", None) or getattr(item, "displayName", None) or "").strip()
         model_id = _normalize_cursor_model_id(str(raw_id))
         if not model_id or model_id in seen:
             continue
@@ -146,9 +139,7 @@ async def list_cursor_model_infos(api_key: str, *, base_url: str = "") -> list[C
         try:
             models = await _list_cursor_models_sdk(key)
         except Exception as sdk_exc:  # noqa: BLE001
-            raise RuntimeError(
-                f"Cursor model list failed via HTTP ({http_exc}) and SDK ({sdk_exc})"
-            ) from sdk_exc
+            raise RuntimeError(f"Cursor model list failed via HTTP ({http_exc}) and SDK ({sdk_exc})") from sdk_exc
         return models
 
 
