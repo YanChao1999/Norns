@@ -2922,3 +2922,23 @@ details.disclosure summary {
     position: static;
   }
 }
+
+
+.ask-agent-form {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 92%, var(--running));
+}
+
+.ask-agent-form .field {
+  margin: 0;
+}
+
+.ask-agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

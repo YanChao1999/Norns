@@ -1,42 +1,88 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { useI18n } from '../i18n';
 import { applyTheme, readConfirmWritesUi, ThemeId, writeConfirmWritesUi } from '../theme';
-import { BoardSummary, ConnectorType } from '../types';
+import { BoardDetail, BoardSummary, ConnectorType, Stage } from '../types';
+import { boardWriteGateEnabled } from '../writeGate';
 import { ConnectorHealth } from './ConnectorHealth';
 
 interface Props {
+  board?: BoardDetail | null;
   onCreated: (boardId: string) => void;
   theme: ThemeId;
   onThemeChange: (theme: ThemeId) => void;
 }
 
-export function Settings({ onCreated, theme, onThemeChange }: Props) {
+async function setStagesConfirmWrites(stages: Stage[], enabled: boolean): Promise<void> {
+  await Promise.all(stages.map((stage) => apiClient.put(`/stages/${stage.id}`, { confirm_writes: enabled })));
+}
+
+export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [boardName, setBoardName] = useState('Delivery');
   const [workspacePath, setWorkspacePath] = useState('');
   const [gitUrl, setGitUrl] = useState('');
-  const [confirmWrites, setConfirmWrites] = useState(readConfirmWritesUi);
+  const [confirmWrites, setConfirmWrites] = useState(() =>
+    board ? boardWriteGateEnabled(board.stages) : readConfirmWritesUi()
+  );
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<ConnectorType | undefined>();
+  const [gateError, setGateError] = useState('');
+
+  useEffect(() => {
+    if (board?.stages) {
+      setConfirmWrites(boardWriteGateEnabled(board.stages));
+    } else {
+      setConfirmWrites(readConfirmWritesUi());
+    }
+  }, [board]);
 
   const createBoard = useMutation({
-    mutationFn: async () =>
-      apiClient.post<BoardSummary>('/boards', {
+    mutationFn: async () => {
+      const created = await apiClient.post<BoardSummary>('/boards', {
         name: boardName,
         description: 'Initial Norns board',
         workspace_path: workspacePath,
         git_url: gitUrl
-      }),
-    onSuccess: (board) => {
+      });
+      const preferConfirm = readConfirmWritesUi();
+      if (preferConfirm && created.stages?.length) {
+        await setStagesConfirmWrites(created.stages, true);
+      }
+      return created;
+    },
+    onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       setBoardName('Delivery');
       setWorkspacePath('');
       setGitUrl('');
-      onCreated(board.id);
+      onCreated(created.id);
+    }
+  });
+
+  const writeGate = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      if (!board?.stages.length) {
+        writeConfirmWritesUi(enabled);
+        return enabled;
+      }
+      await setStagesConfirmWrites(board.stages, enabled);
+      writeConfirmWritesUi(enabled);
+      return enabled;
+    },
+    onSuccess: (enabled) => {
+      setConfirmWrites(enabled);
+      setGateError('');
+      if (board) {
+        queryClient.invalidateQueries({ queryKey: ['board', board.id] });
+        queryClient.invalidateQueries({ queryKey: ['boards'] });
+      }
+    },
+    onError: (error) => {
+      setGateError(error instanceof Error ? error.message : 'Failed to update write gate');
     }
   });
 
@@ -129,6 +175,9 @@ export function Settings({ onCreated, theme, onThemeChange }: Props) {
           <span className="settings-section-num">3</span>
           <h2 className="settings-section-title">{t('settings.sectionWriteGate')}</h2>
         </div>
+        <p className="muted">
+          {board ? t('settings.writeGateBoard', { name: board.name }) : t('settings.writeGateNoBoard')}
+        </p>
         <div className="write-gate-row">
           <span aria-hidden="true">⚠</span>
           <span>{t('settings.writeGateLabel')}</span>
@@ -137,15 +186,19 @@ export function Settings({ onCreated, theme, onThemeChange }: Props) {
             className={`toggle${confirmWrites ? ' is-on' : ''}`}
             role="switch"
             aria-checked={confirmWrites}
+            disabled={writeGate.isPending}
             onClick={() => {
               const next = !confirmWrites;
               setConfirmWrites(next);
-              writeConfirmWritesUi(next);
+              writeGate.mutate(next);
             }}
           >
             <i />
           </button>
         </div>
+        <p className="muted settings-write-gate-hint">{t('settings.writeGateHint')}</p>
+        {writeGate.isPending ? <p className="muted">{t('settings.writeGateUpdating')}</p> : null}
+        {gateError ? <p className="error">{gateError}</p> : null}
       </section>
 
       <section className="settings-section">

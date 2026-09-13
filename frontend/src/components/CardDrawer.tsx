@@ -23,6 +23,7 @@ import { useI18n } from '../i18n';
 import { PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { AgentRun, BoardDetail, Card } from '../types';
+import { appendOperatorQuestion } from '../writeGate';
 import { Dialog } from './Dialog';
 import { MarkdownPreview } from './MarkdownPreview';
 import { WaitLive } from './WaitLive';
@@ -30,6 +31,7 @@ import { WaitLive } from './WaitLive';
 interface Props {
   card: Card | null;
   board?: BoardDetail;
+  practiceMode?: boolean;
   onClose: () => void;
   onOpenHistory?: () => void;
 }
@@ -38,12 +40,14 @@ function agentRecommendation(value: unknown): 'approve' | 'reject' | null {
   return value === 'approve' || value === 'reject' ? value : null;
 }
 
-export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
+export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenHistory }: Props) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const previousStatus = useRef<{ id?: string; status?: string }>({});
   const [runStarted, setRunStarted] = useState(false);
-  const [askNote, setAskNote] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const [askText, setAskText] = useState('');
+  const [askNotice, setAskNotice] = useState('');
   const [expandedStageId, setExpandedStageId] = useState<string | null>(null);
 
   const { data: runs = [] } = useQuery({
@@ -55,7 +59,9 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
 
   useEffect(() => {
     setRunStarted(false);
-    setAskNote(false);
+    setAskOpen(false);
+    setAskText('');
+    setAskNotice('');
     setExpandedStageId(null);
   }, [card?.id]);
 
@@ -106,6 +112,34 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      setRunStarted(false);
+    }
+  });
+
+
+  const askMutation = useMutation({
+    mutationFn: async (question: string) => {
+      if (!card) {
+        throw new Error('No card');
+      }
+      const nextBody = appendOperatorQuestion(card.body, question);
+      await apiClient.put(`/cards/${card.id}`, { body: nextBody });
+      const canStart = card.status === 'idle' || card.status === 'blocked';
+      if (canStart) {
+        setRunStarted(true);
+        await apiClient.post(`/cards/${card.id}/run`);
+        return 'ran' as const;
+      }
+      return 'saved' as const;
+    },
+    onSuccess: (result) => {
+      setAskText('');
+      setAskOpen(false);
+      setAskNotice(result === 'ran' ? t('detail.askAgentRunning') : t('detail.askAgentSaved'));
+      queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
+      queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+    },
+    onError: () => {
       setRunStarted(false);
     }
   });
@@ -458,7 +492,15 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               </>
             ) : null}
 
-            <button type="button" className="action-tile is-ask" onClick={() => setAskNote(true)}>
+            <button
+              type="button"
+              className="action-tile is-ask"
+              onClick={() => {
+                setAskNotice('');
+                setAskOpen((open) => !open);
+              }}
+              disabled={askMutation.isPending}
+            >
               <span className="action-tile-icon" aria-hidden="true">
                 ?
               </span>
@@ -467,9 +509,60 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
                 <small>{t('detail.askAgentHint')}</small>
               </span>
             </button>
-            {askNote ? (
+            {askOpen ? (
+              practiceMode ? (
+                <p className="notice" role="status">
+                  {t('detail.askAgentPractice')}
+                </p>
+              ) : (
+                <form
+                  className="ask-agent-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const question = askText.trim();
+                    if (!question || askMutation.isPending) {
+                      return;
+                    }
+                    if (!(card.status === 'idle' || card.status === 'blocked' || card.status === 'waiting_approval' || card.status === 'waiting_tool_approval')) {
+                      setAskNotice(t('detail.askAgentBusy'));
+                      return;
+                    }
+                    askMutation.mutate(question);
+                  }}
+                >
+                  <label className="field">
+                    {t('detail.askAgentTitle')}
+                    <textarea
+                      className="input"
+                      rows={3}
+                      value={askText}
+                      onChange={(event) => setAskText(event.target.value)}
+                      placeholder={t('detail.askAgentPlaceholder')}
+                      disabled={askMutation.isPending}
+                    />
+                  </label>
+                  <div className="ask-agent-actions">
+                    <button type="submit" className="btn btn-primary" disabled={!askText.trim() || askMutation.isPending}>
+                      {askMutation.isPending ? t('detail.askAgentRunning') : t('detail.askAgentSend')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={askMutation.isPending}
+                      onClick={() => {
+                        setAskOpen(false);
+                        setAskText('');
+                      }}
+                    >
+                      {t('detail.askAgentCancel')}
+                    </button>
+                  </div>
+                </form>
+              )
+            ) : null}
+            {askNotice ? (
               <p className="notice" role="status">
-                {t('detail.askAgentSoon')}
+                {askNotice}
               </p>
             ) : null}
 

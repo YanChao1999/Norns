@@ -89,7 +89,13 @@ export const en = {
   'detail.rejectHint': 'Reject this stage — needs supplement or correction.',
   'detail.askAgentTitle': 'Ask agent',
   'detail.askAgentHint': 'Clarify or request information from the responsible agent.',
-  'detail.askAgentSoon': 'Ask agent will open a clarification run when a model key is connected.',
+  'detail.askAgentPlaceholder': 'What should the agent clarify or check?',
+  'detail.askAgentSend': 'Send to agent',
+  'detail.askAgentCancel': 'Cancel',
+  'detail.askAgentPractice': 'Connect a model key in Settings to ask the agent.',
+  'detail.askAgentBusy': 'Wait until this card is idle or blocked, then ask again.',
+  'detail.askAgentSaved': 'Question saved on the card. Reject this stage, then Run to get an answer.',
+  'detail.askAgentRunning': 'Sending clarification to the agent…',
   'detail.writeRecords': 'Write records',
   'detail.noWrites': 'No system writes yet. After approving this stage, the system will execute the write.',
   'detail.confirmWrites': 'Confirm writes',
@@ -131,10 +137,28 @@ export const en = {
   'settings.manage': 'Manage',
   'settings.addConnector': 'Add connector',
   'settings.writeGateLabel': 'Confirm writes: you must confirm before writing',
+  'settings.writeGateHint': 'Applies to every stage on the selected board. When on, write tools pause until you confirm.',
+  'settings.writeGateNoBoard': 'Create or select a board first. This preference will apply when you create a new board.',
+  'settings.writeGateUpdating': 'Updating stages…',
+  'settings.writeGateBoard': 'Board: {name}',
   'settings.appearanceLight': 'Command Light',
   'settings.appearanceNight': 'Night (same shell)',
   'settings.connectorsIntro':
-    'OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface. GitHub, Jira, Polarion, and MCP unlock plugins under Agent.'
+    'OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface. GitHub, Jira, Polarion, and MCP unlock plugins under Agent.',
+
+  'login.brand': 'Norns',
+  'login.title': 'Control room',
+  'login.subtitle': 'Sign in to operate boards and approval gates.',
+  'login.username': 'Username',
+  'login.password': 'Password',
+  'login.submit': 'Sign in',
+  'login.pending': 'Signing in…',
+  'login.error': 'Invalid username or password.',
+
+  'machine.intro':
+    'Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage. After parallel tracks, add a later column (Review, Merge, …) and draw a line from each track into it. Cards arrive and run as soon as they are ready — soft join locks confirm-write on that later stage until every parallel lane has settled.',
+  'machine.parallelHint':
+    'Adds a new row in the next column and a second default line so both tracks run. Draw lines from each parallel row into a later join stage. Soft join keeps confirm-write locked there until all parallel lanes settle.'
 } as const;
 
 export type MessageKey = keyof typeof en;

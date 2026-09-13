@@ -127,6 +127,7 @@ export function Board({ boardId, onEditMachine, practiceMode = false }: Props) {
       <CardDrawer
         card={liveCard}
         board={board}
+        practiceMode={practiceMode}
         onClose={() => setSelectedCard(null)}
         onOpenHistory={
           liveCard

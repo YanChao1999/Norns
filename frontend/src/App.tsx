@@ -164,6 +164,7 @@ export default function App() {
         ) : null}
         {view === 'settings' ? (
           <Settings
+            board={selectedBoard}
             theme={theme}
             onThemeChange={setTheme}
             onCreated={(boardId) => {
@@ -182,7 +183,11 @@ export default function App() {
             {isLoading ? <div className="muted">{t('app.loadingBoards')}</div> : null}
             {!boards.length && !isLoading ? <div className="empty-board">{t('app.emptyBoard')}</div> : null}
             {selectedBoardId ? (
-              <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} practiceMode={llmConfigured === false} />
+              <Board
+                boardId={selectedBoardId}
+                onEditMachine={() => setView('machine')}
+                practiceMode={llmConfigured === false}
+              />
             ) : null}
             {llmConfigured === false && view === 'board' ? <PracticeCard /> : null}
           </>
