@@ -1871,18 +1871,23 @@ details.disclosure summary {
   gap: 10px;
 }
 
-.station-head h2 {
+.station-head h2,
+.column-head h2 {
   margin: 0;
   font-family: var(--display);
   font-size: 26px;
   font-weight: 600;
   letter-spacing: -0.02em;
+  text-transform: none;
 }
 
-.station-head p {
+.station-head p,
+.column-head p {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .station-tools {
