@@ -16,7 +16,9 @@ from ..workspace import validate_workspace_binding
 from .auth import get_current_user
 
 
-def _apply_workspace_fields(*, workspace_path: str | None = None, git_url: str | None = None) -> tuple[str | None, str | None]:
+def _apply_workspace_fields(
+    *, workspace_path: str | None = None, git_url: str | None = None
+) -> tuple[str | None, str | None]:
     path = workspace_path.strip() if isinstance(workspace_path, str) else workspace_path
     url = git_url.strip() if isinstance(git_url, str) else git_url
     try:
@@ -24,6 +26,7 @@ def _apply_workspace_fields(*, workspace_path: str | None = None, git_url: str |
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return path, url
+
 
 router = APIRouter(tags=["boards"], dependencies=[Depends(get_current_user)])
 
@@ -437,9 +440,7 @@ async def update_stage(
             stage.agent_config.tool_allowlist = payload.tool_allowlist
         if payload.workspace_path is not None or payload.git_url is not None:
             next_path = (
-                payload.workspace_path
-                if payload.workspace_path is not None
-                else stage.agent_config.workspace_path
+                payload.workspace_path if payload.workspace_path is not None else stage.agent_config.workspace_path
             )
             next_url = payload.git_url if payload.git_url is not None else stage.agent_config.git_url
             agent_path, agent_url = _apply_workspace_fields(workspace_path=next_path or "", git_url=next_url or "")
