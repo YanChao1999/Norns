@@ -111,7 +111,15 @@ export function llmLabel(run: AgentRun | null | undefined): string {
   const record = source as Record<string, unknown>;
   const provider = String(record.provider || '').trim();
   const model = String(record.model || '').trim();
-  const names: Record<string, string> = { openai: 'OpenAI', deepseek: 'DeepSeek', cursor: 'Cursor' };
+  const names: Record<string, string> = {
+    openai: 'OpenAI',
+    deepseek: 'DeepSeek',
+    cursor: 'Cursor',
+    practice: 'Practice'
+  };
+  if (provider === 'practice') {
+    return 'Practice (no model)';
+  }
   const label = names[provider] || (provider ? provider[0].toUpperCase() + provider.slice(1) : '');
   return [label, model].filter(Boolean).join(' · ');
 }

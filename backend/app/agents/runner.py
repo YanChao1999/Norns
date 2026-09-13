@@ -267,15 +267,19 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             creds = credentials_for_provider(connectors, settings, preferred)
         else:
             creds = resolve_llm_credentials(connectors, settings)
-        identity = llm_identity(
-            creds.provider,
-            resolve_stage_model(
-                provider=creds.provider,
-                base_url=creds.base_url,
-                stage_model=(stage.agent_config.model if stage.agent_config else "") or creds.default_model,
-                default_model=creds.default_model,
-            ),
-        )
+        if not str(creds.api_key or "").strip():
+            # Practice path: do not stamp openai/gpt-4o when no key is usable (#21).
+            identity = llm_identity("practice", "none")
+        else:
+            identity = llm_identity(
+                creds.provider,
+                resolve_stage_model(
+                    provider=creds.provider,
+                    base_url=creds.base_url,
+                    stage_model=(stage.agent_config.model if stage.agent_config else "") or creds.default_model,
+                    default_model=creds.default_model,
+                ),
+            )
         run.inputs = {**dict(run.inputs or {}), "llm": identity}
         runner_timeout_if_injected()
         model_output, tool_calls, handoff = await _execute_agent(
@@ -312,8 +316,18 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             return
         run.status = "completed"
         run.completed_at = utc_now()
-        if stage.require_approval:
-            # Agent recommendation is advisory only; never skip the human gate.
+        practice = isinstance(handoff, dict) and handoff.get("placeholder") is True
+        if stage.require_approval or practice:
+            # Hold practice runs at the gate even when require_approval is false (#37).
+            if practice and not stage.require_approval:
+                run.handoff = {
+                    **dict(run.handoff or {}),
+                    "practice_held": True,
+                    "summary": (
+                        f"{(run.handoff or {}).get('summary') or model_output}\n\n"
+                        "Practice auto-advance was skipped — confirm to continue or add a real model connector."
+                    ),
+                }
             wait_for_approval(card)
         else:
             routes = resolve_routes(

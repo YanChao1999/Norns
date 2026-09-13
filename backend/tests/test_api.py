@@ -81,8 +81,12 @@ def test_board_crud():
     asyncio.run(engine.dispose())
 
 
-def test_board_and_agent_workspace():
+def test_board_and_agent_workspace(tmp_path):
     client, engine = _make_client()
+    board_repo = tmp_path / "board-repo"
+    agent_repo = tmp_path / "agent-repo"
+    board_repo.mkdir()
+    agent_repo.mkdir()
     with client:
         login = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
         assert login.status_code == 200
@@ -91,14 +95,17 @@ def test_board_and_agent_workspace():
             "/api/boards",
             json={
                 "name": "Repo board",
-                "workspace_path": "/tmp/board-repo",
+                "workspace_path": str(board_repo),
                 "git_url": "https://github.com/acme/board",
             },
         )
-        assert created.status_code == 201
+        assert created.status_code == 201, created.text
         board = created.json()
-        assert board["workspace_path"] == "/tmp/board-repo"
+        assert board["workspace_path"] == str(board_repo)
         assert board["git_url"] == "https://github.com/acme/board"
+        assert any(card["title"].startswith("Sample:") for card in board["cards"])
+        assert board["stages"][0]["agent_config"]["model"] == ""
+        assert board["stages"][0]["agent_config"]["llm_provider"] == ""
 
         updated = client.put(
             f"/api/boards/{board['id']}",
@@ -110,11 +117,11 @@ def test_board_and_agent_workspace():
         stage_id = board["stages"][0]["id"]
         stage = client.put(
             f"/api/stages/{stage_id}",
-            json={"workspace_path": "/tmp/agent-repo", "git_url": "https://github.com/acme/agent"},
+            json={"workspace_path": str(agent_repo), "git_url": "https://github.com/acme/agent"},
         )
-        assert stage.status_code == 200
+        assert stage.status_code == 200, stage.text
         config = stage.json()["agent_config"]
-        assert config["workspace_path"] == "/tmp/agent-repo"
+        assert config["workspace_path"] == str(agent_repo)
         assert config["git_url"] == "https://github.com/acme/agent"
 
         resolved = client.get(f"/api/workspace?board_id={board['id']}&stage_id={stage_id}")
@@ -126,6 +133,42 @@ def test_board_and_agent_workspace():
         board_only = client.get(f"/api/workspace?board_id={board['id']}")
         assert board_only.json()["source"] == "board"
         assert board_only.json()["github_repo"] == "acme/board"
+
+        bad_path = client.put(
+            f"/api/boards/{board['id']}",
+            json={"workspace_path": str(tmp_path / "missing"), "git_url": "https://github.com/acme/board"},
+        )
+        assert bad_path.status_code == 400
+        assert "does not exist" in bad_path.json()["detail"]
+
+        bad_url = client.put(
+            f"/api/boards/{board['id']}",
+            json={"workspace_path": str(board_repo), "git_url": "not-a-git-url"},
+        )
+        assert bad_url.status_code == 400
+        assert "git_url" in bad_url.json()["detail"]
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_workspace_endpoint_reflects_board_binding(tmp_path):
+    client, engine = _make_client()
+    repo = tmp_path / "bound"
+    repo.mkdir()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post(
+            "/api/boards",
+            json={"name": "Bound", "workspace_path": str(repo), "git_url": "https://github.com/acme/bound"},
+        ).json()
+        unbound = client.get("/api/workspace").json()
+        # Bare /workspace is process default — may be null or cwd; board binding uses board_id.
+        bound = client.get(f"/api/workspace?board_id={board['id']}").json()
+        assert bound["source"] == "board"
+        assert bound["path"] == str(repo)
+        assert bound["github_repo"] == "acme/bound"
+        assert unbound.get("source") != "board" or unbound.get("path") != str(repo)
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
