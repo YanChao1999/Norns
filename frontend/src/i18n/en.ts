@@ -143,8 +143,12 @@ export const en = {
   'settings.writeGateBoard': 'Board: {name}',
   'settings.appearanceLight': 'Command Light',
   'settings.appearanceNight': 'Night (same shell)',
+  'settings.modelsIntro':
+    'LLM providers for stage agents. Today: OpenAI-compatible chat (OpenAI, DeepSeek, …) and the Cursor agent interface. More providers can be added the same way later.',
+  'settings.toolsIntro':
+    'Tool connectors unlock plugins under Agent (GitHub, Jira, Polarion, MCP, and others you add).',
   'settings.connectorsIntro':
-    'OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface. GitHub, Jira, Polarion, and MCP unlock plugins under Agent.',
+    'Connect LLM providers and tool connectors. Models power stage agents; tools unlock plugins under Agent.',
 
   'login.brand': 'Norns',
   'login.title': 'Control room',

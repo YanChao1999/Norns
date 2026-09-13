@@ -131,6 +131,7 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
           <span className="settings-section-num">1</span>
           <h2 className="settings-section-title">{t('settings.sectionModels')}</h2>
         </div>
+        <p className="muted">{t('settings.modelsIntro')}</p>
         <ConnectorHealth
           variant="models"
           preferredType={formType}
@@ -153,6 +154,7 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
           <span className="settings-section-num">2</span>
           <h2 className="settings-section-title">{t('settings.sectionConnectors')}</h2>
         </div>
+        <p className="muted">{t('settings.toolsIntro')}</p>
         <ConnectorHealth
           variant="tools"
           preferredType={formType}
