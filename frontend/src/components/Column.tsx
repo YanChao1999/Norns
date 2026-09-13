@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import { useI18n } from '../i18n';
 import { Card, Stage } from '../types';
 import { CardItem } from './CardItem';
 
@@ -12,43 +13,79 @@ interface Props {
   isFirst: boolean;
   row?: number;
   parallel?: boolean;
+  locked?: boolean;
   openCardId: string | null;
   onOpenCard: (card: Card) => void;
   onOpenConfig: (stage: Stage) => void;
+  compact?: boolean;
 }
 
-export function Column({ boardId, stage, cards, isFirst, row = 1, parallel = false, openCardId, onOpenCard, onOpenConfig }: Props) {
+export function Column({
+  boardId,
+  stage,
+  cards,
+  isFirst,
+  row = 1,
+  parallel = false,
+  locked = false,
+  openCardId,
+  onOpenCard,
+  onOpenConfig,
+  compact = false
+}: Props) {
+  const { t } = useI18n();
+  const tools = stage.agent_config?.tool_allowlist?.length ? stage.agent_config.tool_allowlist.join(' · ') : t('board.noPlugins');
+  const roleBits = [
+    stage.require_approval ? t('board.humanGate') : t('board.autoAdvance'),
+    stage.confirm_writes ? t('board.confirmWrites') : null
+  ].filter(Boolean);
+
   return (
-    <section className={`column${parallel ? ' is-parallel-row' : ''}`}>
-      <header className="column-head">
+    <section className={`station column${parallel ? ' is-parallel-row' : ''}${locked ? ' is-locked' : ''}${compact ? ' is-compact' : ''}`}>
+      <header className="station-head column-head">
         <div>
           <h2>{stage.name}</h2>
           <p>
-            {parallel ? `Row ${row} · parallel · ` : ''}
-            {stage.require_approval ? 'Human gate' : 'Auto-advance'}
-            {stage.confirm_writes ? ' · confirm writes' : ''}
-            {stage.auto_start ? ' · auto-start' : ''}
-            {stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ' · own repo' : ''}
-            {stage.agent_config?.tool_allowlist?.length ? ` · ${stage.agent_config.tool_allowlist.join(', ')}` : ' · no plugins'}
+            {parallel ? `${t('board.row', { row })} · ${t('board.parallel')} · ` : ''}
+            {roleBits.join(' · ')}
           </p>
+          <p className="station-tools">({tools}{stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ` · ${t('board.ownRepo')}` : ''})</p>
         </div>
         <div className="column-actions">
           <span className="column-count">{cards.length}</span>
-          <button type="button" className="btn btn-icon" title="Configure agent" onClick={() => onOpenConfig(stage)}>
-            Agent
+          <button type="button" className="btn btn-icon" title={t('board.agent')} onClick={() => onOpenConfig(stage)}>
+            {t('board.agent')}
           </button>
         </div>
       </header>
-      {isFirst ? <AddCard boardId={boardId} /> : null}
-      {cards.map((card) => (
-        <CardItem key={card.id} card={card} isOpen={openCardId === card.id} isParallelLane={parallel} onOpen={onOpenCard} />
-      ))}
-      {!cards.length ? <div className="empty-col">No cards in this station.</div> : null}
+      {isFirst && !locked ? <AddCard boardId={boardId} /> : null}
+      {locked && stage.confirm_writes ? (
+        <div className="locked-panel">
+          <div className="locked-panel-icon" aria-hidden="true">
+            🔒
+          </div>
+          <strong>{t('board.skuldWaiting')}</strong>
+          <p>{t('board.skuldLocked')}</p>
+        </div>
+      ) : (
+        <>
+          {cards.map((card) => (
+            <CardItem key={card.id} card={card} isOpen={openCardId === card.id} isParallelLane={parallel} locked={locked} onOpen={onOpenCard} />
+          ))}
+          {!cards.length ? (
+            <div className="station-empty empty-col">
+              <span aria-hidden="true">📁</span>
+              <span>{t('board.emptyStation')}</span>
+            </div>
+          ) : null}
+        </>
+      )}
     </section>
   );
 }
 
 function AddCard({ boardId }: { boardId: string }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [newCard, setNewCard] = useState({ title: '', body: '' });
@@ -65,7 +102,7 @@ function AddCard({ boardId }: { boardId: string }) {
   if (!open) {
     return (
       <button type="button" className="add-toggle" onClick={() => setOpen(true)}>
-        Add card to this station
+        {t('board.addCard')}
       </button>
     );
   }
@@ -80,31 +117,25 @@ function AddCard({ boardId }: { boardId: string }) {
         }
       }}
     >
-      <label className="field">
-        Title
-        <input
-          className="input"
-          value={newCard.title}
-          onChange={(event) => setNewCard((current) => ({ ...current, title: event.target.value }))}
-          placeholder="Card title"
-          autoFocus
-        />
-      </label>
-      <label className="field">
-        Body
-        <textarea
-          className="textarea"
-          rows={3}
-          value={newCard.body}
-          onChange={(event) => setNewCard((current) => ({ ...current, body: event.target.value }))}
-          placeholder="Markdown body"
-        />
-      </label>
-      <div className="new-board">
+      <input
+        className="input"
+        value={newCard.title}
+        onChange={(event) => setNewCard((current) => ({ ...current, title: event.target.value }))}
+        placeholder="Title"
+        autoFocus
+      />
+      <textarea
+        className="input"
+        value={newCard.body}
+        onChange={(event) => setNewCard((current) => ({ ...current, body: event.target.value }))}
+        placeholder="Body (markdown)"
+        rows={3}
+      />
+      <div className="gate-actions">
         <button type="submit" className="btn btn-primary" disabled={!newCard.title || createCard.isPending}>
-          {createCard.isPending ? 'Adding…' : 'Add card'}
+          Add
         </button>
-        <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>
+        <button type="button" className="btn" onClick={() => setOpen(false)}>
           Cancel
         </button>
       </div>

@@ -1,7 +1,8 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import { useI18n } from '../i18n';
 import { Connector, ConnectorType } from '../types';
 
 interface LlmModelCatalog {
@@ -13,6 +14,8 @@ interface LlmModelCatalog {
 }
 
 const TYPES: ConnectorType[] = ['openai', 'cursor', 'deepseek', 'github', 'jira', 'polarion', 'mcp'];
+const MODEL_TYPES: Array<'cursor' | 'deepseek' | 'openai'> = ['cursor', 'deepseek', 'openai'];
+const TOOL_TYPES: Array<'polarion' | 'jira' | 'github' | 'mcp'> = ['polarion', 'jira', 'github', 'mcp'];
 
 const LLM_DEFAULTS: Record<'openai' | 'cursor' | 'deepseek', { base_url: string; default_model: string; placeholder: string }> = {
   openai: { base_url: 'https://api.openai.com/v1', default_model: 'gpt-4o', placeholder: 'sk-…' },
@@ -41,10 +44,29 @@ const EMPTY_FORM = {
   git_url: ''
 };
 
-export function ConnectorHealth() {
+interface Props {
+  variant?: 'all' | 'models' | 'tools';
+  showForm?: boolean;
+  onShowFormChange?: (open: boolean) => void;
+  preferredType?: ConnectorType;
+  onRequestConnect?: (type: ConnectorType) => void;
+}
+
+export function ConnectorHealth({
+  variant = 'all',
+  showForm,
+  onShowFormChange,
+  preferredType,
+  onRequestConnect
+}: Props) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [internalShowForm, setInternalShowForm] = useState(variant === 'all');
+  const formOpen = showForm ?? internalShowForm;
+  const setFormOpen = onShowFormChange ?? setInternalShowForm;
+
   const { data = [], isLoading } = useQuery({
     queryKey: ['connectors'],
     queryFn: () => apiClient.get<Connector[]>('/connectors')
@@ -71,6 +93,17 @@ export function ConnectorHealth() {
     return merged.length ? merged : [defaults.default_model];
   }, [form.connector_type, form.default_model, modelCatalog]);
 
+  useEffect(() => {
+    if (preferredType && formOpen && !editingId) {
+      setForm((current) => ({
+        ...current,
+        connector_type: preferredType,
+        name: defaultName(preferredType),
+        ...llmDefaults(preferredType)
+      }));
+    }
+  }, [preferredType, formOpen, editingId]);
+
   const save = useMutation({
     mutationFn: async () => {
       const payload = { name: form.name, connector_type: form.connector_type, is_active: form.is_active, config: configFromForm(form) };
@@ -85,6 +118,9 @@ export function ConnectorHealth() {
       queryClient.invalidateQueries({ queryKey: ['llm-models'] });
       setEditingId(null);
       setForm({ ...EMPTY_FORM, name: defaultName(form.connector_type), connector_type: form.connector_type, ...llmDefaults(form.connector_type) });
+      if (variant !== 'all') {
+        setFormOpen(false);
+      }
     }
   });
 
@@ -105,286 +141,131 @@ export function ConnectorHealth() {
     }
   };
 
+  const activeByType = (type: ConnectorType) => data.find((connector) => connector.connector_type === type && connector.is_active);
+
+  const openConnect = (type: ConnectorType, existing?: Connector) => {
+    if (existing) {
+      startEdit(existing, setEditingId, setForm);
+    } else {
+      setEditingId(null);
+      setForm({ ...EMPTY_FORM, name: defaultName(type), connector_type: type, ...llmDefaults(type) });
+    }
+    setFormOpen(true);
+    onRequestConnect?.(type);
+  };
+
+  if (variant === 'models') {
+    return (
+      <div>
+        {MODEL_TYPES.map((type) => {
+          const connected = activeByType(type);
+          return (
+            <div key={type} className="settings-row">
+              <span className="settings-row-name">{labelFor(type)}</span>
+              {connected ? (
+                <>
+                  <span className="settings-badge is-on">{t('settings.connected')}</span>
+                  <button type="button" className="btn" onClick={() => openConnect(type, connected)}>
+                    {t('settings.manage')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="settings-badge">{t('settings.notConnected')}</span>
+                  <button type="button" className="btn" onClick={() => openConnect(type)}>
+                    {t('settings.connect')}
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })}
+        {formOpen && isLlmType(form.connector_type) ? (
+          <ConnectorForm
+            form={form}
+            setForm={setForm}
+            editingId={editingId}
+            modelOptions={modelOptions}
+            modelCatalog={modelCatalog}
+            save={save}
+            onSubmit={onSubmit}
+            onCancel={() => {
+              setEditingId(null);
+              setFormOpen(false);
+            }}
+            types={MODEL_TYPES}
+          />
+        ) : null}
+        {isLoading ? <div className="muted">Loading…</div> : null}
+      </div>
+    );
+  }
+
+  if (variant === 'tools') {
+    return (
+      <div>
+        {TOOL_TYPES.map((type) => {
+          const connected = activeByType(type);
+          return (
+            <div key={type} className="settings-row">
+              <span className="settings-row-name">{labelFor(type)}</span>
+              {connected ? (
+                <span className="settings-badge is-on">{t('settings.connected')}</span>
+              ) : (
+                <span className="settings-badge">{t('settings.notConnected')}</span>
+              )}
+              <button type="button" className="btn" onClick={() => openConnect(type, connected)}>
+                {t('settings.manage')}
+              </button>
+            </div>
+          );
+        })}
+        <button type="button" className="settings-add" onClick={() => openConnect('mcp')}>
+          + {t('settings.addConnector')}
+        </button>
+        {formOpen && !isLlmType(form.connector_type) ? (
+          <ConnectorForm
+            form={form}
+            setForm={setForm}
+            editingId={editingId}
+            modelOptions={modelOptions}
+            modelCatalog={modelCatalog}
+            save={save}
+            onSubmit={onSubmit}
+            onCancel={() => {
+              setEditingId(null);
+              setFormOpen(false);
+            }}
+            types={[...TOOL_TYPES]}
+          />
+        ) : null}
+        {editingId ? (
+          <button type="button" className="btn btn-danger" style={{ marginTop: 8 }} onClick={() => remove.mutate(editingId)} disabled={remove.isPending}>
+            Remove
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <section className="panel">
       <h2>Connectors</h2>
-      <p className="muted">
-        OpenAI and DeepSeek use OpenAI-compatible chat. Cursor stages use the Cursor agent interface via <code>cursor-sdk</code> only — pick models labeled ·
-        Cursor (e.g. auto). Bind a git repo on the board (and optionally on a column Agent). GitHub, Jira, Polarion, and MCP servers unlock plugins under Agent.
-        If more than one model connector is active and the stage has no provider set, DeepSeek is used first, then OpenAI, then Cursor.
-      </p>
-
-      <form className="connector-form" onSubmit={onSubmit}>
-        <label className="field">
-          Type
-          <select
-            className="input"
-            value={form.connector_type}
-            onChange={(event) => {
-              const connector_type = event.target.value as ConnectorType;
-              setForm((current) => ({
-                ...current,
-                connector_type,
-                name: editingId ? current.name : defaultName(connector_type),
-                ...llmDefaults(connector_type)
-              }));
-            }}
-          >
-            {TYPES.map((type) => (
-              <option key={type} value={type}>
-                {labelFor(type)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          Name
-          <input className="input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-        </label>
-        {isLlmType(form.connector_type) ? (
-          <>
-            <label className="field">
-              API key
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={form.api_key}
-                onChange={(event) => setForm((current) => ({ ...current, api_key: event.target.value }))}
-                placeholder={editingId ? 'Leave blank to keep the saved key' : LLM_DEFAULTS[form.connector_type].placeholder}
-              />
-            </label>
-            <label className="field">
-              Base URL
-              <input className="input" value={form.base_url} onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))} />
-            </label>
-            <label className="field">
-              Default model
-              <select
-                className="input"
-                value={form.default_model}
-                onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}
-              >
-                {modelOptions.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isLlmType(form.connector_type) && modelCatalog ? (
-              <p className="muted">
-                {modelCatalog.source === 'api'
-                  ? `Live catalog: ${modelCatalog.models.length} models from ${form.connector_type} API.`
-                  : `Fallback catalog (${modelCatalog.models.length} models).${modelCatalog.error ? ` ${modelCatalog.error}` : ''}`}
-              </p>
-            ) : null}
-            {form.connector_type === 'cursor' ? (
-              <label className="field">
-                GitHub repo URL (optional)
-                <input
-                  className="input"
-                  value={form.repo_url}
-                  onChange={(event) => setForm((current) => ({ ...current, repo_url: event.target.value }))}
-                  placeholder="Leave empty for no-repo Cloud Agent"
-                />
-              </label>
-            ) : null}
-          </>
-        ) : null}
-        {form.connector_type === 'cursor' ? (
-          <p className="muted">
-            Model dropdown loads from Cursor <code>GET /v1/models</code> for this API key. Stage runs still execute through <code>cursor-sdk</code>. Pick only
-            ids from that live list (e.g. <code>auto</code>, <code>composer-2.5</code>). Optional GitHub repo URL attaches a repository to the cloud agent.
-          </p>
-        ) : null}
-        {form.connector_type === 'github' ? (
-          <>
-            <label className="field">
-              Token
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={form.token}
-                onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
-                placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
-              />
-            </label>
-            <label className="field">
-              Base URL (optional)
-              <input
-                className="input"
-                value={form.base_url}
-                onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))}
-                placeholder="https://api.github.com"
-              />
-            </label>
-          </>
-        ) : null}
-        {form.connector_type === 'jira' ? (
-          <>
-            <label className="field">
-              Server
-              <input
-                className="input"
-                value={form.server}
-                onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))}
-                placeholder="https://jira.example.com"
-              />
-            </label>
-            <label className="field">
-              Username
-              <input className="input" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
-            </label>
-            <label className="field">
-              Token
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={form.token}
-                onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
-                placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
-              />
-            </label>
-            <label className="field">
-              Project key (optional)
-              <input
-                className="input"
-                value={form.project}
-                onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))}
-                placeholder="PROJ"
-              />
-            </label>
-          </>
-        ) : null}
-        {form.connector_type === 'mcp' ? (
-          <>
-            <label className="field">
-              Transport
-              <select
-                className="input"
-                value={form.mcp_transport}
-                onChange={(event) => setForm((current) => ({ ...current, mcp_transport: event.target.value }))}
-              >
-                <option value="stdio">stdio command</option>
-                <option value="http">HTTP URL</option>
-              </select>
-            </label>
-            {form.mcp_transport === 'http' ? (
-              <label className="field">
-                MCP URL
-                <input
-                  className="input"
-                  value={form.mcp_url}
-                  onChange={(event) => setForm((current) => ({ ...current, mcp_url: event.target.value }))}
-                  placeholder="https://example.com/mcp"
-                />
-              </label>
-            ) : (
-              <>
-                <label className="field">
-                  Command
-                  <input
-                    className="input"
-                    value={form.mcp_command}
-                    onChange={(event) => setForm((current) => ({ ...current, mcp_command: event.target.value }))}
-                    placeholder="npx"
-                  />
-                </label>
-                <label className="field">
-                  Args
-                  <input
-                    className="input"
-                    value={form.mcp_args}
-                    onChange={(event) => setForm((current) => ({ ...current, mcp_args: event.target.value }))}
-                    placeholder="-y @modelcontextprotocol/server-github"
-                  />
-                </label>
-              </>
-            )}
-            <p className="muted">Attach this MCP server to a stage by enabling its plugin under Agent → Tools (or check mcp for all MCP connectors).</p>
-          </>
-        ) : null}
-        {form.connector_type === 'polarion' ? (
-          <>
-            <label className="field">
-              Server
-              <input
-                className="input"
-                value={form.server}
-                onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))}
-                placeholder="https://testdrive.polarion.com/polarion"
-              />
-            </label>
-            <label className="field">
-              Username
-              <input className="input" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
-            </label>
-            <label className="field">
-              Token
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={form.token}
-                onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
-                placeholder={editingId ? 'Leave blank to keep the saved token' : 'Access token (not the browser /#/home URL)'}
-              />
-            </label>
-            <label className="field">
-              Password (if not using a token)
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={form.password}
-                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                placeholder={editingId ? 'Leave blank to keep the saved password' : ''}
-              />
-            </label>
-            <label className="field">
-              Project
-              <input
-                className="input"
-                value={form.project}
-                onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))}
-                placeholder="5E96"
-              />
-            </label>
-          </>
-        ) : null}
-        <label className="field">
-          <span className="check-row">
-            <input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} />
-            Active
-          </span>
-        </label>
-        {save.isError ? <div className="error">{saveError(save.error)}</div> : null}
-        <div className="connector-actions">
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={!form.name || save.isPending || (isLlmType(form.connector_type) && !editingId && !form.api_key.trim())}
-          >
-            {save.isPending ? 'Saving…' : editingId ? 'Save connector' : 'Add connector'}
-          </button>
-          {editingId ? (
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setEditingId(null);
-                setForm(EMPTY_FORM);
-              }}
-            >
-              Cancel
-            </button>
-          ) : null}
-        </div>
-      </form>
-
+      <p className="muted">{t('settings.connectorsIntro')}</p>
+      <ConnectorForm
+        form={form}
+        setForm={setForm}
+        editingId={editingId}
+        modelOptions={modelOptions}
+        modelCatalog={modelCatalog}
+        save={save}
+        onSubmit={onSubmit}
+        onCancel={() => {
+          setEditingId(null);
+          setForm(EMPTY_FORM);
+        }}
+        types={TYPES}
+      />
       {isLoading ? <div className="muted">Loading connectors…</div> : null}
       {data
         .filter((connector) => connector.connector_type !== 'workspace')
@@ -410,6 +291,272 @@ export function ConnectorHealth() {
         <div className="muted">No connectors yet. Add OpenAI, Cursor, or DeepSeek here so stage runs call a real model.</div>
       ) : null}
     </section>
+  );
+}
+
+function ConnectorForm({
+  form,
+  setForm,
+  editingId,
+  modelOptions,
+  modelCatalog,
+  save,
+  onSubmit,
+  onCancel,
+  types
+}: {
+  form: typeof EMPTY_FORM;
+  setForm: Dispatch<SetStateAction<typeof EMPTY_FORM>>;
+  editingId: string | null;
+  modelOptions: string[];
+  modelCatalog?: LlmModelCatalog;
+  save: { isPending: boolean; isError: boolean; error: unknown };
+  onSubmit: (event: FormEvent) => void;
+  onCancel: () => void;
+  types: ConnectorType[];
+}) {
+  return (
+    <form className="connector-form" onSubmit={onSubmit} style={{ marginTop: 12 }}>
+      <label className="field">
+        Type
+        <select
+          className="input"
+          value={form.connector_type}
+          onChange={(event) => {
+            const connector_type = event.target.value as ConnectorType;
+            setForm((current) => ({
+              ...current,
+              connector_type,
+              name: editingId ? current.name : defaultName(connector_type),
+              ...llmDefaults(connector_type)
+            }));
+          }}
+        >
+          {types.map((type) => (
+            <option key={type} value={type}>
+              {labelFor(type)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Name
+        <input className="input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+      </label>
+      {isLlmType(form.connector_type) ? (
+        <>
+          <label className="field">
+            API key
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={form.api_key}
+              onChange={(event) => setForm((current) => ({ ...current, api_key: event.target.value }))}
+              placeholder={editingId ? 'Leave blank to keep the saved key' : LLM_DEFAULTS[form.connector_type].placeholder}
+            />
+          </label>
+          <label className="field">
+            Base URL
+            <input className="input" value={form.base_url} onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))} />
+          </label>
+          <label className="field">
+            Default model
+            <select className="input" value={form.default_model} onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}>
+              {modelOptions.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          </label>
+          {modelCatalog ? (
+            <p className="muted">
+              {modelCatalog.source === 'api'
+                ? `Live catalog: ${modelCatalog.models.length} models from ${form.connector_type} API.`
+                : `Fallback catalog (${modelCatalog.models.length} models).${modelCatalog.error ? ` ${modelCatalog.error}` : ''}`}
+            </p>
+          ) : null}
+          {form.connector_type === 'cursor' ? (
+            <label className="field">
+              GitHub repo URL (optional)
+              <input
+                className="input"
+                value={form.repo_url}
+                onChange={(event) => setForm((current) => ({ ...current, repo_url: event.target.value }))}
+                placeholder="Leave empty for no-repo Cloud Agent"
+              />
+            </label>
+          ) : null}
+        </>
+      ) : null}
+      {form.connector_type === 'github' ? (
+        <>
+          <label className="field">
+            Token
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={form.token}
+              onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+              placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
+            />
+          </label>
+          <label className="field">
+            Base URL (optional)
+            <input
+              className="input"
+              value={form.base_url}
+              onChange={(event) => setForm((current) => ({ ...current, base_url: event.target.value }))}
+              placeholder="https://api.github.com"
+            />
+          </label>
+        </>
+      ) : null}
+      {form.connector_type === 'jira' ? (
+        <>
+          <label className="field">
+            Server
+            <input
+              className="input"
+              value={form.server}
+              onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))}
+              placeholder="https://jira.example.com"
+            />
+          </label>
+          <label className="field">
+            Username
+            <input className="input" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
+          </label>
+          <label className="field">
+            Token
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={form.token}
+              onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+              placeholder={editingId ? 'Leave blank to keep the saved token' : ''}
+            />
+          </label>
+          <label className="field">
+            Project key (optional)
+            <input
+              className="input"
+              value={form.project}
+              onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))}
+              placeholder="PROJ"
+            />
+          </label>
+        </>
+      ) : null}
+      {form.connector_type === 'mcp' ? (
+        <>
+          <label className="field">
+            Transport
+            <select className="input" value={form.mcp_transport} onChange={(event) => setForm((current) => ({ ...current, mcp_transport: event.target.value }))}>
+              <option value="stdio">stdio command</option>
+              <option value="http">HTTP URL</option>
+            </select>
+          </label>
+          {form.mcp_transport === 'http' ? (
+            <label className="field">
+              MCP URL
+              <input
+                className="input"
+                value={form.mcp_url}
+                onChange={(event) => setForm((current) => ({ ...current, mcp_url: event.target.value }))}
+                placeholder="https://example.com/mcp"
+              />
+            </label>
+          ) : (
+            <>
+              <label className="field">
+                Command
+                <input
+                  className="input"
+                  value={form.mcp_command}
+                  onChange={(event) => setForm((current) => ({ ...current, mcp_command: event.target.value }))}
+                  placeholder="npx"
+                />
+              </label>
+              <label className="field">
+                Args
+                <input
+                  className="input"
+                  value={form.mcp_args}
+                  onChange={(event) => setForm((current) => ({ ...current, mcp_args: event.target.value }))}
+                  placeholder="-y @modelcontextprotocol/server-github"
+                />
+              </label>
+            </>
+          )}
+        </>
+      ) : null}
+      {form.connector_type === 'polarion' ? (
+        <>
+          <label className="field">
+            Server
+            <input
+              className="input"
+              value={form.server}
+              onChange={(event) => setForm((current) => ({ ...current, server: event.target.value }))}
+              placeholder="https://testdrive.polarion.com/polarion"
+            />
+          </label>
+          <label className="field">
+            Username
+            <input className="input" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
+          </label>
+          <label className="field">
+            Token
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={form.token}
+              onChange={(event) => setForm((current) => ({ ...current, token: event.target.value }))}
+              placeholder={editingId ? 'Leave blank to keep the saved token' : 'Access token'}
+            />
+          </label>
+          <label className="field">
+            Password (if not using a token)
+            <input
+              className="input"
+              type="password"
+              autoComplete="off"
+              value={form.password}
+              onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+              placeholder={editingId ? 'Leave blank to keep the saved password' : ''}
+            />
+          </label>
+          <label className="field">
+            Project
+            <input className="input" value={form.project} onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))} placeholder="elibrary" />
+          </label>
+        </>
+      ) : null}
+      <label className="field">
+        <span className="check-row">
+          <input type="checkbox" checked={form.is_active} onChange={(event) => setForm((current) => ({ ...current, is_active: event.target.checked }))} />
+          Active
+        </span>
+      </label>
+      {save.isError ? <div className="error">{saveError(save.error)}</div> : null}
+      <div className="connector-actions">
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={!form.name || save.isPending || (isLlmType(form.connector_type) && !editingId && !form.api_key.trim())}
+        >
+          {save.isPending ? 'Saving…' : editingId ? 'Save connector' : 'Add connector'}
+        </button>
+        <button type="button" className="btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -469,14 +616,13 @@ function configFromForm(form: typeof EMPTY_FORM): Record<string, string> {
   if (form.connector_type === 'workspace') {
     return { path: form.workspace_path, git_url: form.git_url };
   }
-  const config: Record<string, string> = {
+  return {
     server: form.server,
     username: form.username,
     password: form.password,
     token: form.token,
     project: form.project.trim()
   };
-  return config;
 }
 
 function startEdit(connector: Connector, setEditingId: (id: string) => void, setForm: (form: typeof EMPTY_FORM) => void): void {

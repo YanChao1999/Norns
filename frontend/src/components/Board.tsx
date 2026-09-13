@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { entryStageId, groupStages } from '../boardLayout';
+import { useI18n } from '../i18n';
+import { boardHasParallel, softJoinProgress } from '../softJoin';
 import { BoardDetail, Card, Stage } from '../types';
 import { repoChipLabel } from '../workspaceLabel';
 import { AgentConfigModal } from './AgentConfig';
@@ -10,13 +12,16 @@ import { CardDrawer } from './CardDrawer';
 import { CardHistory } from './CardHistory';
 import { Column } from './Column';
 import { Dialog } from './Dialog';
+import { SoftJoinBridge } from './SoftJoinBridge';
 
 interface Props {
   boardId: string;
   onEditMachine?: () => void;
+  practiceMode?: boolean;
 }
 
-export function Board({ boardId, onEditMachine }: Props) {
+export function Board({ boardId, onEditMachine, practiceMode = false }: Props) {
+  const { t } = useI18n();
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [historyCard, setHistoryCard] = useState<Card | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
@@ -42,13 +47,13 @@ export function Board({ boardId, onEditMachine }: Props) {
   }, [board]);
 
   if (isLoading || !board) {
-    return <div className="muted">Loading board…</div>;
+    return <div className="muted">{t('board.loading')}</div>;
   }
 
   const stages = [...board.stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
   const columns = groupStages(stages);
   const entryId = entryStageId(stages);
-  const rowCount = Math.max(1, ...stages.map((stage) => (stage.lane ?? 0) + 1));
+  const parallelMode = boardHasParallel(columns);
   const liveCard = selectedCard ? (board.cards.find((item) => item.id === selectedCard.id) ?? selectedCard) : null;
   const liveHistoryCard = historyCard ? (board.cards.find((item) => item.id === historyCard.id) ?? historyCard) : null;
 
@@ -71,76 +76,53 @@ export function Board({ boardId, onEditMachine }: Props) {
       <div className="board-head">
         <div>
           <h1>{board.name}</h1>
-          <p>{board.description || 'Each column is a workflow step. Cards follow the lines you draw. Column and row only place stages on the board.'}</p>
+          <p>
+            {board.description ||
+              (practiceMode
+                ? t('practice.body')
+                : 'Each column is a workflow step. Cards follow the lines you draw.')}
+          </p>
         </div>
         <div className="board-head-actions">
           <BoardWorkspace board={board} />
           {onEditMachine ? (
             <button type="button" className="btn" onClick={onEditMachine}>
-              Edit state machine
+              {t('board.editMachine')}
             </button>
           ) : null}
         </div>
       </div>
 
-      <div
-        className="board-grid"
-        style={{
-          gridTemplateColumns: `64px repeat(${columns.length}, minmax(280px, 1fr))`,
-          gridTemplateRows: `28px repeat(${rowCount}, minmax(240px, 1fr))`
-        }}
-      >
-        <div className="board-grid-corner" />
-        {columns.map((group, columnIndex) => {
-          const parallel = group.length > 1;
-          return (
-            <header
-              key={`col-${group[0].id}`}
-              className={`board-column-banner${parallel ? ' is-parallel' : ''}`}
-              style={{ gridColumn: columnIndex + 2, gridRow: 1 }}
-            >
-              <span>Column {group[0].order}</span>
-              {parallel ? <span className="board-column-parallel">{group.length} rows in parallel</span> : null}
-            </header>
-          );
-        })}
-        {Array.from({ length: rowCount }, (_, index) => (
-          <div key={`row-${index}`} className="board-row-label" style={{ gridColumn: 1, gridRow: index + 2 }}>
-            Row {index + 1}
-          </div>
-        ))}
-        {columns.flatMap((group, columnIndex) => {
-          const parallel = group.length > 1;
-          return Array.from({ length: rowCount }, (_, index) => {
-            const row = index + 1;
-            const stage = group.find((item) => (item.lane ?? 0) + 1 === row);
-            if (!stage) {
-              return (
-                <div
-                  key={`${group[0].id}-empty-${row}`}
-                  className={`board-empty-cell${parallel ? ' is-parallel' : ''}`}
-                  style={{ gridColumn: columnIndex + 2, gridRow: row + 1 }}
-                />
-              );
-            }
+      {parallelMode ? (
+        <StageRail
+          boardId={boardId}
+          board={board}
+          columns={columns}
+          cardsByStage={cardsByStage}
+          entryId={entryId}
+          openCardId={liveCard?.id ?? null}
+          onOpenCard={setSelectedCard}
+          onOpenConfig={setSelectedStage}
+        />
+      ) : (
+        <div className="stage-rail-linear">
+          {columns.map((group) => {
+            const stage = group[0];
             return (
-              <div key={stage.id} className={`board-cell${parallel ? ' is-parallel' : ''}`} style={{ gridColumn: columnIndex + 2, gridRow: row + 1 }}>
-                <Column
-                  boardId={boardId}
-                  stage={stage}
-                  cards={cardsByStage.get(stage.id) ?? []}
-                  isFirst={stage.id === entryId}
-                  row={row}
-                  parallel={parallel}
-                  openCardId={liveCard?.id ?? null}
-                  onOpenCard={setSelectedCard}
-                  onOpenConfig={setSelectedStage}
-                />
-              </div>
+              <Column
+                key={stage.id}
+                boardId={boardId}
+                stage={stage}
+                cards={cardsByStage.get(stage.id) ?? []}
+                isFirst={stage.id === entryId}
+                openCardId={liveCard?.id ?? null}
+                onOpenCard={setSelectedCard}
+                onOpenConfig={setSelectedStage}
+              />
             );
-          });
-        })}
-      </div>
+          })}
+        </div>
+      )}
 
       <CardDrawer
         card={liveCard}
@@ -160,6 +142,89 @@ export function Board({ boardId, onEditMachine }: Props) {
         boardWorkspace={{ path: board.workspace_path ?? '', git_url: board.git_url ?? '' }}
         onClose={() => setSelectedStage(null)}
       />
+    </div>
+  );
+}
+
+function StageRail({
+  boardId,
+  board,
+  columns,
+  cardsByStage,
+  entryId,
+  openCardId,
+  onOpenCard,
+  onOpenConfig
+}: {
+  boardId: string;
+  board: BoardDetail;
+  columns: Stage[][];
+  cardsByStage: Map<string, Card[]>;
+  entryId?: string;
+  openCardId: string | null;
+  onOpenCard: (card: Card) => void;
+  onOpenConfig: (stage: Stage) => void;
+}) {
+  const { t } = useI18n();
+  const parallelIndex = columns.findIndex((group) => group.length > 1);
+  const parallelGroup = parallelIndex >= 0 ? columns[parallelIndex] : null;
+  const progress = parallelGroup ? softJoinProgress(parallelGroup, board.cards) : null;
+  const joinLocked = Boolean(parallelGroup && progress && !progress.complete);
+
+  return (
+    <div className="stage-rail">
+      {columns.map((group, index) => {
+        if (group.length > 1) {
+          const isLast = index === columns.length - 1;
+          return (
+            <div key={`parallel-${group[0].id}`} style={{ display: 'contents' }}>
+              <div className="parallel-frame">
+                <div className="parallel-frame-badge">{t('board.inParallel')}</div>
+                <div className="parallel-lanes">
+                  {[...group]
+                    .sort((left, right) => (left.lane ?? 0) - (right.lane ?? 0))
+                    .map((stage) => (
+                      <Column
+                        key={stage.id}
+                        boardId={boardId}
+                        stage={stage}
+                        cards={cardsByStage.get(stage.id) ?? []}
+                        isFirst={stage.id === entryId}
+                        row={(stage.lane ?? 0) + 1}
+                        parallel
+                        compact
+                        openCardId={openCardId}
+                        onOpenCard={onOpenCard}
+                        onOpenConfig={onOpenConfig}
+                      />
+                    ))}
+                </div>
+              </div>
+              {isLast && progress ? <SoftJoinBridge progress={progress} onOpenCard={onOpenCard} /> : null}
+            </div>
+          );
+        }
+
+        const stage = group[0];
+        const afterParallel = parallelIndex >= 0 && index === parallelIndex + 1;
+        const terminalLocked = afterParallel && joinLocked && Boolean(stage.confirm_writes);
+
+        return (
+          <div key={stage.id} style={{ display: 'contents' }}>
+            {afterParallel && progress ? <SoftJoinBridge progress={progress} onOpenCard={onOpenCard} /> : null}
+            <Column
+              boardId={boardId}
+              stage={stage}
+              cards={cardsByStage.get(stage.id) ?? []}
+              isFirst={stage.id === entryId}
+              locked={terminalLocked}
+              openCardId={openCardId}
+              onOpenCard={onOpenCard}
+              onOpenConfig={onOpenConfig}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
