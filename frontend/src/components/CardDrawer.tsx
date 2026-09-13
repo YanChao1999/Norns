@@ -353,11 +353,7 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               onClick={() => approvalMutation.mutate(false)}
               disabled={approvalMutation.isPending}
               title={
-                placeholderRun
-                  ? 'Practice reject — blocks the practice card'
-                  : recommendation === 'reject'
-                    ? 'Agent recommended reject'
-                    : 'Confirm reject'
+                placeholderRun ? 'Practice reject — blocks the practice card' : recommendation === 'reject' ? 'Agent recommended reject' : 'Confirm reject'
               }
             >
               {placeholderRun ? PRACTICE_REJECT_LABEL : rejectLabel(rejectLines, board, handoff)}

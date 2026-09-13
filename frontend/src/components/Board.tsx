@@ -254,9 +254,7 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
             />
           </label>
           {detected?.path && detected.source === 'board' && bound ? (
-            <p className="muted">
-              Workspace API sees {detected.github_repo || detected.path} for this board.
-            </p>
+            <p className="muted">Workspace API sees {detected.github_repo || detected.path} for this board.</p>
           ) : null}
           {detected?.path && !path && detected.source !== 'board' ? (
             <p className="muted">
