@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildJourney,
+  buildStagePath,
   chronologicalRuns,
   compareRunDecision,
   handoffSummary,
@@ -176,5 +177,41 @@ describe('cardJourney', () => {
         })
       )
     ).toBe('DeepSeek · deepseek-v4-flash');
+  });
+
+  it('inserts soft join between parallel lanes and the next stage', () => {
+    const parallelBoard = {
+      ...board,
+      stages: [
+        { id: 's1', board_id: 'b1', name: 'Urd implement', order: 1, require_approval: true },
+        { id: 's2a', board_id: 'b1', name: 'Check compliance', order: 2, lane: 0, require_approval: true },
+        { id: 's2b', board_id: 'b1', name: 'Check requirements', order: 2, lane: 1, require_approval: true },
+        { id: 's2c', board_id: 'b1', name: 'Run tests', order: 2, lane: 2, require_approval: false },
+        { id: 's3', board_id: 'b1', name: 'Skuld confirm write', order: 3, require_approval: true, confirm_writes: true }
+      ]
+    } as BoardDetail;
+    const card = {
+      id: 'c1',
+      board_id: 'b1',
+      title: 'Checkout API',
+      body: '',
+      external_id: 'NOR-14',
+      current_stage_id: 's2b',
+      status: 'waiting_approval'
+    } as Card;
+    const path = buildStagePath(card, parallelBoard, [
+      run({ id: 'r1', stage_id: 's1' }),
+      run({ id: 'r2', stage_id: 's2a' })
+    ]);
+    expect(path.map((node) => [node.kind, node.label, node.parallel])).toEqual([
+      ['stage', 'Urd implement', false],
+      ['stage', 'Check compliance', true],
+      ['stage', 'Check requirements', true],
+      ['stage', 'Run tests', true],
+      ['soft_join', 'soft join', false],
+      ['stage', 'Skuld confirm write', false],
+      ['end', 'End', false]
+    ]);
+    expect(path.find((node) => node.kind === 'soft_join')?.state).toBe('locked');
   });
 });

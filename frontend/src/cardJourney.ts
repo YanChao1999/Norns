@@ -207,3 +207,80 @@ export function journeyStateLabel(state: JourneyStepState): string {
       return 'running';
   }
 }
+
+export type StagePathKind = 'stage' | 'soft_join' | 'end';
+
+export interface StagePathNode {
+  id: string;
+  kind: StagePathKind;
+  label: string;
+  state: JourneyStepState | 'locked' | 'waiting';
+  parallel: boolean;
+  stage?: Stage;
+  step?: JourneyStep;
+}
+
+/** Flatten board columns into a stage-path with parallel markers and soft-join / end nodes. */
+export function buildStagePath(card: Card, board: BoardDetail | undefined, runs: AgentRun[]): StagePathNode[] {
+  const journey = buildJourney(card, board, runs);
+  const byId = new Map(journey.map((step) => [step.stage.id, step]));
+  const groups = groupStages(board?.stages ?? []);
+  const nodes: StagePathNode[] = [];
+
+  for (let index = 0; index < groups.length; index += 1) {
+    const group = groups[index];
+    const parallel = group.length > 1;
+    for (const stage of [...group].sort((left, right) => (left.lane ?? 0) - (right.lane ?? 0))) {
+      const step = byId.get(stage.id);
+      nodes.push({
+        id: stage.id,
+        kind: 'stage',
+        label: stage.name,
+        state: step?.state ?? 'pending',
+        parallel,
+        stage,
+        step
+      });
+    }
+
+    const next = groups[index + 1];
+    if (parallel && next) {
+      const joinSettled = group.every((stage) => {
+        const step = byId.get(stage.id);
+        return step?.state === 'done' || step?.state === 'failed';
+      });
+      nodes.push({
+        id: `soft-join-after-${group[0].id}`,
+        kind: 'soft_join',
+        label: 'soft join',
+        state: joinSettled ? 'done' : card.status === 'waiting_join' || !joinSettled ? 'locked' : 'pending',
+        parallel: false
+      });
+    }
+  }
+
+  const allDone = journey.length > 0 && journey.every((step) => step.state === 'done') && card.status === 'done';
+  nodes.push({
+    id: 'end',
+    kind: 'end',
+    label: 'End',
+    state: allDone ? 'done' : 'pending',
+    parallel: false
+  });
+
+  return nodes;
+}
+
+function groupStages(stages: Stage[]): Stage[][] {
+  const sorted = [...stages].sort((left, right) => left.order - right.order || (left.lane ?? 0) - (right.lane ?? 0));
+  const groups: Stage[][] = [];
+  for (const stage of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last[0].order === stage.order) {
+      last.push(stage);
+    } else {
+      groups.push([stage]);
+    }
+  }
+  return groups;
+}

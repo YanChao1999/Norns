@@ -57,7 +57,7 @@ interface DialogProps {
   open: boolean;
   onClose: () => void;
   labelledBy: string;
-  variant: 'drawer' | 'modal';
+  variant: 'drawer' | 'modal' | 'sheet';
   children: ReactNode;
 }
 
@@ -77,6 +77,24 @@ export function Dialog({ open, onClose, labelledBy, variant, children }: DialogP
       <>
         <div className="drawer-backdrop" onClick={onClose} />
         <aside ref={setPanelRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1}>
+          {children}
+        </aside>
+      </>
+    );
+  }
+
+  if (variant === 'sheet') {
+    return (
+      <>
+        <div className="drawer-backdrop" onClick={onClose} />
+        <aside
+          ref={setPanelRef}
+          className="sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          tabIndex={-1}
+        >
           {children}
         </aside>
       </>
