@@ -76,12 +76,7 @@ export function Board({ boardId, onEditMachine, practiceMode = false }: Props) {
       <div className="board-head">
         <div>
           <h1>{board.name}</h1>
-          <p>
-            {board.description ||
-              (practiceMode
-                ? t('practice.body')
-                : 'Each column is a workflow step. Cards follow the lines you draw.')}
-          </p>
+          <p>{board.description || (practiceMode ? t('practice.body') : 'Each column is a workflow step. Cards follow the lines you draw.')}</p>
         </div>
         <div className="board-head-actions">
           <BoardWorkspace board={board} />

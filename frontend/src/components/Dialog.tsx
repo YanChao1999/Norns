@@ -87,14 +87,7 @@ export function Dialog({ open, onClose, labelledBy, variant, children }: DialogP
     return (
       <>
         <div className="drawer-backdrop" onClick={onClose} />
-        <aside
-          ref={setPanelRef}
-          className="sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={labelledBy}
-          tabIndex={-1}
-        >
+        <aside ref={setPanelRef} className="sheet" role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1}>
           {children}
         </aside>
       </>

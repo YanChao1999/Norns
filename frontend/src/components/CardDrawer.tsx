@@ -116,7 +116,6 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
     }
   });
 
-
   const askMutation = useMutation({
     mutationFn: async (question: string) => {
       if (!card) {
@@ -222,7 +221,10 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
           </div>
           <ol className="stage-path">
             {stagePath.map((node, index) => (
-              <li key={node.id} className={`stage-path-node is-${node.state}${node.parallel ? ' is-parallel' : ''}${node.kind !== 'stage' ? ` is-${node.kind}` : ''}`}>
+              <li
+                key={node.id}
+                className={`stage-path-node is-${node.state}${node.parallel ? ' is-parallel' : ''}${node.kind !== 'stage' ? ` is-${node.kind}` : ''}`}
+              >
                 {index > 0 ? <span className="stage-path-connector" aria-hidden="true" /> : null}
                 <button
                   type="button"
@@ -370,7 +372,9 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
               </section>
             ) : null}
 
-            {expandedStageId ? <JourneyStageDetail stageId={expandedStageId} board={board} runs={runs.filter((run) => run.stage_id === expandedStageId)} /> : null}
+            {expandedStageId ? (
+              <JourneyStageDetail stageId={expandedStageId} board={board} runs={runs.filter((run) => run.stage_id === expandedStageId)} />
+            ) : null}
 
             {latestCurrentRun && sandbox ? (
               <p className="muted">
@@ -393,7 +397,9 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                     <span className="journey-rail-dot" aria-hidden="true" />
                     <div>
                       <p className="journey-rail-time">
-                        {step.latestRun ? formatRunTime(step.latestRun.completed_at ?? step.latestRun.created_at) : pathStateLabel({ state: step.state } as StagePathNode, t)}
+                        {step.latestRun
+                          ? formatRunTime(step.latestRun.completed_at ?? step.latestRun.created_at)
+                          : pathStateLabel({ state: step.state } as StagePathNode, t)}
                       </p>
                       <strong>
                         {step.stage.name}
@@ -523,7 +529,12 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                     if (!question || askMutation.isPending) {
                       return;
                     }
-                    if (!(card.status === 'idle' || card.status === 'blocked' || card.status === 'waiting_approval' || card.status === 'waiting_tool_approval')) {
+                    if (!(
+                      card.status === 'idle' ||
+                      card.status === 'blocked' ||
+                      card.status === 'waiting_approval' ||
+                      card.status === 'waiting_tool_approval'
+                    )) {
                       setAskNotice(t('detail.askAgentBusy'));
                       return;
                     }
@@ -568,19 +579,13 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
 
             {joining ? <p className="muted">{t('detail.joiningStatus')}</p> : null}
             {inProgress ? <WaitLive startedAt={latestCurrentRun?.created_at ?? card.updated_at} variant="footer" /> : null}
-            {!canRun && !waiting && !waitingWrites && !joining && !inProgress ? (
-              <p className="muted">{STATUS_LABEL[card.status]}</p>
-            ) : null}
+            {!canRun && !waiting && !waitingWrites && !joining && !inProgress ? <p className="muted">{STATUS_LABEL[card.status]}</p> : null}
 
             <section className="machine-card-writes">
               <h4>
                 <span aria-hidden="true">📄</span> {t('detail.writeRecords')}
               </h4>
-              {pendingWrites.length ? (
-                <pre className="log">{JSON.stringify(pendingWrites, null, 2)}</pre>
-              ) : (
-                <p>{t('detail.noWrites')}</p>
-              )}
+              {pendingWrites.length ? <pre className="log">{JSON.stringify(pendingWrites, null, 2)}</pre> : <p>{t('detail.noWrites')}</p>}
             </section>
           </aside>
         </div>
@@ -648,7 +653,10 @@ function shortId(id: string): string {
   return id.slice(0, 8).toUpperCase();
 }
 
-function detailStatus(status: Card['status'], t: (key: Parameters<ReturnType<typeof useI18n>['t']>[0], vars?: Record<string, string | number>) => string): string {
+function detailStatus(
+  status: Card['status'],
+  t: (key: Parameters<ReturnType<typeof useI18n>['t']>[0], vars?: Record<string, string | number>) => string
+): string {
   switch (status) {
     case 'waiting_approval':
       return t('detail.waitingConfirm');

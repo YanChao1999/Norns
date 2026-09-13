@@ -25,9 +25,7 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
   const [boardName, setBoardName] = useState('Delivery');
   const [workspacePath, setWorkspacePath] = useState('');
   const [gitUrl, setGitUrl] = useState('');
-  const [confirmWrites, setConfirmWrites] = useState(() =>
-    board ? boardWriteGateEnabled(board.stages) : readConfirmWritesUi()
-  );
+  const [confirmWrites, setConfirmWrites] = useState(() => (board ? boardWriteGateEnabled(board.stages) : readConfirmWritesUi()));
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<ConnectorType | undefined>();
   const [gateError, setGateError] = useState('');
@@ -177,9 +175,7 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
           <span className="settings-section-num">3</span>
           <h2 className="settings-section-title">{t('settings.sectionWriteGate')}</h2>
         </div>
-        <p className="muted">
-          {board ? t('settings.writeGateBoard', { name: board.name }) : t('settings.writeGateNoBoard')}
-        </p>
+        <p className="muted">{board ? t('settings.writeGateBoard', { name: board.name }) : t('settings.writeGateNoBoard')}</p>
         <div className="write-gate-row">
           <span aria-hidden="true">⚠</span>
           <span>{t('settings.writeGateLabel')}</span>

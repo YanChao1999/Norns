@@ -43,13 +43,7 @@ export function LoginForm({ onLoggedIn }: Props) {
         </label>
         <label className="field">
           {t('login.password')}
-          <input
-            className="input"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete="current-password"
-          />
+          <input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
         </label>
         {error ? <div className="error">{error}</div> : null}
         <button type="submit" className="btn btn-primary" disabled={pending || !username || !password}>

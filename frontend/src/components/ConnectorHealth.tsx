@@ -52,13 +52,7 @@ interface Props {
   onRequestConnect?: (type: ConnectorType) => void;
 }
 
-export function ConnectorHealth({
-  variant = 'all',
-  showForm,
-  onShowFormChange,
-  preferredType,
-  onRequestConnect
-}: Props) {
+export function ConnectorHealth({ variant = 'all', showForm, onShowFormChange, preferredType, onRequestConnect }: Props) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -362,7 +356,11 @@ function ConnectorForm({
           </label>
           <label className="field">
             Default model
-            <select className="input" value={form.default_model} onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}>
+            <select
+              className="input"
+              value={form.default_model}
+              onChange={(event) => setForm((current) => ({ ...current, default_model: event.target.value }))}
+            >
               {modelOptions.map((model) => (
                 <option key={model} value={model}>
                   {model}
@@ -455,7 +453,11 @@ function ConnectorForm({
         <>
           <label className="field">
             Transport
-            <select className="input" value={form.mcp_transport} onChange={(event) => setForm((current) => ({ ...current, mcp_transport: event.target.value }))}>
+            <select
+              className="input"
+              value={form.mcp_transport}
+              onChange={(event) => setForm((current) => ({ ...current, mcp_transport: event.target.value }))}
+            >
               <option value="stdio">stdio command</option>
               <option value="http">HTTP URL</option>
             </select>
@@ -533,7 +535,12 @@ function ConnectorForm({
           </label>
           <label className="field">
             Project
-            <input className="input" value={form.project} onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))} placeholder="elibrary" />
+            <input
+              className="input"
+              value={form.project}
+              onChange={(event) => setForm((current) => ({ ...current, project: event.target.value }))}
+              placeholder="elibrary"
+            />
           </label>
         </>
       ) : null}

@@ -93,7 +93,12 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
             type="button"
             className="btn btn-approve"
             disabled={approval.isPending || locked}
-            onClick={() => approval.mutate({ approved: true, recommendation: card.recommendation === 'approve' || card.recommendation === 'reject' ? card.recommendation : null })}
+            onClick={() =>
+              approval.mutate({
+                approved: true,
+                recommendation: card.recommendation === 'approve' || card.recommendation === 'reject' ? card.recommendation : null
+              })
+            }
           >
             {t('card.approve')}
           </button>
@@ -101,7 +106,12 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
             type="button"
             className="btn btn-reject"
             disabled={approval.isPending || locked}
-            onClick={() => approval.mutate({ approved: false, recommendation: card.recommendation === 'approve' || card.recommendation === 'reject' ? card.recommendation : null })}
+            onClick={() =>
+              approval.mutate({
+                approved: false,
+                recommendation: card.recommendation === 'approve' || card.recommendation === 'reject' ? card.recommendation : null
+              })
+            }
           >
             {t('card.reject')}
           </button>

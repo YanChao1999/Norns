@@ -20,12 +20,7 @@ describe('boardWriteGateEnabled', () => {
   });
 
   it('is true when any stage confirms writes', () => {
-    expect(
-      boardWriteGateEnabled([
-        stage({ id: 'a', confirm_writes: false }),
-        stage({ id: 'b', confirm_writes: true })
-      ])
-    ).toBe(true);
+    expect(boardWriteGateEnabled([stage({ id: 'a', confirm_writes: false }), stage({ id: 'b', confirm_writes: true })])).toBe(true);
   });
 
   it('is false when no stage confirms writes', () => {

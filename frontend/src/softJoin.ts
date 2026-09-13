@@ -10,9 +10,7 @@ export interface SoftJoinProgress {
 
 /** A lane is settled when it has a card that finished work or is waiting at a gate/join. */
 function laneIsSettled(cards: Card[]): boolean {
-  return cards.some((card) =>
-    ['done', 'waiting_join', 'waiting_tool_approval', 'waiting_approval'].includes(card.status)
-  );
+  return cards.some((card) => ['done', 'waiting_join', 'waiting_tool_approval', 'waiting_approval'].includes(card.status));
 }
 
 /** Count how many parallel lanes have a settled (or join-waiting) card. */
@@ -39,9 +37,7 @@ export function softJoinProgress(parallelStages: Stage[], cards: Card[]): SoftJo
 
   // Parent/join cards that left parallel stages and sit on a join/confirm stage.
   const outside = cards.filter(
-    (card) =>
-      (card.status === 'waiting_join' || card.status === 'waiting_tool_approval') &&
-      !parallelStages.some((stage) => stage.id === card.current_stage_id)
+    (card) => (card.status === 'waiting_join' || card.status === 'waiting_tool_approval') && !parallelStages.some((stage) => stage.id === card.current_stage_id)
   );
   for (const card of outside) {
     if (card.status === 'waiting_join') {

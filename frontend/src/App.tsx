@@ -89,13 +89,9 @@ export default function App() {
   const llmConfigured = runtime == null ? null : Boolean(runtime.llm_configured ?? runtime.openai_configured);
   const showPractice = llmConfigured === false && !practiceDismissed;
 
-  const waitingCount =
-    selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
+  const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
   const pullingCount = selectedBoard?.cards.filter((card) => card.status === 'running').length ?? 0;
-  const hasParallel = useMemo(
-    () => (selectedBoard ? boardHasParallel(groupStages(selectedBoard.stages)) : false),
-    [selectedBoard]
-  );
+  const hasParallel = useMemo(() => (selectedBoard ? boardHasParallel(groupStages(selectedBoard.stages)) : false), [selectedBoard]);
 
   if (!authChecked) {
     return <div className="app-boot">{t('app.checkingSession')}</div>;
@@ -156,12 +152,7 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        {showPractice && view === 'board' ? (
-          <PracticeBanner
-            onGoSettings={() => setView('settings')}
-            onContinue={() => setPracticeDismissed(true)}
-          />
-        ) : null}
+        {showPractice && view === 'board' ? <PracticeBanner onGoSettings={() => setView('settings')} onContinue={() => setPracticeDismissed(true)} /> : null}
         {view === 'settings' ? (
           <Settings
             board={selectedBoard}
@@ -182,13 +173,7 @@ export default function App() {
           <>
             {isLoading ? <div className="muted">{t('app.loadingBoards')}</div> : null}
             {!boards.length && !isLoading ? <div className="empty-board">{t('app.emptyBoard')}</div> : null}
-            {selectedBoardId ? (
-              <Board
-                boardId={selectedBoardId}
-                onEditMachine={() => setView('machine')}
-                practiceMode={llmConfigured === false}
-              />
-            ) : null}
+            {selectedBoardId ? <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} practiceMode={llmConfigured === false} /> : null}
             {llmConfigured === false && view === 'board' ? <PracticeCard /> : null}
           </>
         )}

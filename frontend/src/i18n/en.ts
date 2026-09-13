@@ -78,8 +78,7 @@ export const en = {
   'detail.cardId': 'Card ID',
   'detail.enteredStage': 'Entered current stage',
   'detail.suggestionTitle': 'Suggestion (not written)',
-  'detail.suggestionDefault':
-    'Please review and confirm the requirements and compliance results. If there are no issues, you can approve the write.',
+  'detail.suggestionDefault': 'Please review and confirm the requirements and compliance results. If there are no issues, you can approve the write.',
   'detail.handoff': 'Handoff: After this stage lands in parallel, wait for soft join.',
   'detail.journey': 'Journey so far',
   'detail.actionsTitle': 'Approve / advance this card',
@@ -145,10 +144,8 @@ export const en = {
   'settings.appearanceNight': 'Night (same shell)',
   'settings.modelsIntro':
     'LLM providers for stage agents. Today: OpenAI-compatible chat (OpenAI, DeepSeek, …) and the Cursor agent interface. More providers can be added the same way later.',
-  'settings.toolsIntro':
-    'Tool connectors unlock plugins under Agent (GitHub, Jira, Polarion, MCP, and others you add).',
-  'settings.connectorsIntro':
-    'Connect LLM providers and tool connectors. Models power stage agents; tools unlock plugins under Agent.',
+  'settings.toolsIntro': 'Tool connectors unlock plugins under Agent (GitHub, Jira, Polarion, MCP, and others you add).',
+  'settings.connectorsIntro': 'Connect LLM providers and tool connectors. Models power stage agents; tools unlock plugins under Agent.',
 
   'login.brand': 'Norns',
   'login.title': 'Control room',

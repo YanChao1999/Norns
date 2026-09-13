@@ -199,10 +199,7 @@ describe('cardJourney', () => {
       current_stage_id: 's2b',
       status: 'waiting_approval'
     } as Card;
-    const path = buildStagePath(card, parallelBoard, [
-      run({ id: 'r1', stage_id: 's1' }),
-      run({ id: 'r2', stage_id: 's2a' })
-    ]);
+    const path = buildStagePath(card, parallelBoard, [run({ id: 'r1', stage_id: 's1' }), run({ id: 'r2', stage_id: 's2a' })]);
     expect(path.map((node) => [node.kind, node.label, node.parallel])).toEqual([
       ['stage', 'Urd implement', false],
       ['stage', 'Check compliance', true],

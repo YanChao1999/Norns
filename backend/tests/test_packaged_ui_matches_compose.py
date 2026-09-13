@@ -37,11 +37,14 @@ def test_vite_entry_imports_the_same_css_compose_serves():
 
 def test_compose_control_room_source_has_login_and_dark_theme():
     login = (ROOT / "frontend" / "src" / "components" / "LoginForm.tsx").read_text(encoding="utf-8")
+    # Login copy lives in the English catalog (i18n); class names stay on the form.
+    en = (ROOT / "frontend" / "src" / "i18n" / "en.ts").read_text(encoding="utf-8")
     css = (ROOT / "frontend" / "src" / "styles" / "control-room.css").read_text(encoding="utf-8")
-    errors = control_room_bundle_errors([login, css])
+    errors = control_room_bundle_errors([login, en, css])
     assert errors == []
+    js_blob = f"{login}\n{en}"
     for marker in COMPOSE_JS_MARKERS:
-        assert marker in login
+        assert marker in js_blob
     for marker in COMPOSE_CSS_MARKERS:
         assert marker in css
 

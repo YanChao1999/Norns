@@ -35,10 +35,9 @@ export function Column({
 }: Props) {
   const { t } = useI18n();
   const tools = stage.agent_config?.tool_allowlist?.length ? stage.agent_config.tool_allowlist.join(' · ') : t('board.noPlugins');
-  const roleBits = [
-    stage.require_approval ? t('board.humanGate') : t('board.autoAdvance'),
-    stage.confirm_writes ? t('board.confirmWrites') : null
-  ].filter(Boolean);
+  const roleBits = [stage.require_approval ? t('board.humanGate') : t('board.autoAdvance'), stage.confirm_writes ? t('board.confirmWrites') : null].filter(
+    Boolean
+  );
 
   return (
     <section className={`station column${parallel ? ' is-parallel-row' : ''}${locked ? ' is-locked' : ''}${compact ? ' is-compact' : ''}`}>
@@ -49,7 +48,10 @@ export function Column({
             {parallel ? `${t('board.row', { row })} · ${t('board.parallel')} · ` : ''}
             {roleBits.join(' · ')}
           </p>
-          <p className="station-tools">({tools}{stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ` · ${t('board.ownRepo')}` : ''})</p>
+          <p className="station-tools">
+            ({tools}
+            {stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ` · ${t('board.ownRepo')}` : ''})
+          </p>
         </div>
         <div className="column-actions">
           <span className="column-count">{cards.length}</span>
