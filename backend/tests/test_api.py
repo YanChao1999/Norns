@@ -1,13 +1,42 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from backend.app.connector_config import LlmModelCatalog, LlmModelEntry
 from backend.app.database import Base, get_session
 from backend.app.main import app
+
+
+def _usable_catalog(*, provider: str = "openai", model: str = "gpt-4o") -> LlmModelCatalog:
+    return LlmModelCatalog(
+        provider=provider,
+        default_model=model,
+        models=[model],
+        source="api",
+        error="",
+        entries=[
+            LlmModelEntry(id=model, provider=provider, label=f"{model} · OpenAI", usable=True, source="api"),
+        ],
+    )
+
+
+def _failed_catalog(*, provider: str = "openai", error: str = "Error code: 401") -> LlmModelCatalog:
+    model = "gpt-4o"
+    return LlmModelCatalog(
+        provider=provider,
+        default_model=model,
+        models=[model],
+        source="fallback",
+        error=error,
+        entries=[
+            LlmModelEntry(id=model, provider=provider, label=f"{model} · OpenAI", usable=False, source="fallback"),
+        ],
+    )
 
 
 def _make_client() -> tuple[TestClient, object]:
@@ -52,8 +81,12 @@ def test_board_crud():
     asyncio.run(engine.dispose())
 
 
-def test_board_and_agent_workspace():
+def test_board_and_agent_workspace(tmp_path):
     client, engine = _make_client()
+    board_repo = tmp_path / "board-repo"
+    agent_repo = tmp_path / "agent-repo"
+    board_repo.mkdir()
+    agent_repo.mkdir()
     with client:
         login = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
         assert login.status_code == 200
@@ -62,14 +95,17 @@ def test_board_and_agent_workspace():
             "/api/boards",
             json={
                 "name": "Repo board",
-                "workspace_path": "/tmp/board-repo",
+                "workspace_path": str(board_repo),
                 "git_url": "https://github.com/acme/board",
             },
         )
-        assert created.status_code == 201
+        assert created.status_code == 201, created.text
         board = created.json()
-        assert board["workspace_path"] == "/tmp/board-repo"
+        assert board["workspace_path"] == str(board_repo)
         assert board["git_url"] == "https://github.com/acme/board"
+        assert any(card["title"].startswith("Sample:") for card in board["cards"])
+        assert board["stages"][0]["agent_config"]["model"] == ""
+        assert board["stages"][0]["agent_config"]["llm_provider"] == ""
 
         updated = client.put(
             f"/api/boards/{board['id']}",
@@ -81,11 +117,11 @@ def test_board_and_agent_workspace():
         stage_id = board["stages"][0]["id"]
         stage = client.put(
             f"/api/stages/{stage_id}",
-            json={"workspace_path": "/tmp/agent-repo", "git_url": "https://github.com/acme/agent"},
+            json={"workspace_path": str(agent_repo), "git_url": "https://github.com/acme/agent"},
         )
-        assert stage.status_code == 200
+        assert stage.status_code == 200, stage.text
         config = stage.json()["agent_config"]
-        assert config["workspace_path"] == "/tmp/agent-repo"
+        assert config["workspace_path"] == str(agent_repo)
         assert config["git_url"] == "https://github.com/acme/agent"
 
         resolved = client.get(f"/api/workspace?board_id={board['id']}&stage_id={stage_id}")
@@ -97,6 +133,42 @@ def test_board_and_agent_workspace():
         board_only = client.get(f"/api/workspace?board_id={board['id']}")
         assert board_only.json()["source"] == "board"
         assert board_only.json()["github_repo"] == "acme/board"
+
+        bad_path = client.put(
+            f"/api/boards/{board['id']}",
+            json={"workspace_path": str(tmp_path / "missing"), "git_url": "https://github.com/acme/board"},
+        )
+        assert bad_path.status_code == 400
+        assert "does not exist" in bad_path.json()["detail"]
+
+        bad_url = client.put(
+            f"/api/boards/{board['id']}",
+            json={"workspace_path": str(board_repo), "git_url": "not-a-git-url"},
+        )
+        assert bad_url.status_code == 400
+        assert "git_url" in bad_url.json()["detail"]
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_workspace_endpoint_reflects_board_binding(tmp_path):
+    client, engine = _make_client()
+    repo = tmp_path / "bound"
+    repo.mkdir()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        board = client.post(
+            "/api/boards",
+            json={"name": "Bound", "workspace_path": str(repo), "git_url": "https://github.com/acme/bound"},
+        ).json()
+        unbound = client.get("/api/workspace").json()
+        # Bare /workspace is process default — may be null or cwd; board binding uses board_id.
+        bound = client.get(f"/api/workspace?board_id={board['id']}").json()
+        assert bound["source"] == "board"
+        assert bound["path"] == str(repo)
+        assert bound["github_repo"] == "acme/bound"
+        assert unbound.get("source") != "board" or unbound.get("path") != str(repo)
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
@@ -365,7 +437,11 @@ def test_openai_connector_can_be_created_from_settings_api():
         assert "api_key" not in body["public_config"]
         assert body["public_config"]["default_model"] == "gpt-4o"
         assert "sk-test" not in created.text
-        health = client.get("/api/health").json()
+        with patch(
+            "backend.app.connector_config.fetch_llm_model_catalog",
+            new=AsyncMock(return_value=_usable_catalog()),
+        ):
+            health = client.get("/api/health").json()
         assert health["llm_configured"] is True
         assert health["openai_configured"] is True
         missing = client.post("/api/connectors", json={"name": "Empty", "connector_type": "openai", "config": {}})
@@ -405,9 +481,39 @@ def test_openai_connector_can_be_created_from_settings_api():
         )
         assert updated.status_code == 200, updated.text
         assert updated.json()["public_config"]["default_model"] == "gpt-4o-mini"
-        later = client.get("/api/health").json()
+        with patch(
+            "backend.app.connector_config.fetch_llm_model_catalog",
+            new=AsyncMock(return_value=_usable_catalog(provider="deepseek", model="deepseek-v4-flash")),
+        ):
+            later = client.get("/api/health").json()
         assert later["llm_configured"] is True
         assert later["openai_configured"] is True
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_health_false_when_model_list_auth_fails():
+    """Fake/invalid API keys must not report llm_configured (#30/#34)."""
+    client, engine = _make_client()
+    with client:
+        client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+        created = client.post(
+            "/api/connectors",
+            json={
+                "name": "OpenAI",
+                "connector_type": "openai",
+                "config": {"api_key": "sk-fake", "base_url": "https://api.openai.com/v1", "default_model": "gpt-4o"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        with patch(
+            "backend.app.connector_config.fetch_llm_model_catalog",
+            new=AsyncMock(return_value=_failed_catalog(error="Error code: 401 - Incorrect API key")),
+        ):
+            health = client.get("/api/health").json()
+        assert health["llm_configured"] is False
+        assert health["openai_configured"] is False
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
@@ -454,7 +560,29 @@ def test_llm_models_endpoint_labels_models_by_provider():
                 "config": {"api_key": "crsr_test", "base_url": "https://api.cursor.com/v1", "default_model": "auto"},
             },
         )
-        response = client.get("/api/connectors/llm-models")
+
+        async def fake_catalog(creds):
+            provider = creds.provider
+            model = "auto" if provider == "cursor" else "deepseek-v4-flash"
+            label = "Cursor" if provider == "cursor" else "DeepSeek"
+            return LlmModelCatalog(
+                provider=provider,
+                default_model=model,
+                models=[model],
+                source="api",
+                entries=[
+                    LlmModelEntry(
+                        id=model,
+                        provider=provider,
+                        label=f"{model} · {label}",
+                        usable=True,
+                        source="api",
+                    )
+                ],
+            )
+
+        with patch("backend.app.connector_config.fetch_llm_model_catalog", new=AsyncMock(side_effect=fake_catalog)):
+            response = client.get("/api/connectors/llm-models")
         assert response.status_code == 200, response.text
         body = response.json()
         labels = {entry["label"] for entry in body["entries"]}

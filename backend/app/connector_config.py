@@ -202,12 +202,27 @@ def resolve_openai_credentials(connectors: list[Connector], settings) -> LlmCred
     return resolve_llm_credentials(connectors, settings)
 
 
-def llm_is_configured(connectors: list[Connector], settings) -> bool:
+def llm_key_present(connectors: list[Connector], settings) -> bool:
+    """True when an API key is stored — does not verify the key works."""
     return supports_chat_completions(resolve_llm_credentials(connectors, settings))
 
 
+async def llm_is_configured(connectors: list[Connector], settings) -> bool:
+    """True when a key is present and the provider accepts it (model list succeeds)."""
+    creds = resolve_llm_credentials(connectors, settings)
+    if not supports_chat_completions(creds):
+        return False
+    catalog = await fetch_llm_model_catalog(creds)
+    return catalog_credentials_usable(catalog)
+
+
 def openai_is_configured(connectors: list[Connector], settings) -> bool:
-    return llm_is_configured(connectors, settings)
+    return llm_key_present(connectors, settings)
+
+
+def catalog_credentials_usable(catalog: LlmModelCatalog) -> bool:
+    """Catalog entries are usable only when listing succeeded (no auth/network error)."""
+    return not bool(str(catalog.error or "").strip())
 
 
 def _env_credentials(settings, connector_type: ConnectorType) -> LlmCredentials:
@@ -365,7 +380,8 @@ def _catalog_entries(
         label_prefix = LLM_LABELS[ConnectorType(catalog.provider)]
     except ValueError:
         label_prefix = catalog.provider
-    usable = supports_chat_completions(creds)
+    # Key present is not enough: a 401/list failure must mark models unusable (#30/#34).
+    usable = supports_chat_completions(creds) and catalog_credentials_usable(catalog)
     names = display_names or {}
     return [
         LlmModelEntry(

@@ -18,7 +18,7 @@ import {
   stageName
 } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
-import { PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
+import { PLACEHOLDER_RUN_HINT, PRACTICE_APPROVE_LABEL, PRACTICE_REJECT_LABEL, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { AgentRun, BoardDetail, Card } from '../types';
 import { Dialog } from './Dialog';
@@ -336,20 +336,28 @@ export function CardDrawer({ card, board, onClose, onOpenHistory }: Props) {
               className={`btn btn-gate${recommendation === 'approve' ? ' is-recommended' : ''}`}
               onClick={() => approvalMutation.mutate(true)}
               disabled={approvalMutation.isPending}
-              title={recommendation === 'approve' ? 'Agent recommended approve' : 'Confirm approve'}
+              title={
+                placeholderRun
+                  ? 'Practice approve — continues the practice path only'
+                  : recommendation === 'approve'
+                    ? 'Agent recommended approve'
+                    : 'Confirm approve'
+              }
             >
-              {approveLabel(approveLines, board, handoff)}
-              {recommendation === 'approve' ? ' · agent' : ''}
+              {placeholderRun ? PRACTICE_APPROVE_LABEL : approveLabel(approveLines, board, handoff)}
+              {!placeholderRun && recommendation === 'approve' ? ' · agent' : ''}
             </button>
             <button
               type="button"
               className={`btn btn-danger${recommendation === 'reject' ? ' is-recommended' : ''}`}
               onClick={() => approvalMutation.mutate(false)}
               disabled={approvalMutation.isPending}
-              title={recommendation === 'reject' ? 'Agent recommended reject' : 'Confirm reject'}
+              title={
+                placeholderRun ? 'Practice reject — blocks the practice card' : recommendation === 'reject' ? 'Agent recommended reject' : 'Confirm reject'
+              }
             >
-              {rejectLabel(rejectLines, board, handoff)}
-              {recommendation === 'reject' ? ' · agent' : ''}
+              {placeholderRun ? PRACTICE_REJECT_LABEL : rejectLabel(rejectLines, board, handoff)}
+              {!placeholderRun && recommendation === 'reject' ? ' · agent' : ''}
             </button>
           </>
         ) : null}

@@ -116,6 +116,42 @@ async def test_auto_advance_ignores_agent_reject_recommendation(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_practice_run_holds_instead_of_auto_advance(monkeypatch):
+    engine, SessionLocal = await _session_factory()
+
+    async def fake_execute(**_kwargs):
+        return (
+            "This was a practice run for Urd — no model API key is set.",
+            [],
+            {"summary": "practice run", "placeholder": True},
+        )
+
+    monkeypatch.setattr("backend.app.agents.runner._execute_agent", fake_execute)
+
+    async with SessionLocal() as session:
+        board = Board(name="Board")
+        stage_a = _stage("Urd", 1, False)
+        stage_b = _stage("Verdandi", 2, True)
+        board.stages = [stage_a, stage_b]
+        card = Card(title="Work", body="Do it", status=CardStatus.IDLE, current_stage=stage_a)
+        board.cards = [card]
+        session.add(board)
+        await session.commit()
+
+        await _run_stage(session, card.id, stage_a.id, "run-practice")
+        await session.refresh(card)
+        run = (await session.execute(select(AgentRun).where(AgentRun.id == "run-practice"))).scalar_one()
+
+        assert card.status == CardStatus.WAITING_APPROVAL
+        assert card.current_stage_id == stage_a.id
+        assert run.status == "completed"
+        assert run.handoff.get("placeholder") is True
+        assert run.handoff.get("practice_held") is True
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_execute_agent_uses_cursor_cloud_agent_for_native_host(monkeypatch):
     seen: dict[str, object] = {}
 
@@ -441,6 +477,7 @@ async def test_execute_agent_is_practice_run_without_api_key():
 
 def test_llm_line_names_provider_and_model():
     assert llm_line({"provider": "deepseek", "model": "deepseek-v4-flash"}) == "LLM: DeepSeek · deepseek-v4-flash"
+    assert llm_line({"provider": "practice", "model": "none"}) == "LLM: Practice · none"
 
 
 def test_timeout_error_has_a_readable_stage_message():
@@ -469,7 +506,7 @@ async def test_empty_timeout_does_not_crash_the_stage(monkeypatch):
         await session.refresh(card)
         run = (await session.execute(select(AgentRun).where(AgentRun.id == "run-timeout"))).scalar_one()
 
-        assert card.status == CardStatus.IDLE
+        assert card.status == CardStatus.BLOCKED
         assert run.status == "failed"
         assert "timed out" in (run.model_output or "").lower()
         assert "timed out" in str(run.handoff.get("summary") or "").lower()

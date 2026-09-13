@@ -179,9 +179,12 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
   const label = repoChipLabel(board.workspace_path, board.git_url);
 
   const { data: detected } = useQuery({
-    queryKey: ['workspace-detected'],
-    enabled: open && !bound,
-    queryFn: () => apiClient.get<{ path?: string | null; git_url?: string | null; github_repo?: string | null }>('/workspace')
+    queryKey: ['workspace', board.id],
+    enabled: open,
+    queryFn: () =>
+      apiClient.get<{ path?: string | null; git_url?: string | null; github_repo?: string | null; source?: string | null }>(
+        `/workspace?board_id=${encodeURIComponent(board.id)}`
+      )
   });
 
   const save = useMutation({
@@ -189,6 +192,7 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', board.id] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });
+      queryClient.invalidateQueries({ queryKey: ['workspace', board.id] });
       setOpen(false);
     }
   });
@@ -197,6 +201,22 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
     event.preventDefault();
     save.mutate();
   };
+
+  const saveError = (() => {
+    if (!save.isError || !save.error) {
+      return null;
+    }
+    const raw = save.error instanceof Error ? save.error.message : String(save.error);
+    try {
+      const parsed = JSON.parse(raw) as { detail?: unknown };
+      if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+        return parsed.detail;
+      }
+    } catch {
+      /* plain text */
+    }
+    return raw || 'Could not save the git repo.';
+  })();
 
   return (
     <>
@@ -217,7 +237,7 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
             </button>
           </div>
           <p className="muted">
-            Agents on this board work in one folder. Pick the project checkout; the GitHub URL is optional and fills in from origin when you leave it blank.
+            Agents on this board work in one folder. The folder must exist on this machine; the GitHub URL must look like a real git remote.
           </p>
           <label className="field">
             Folder on this machine
@@ -233,7 +253,10 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
               autoComplete="off"
             />
           </label>
-          {detected?.path && !path ? (
+          {detected?.path && detected.source === 'board' && bound ? (
+            <p className="muted">Workspace API sees {detected.github_repo || detected.path} for this board.</p>
+          ) : null}
+          {detected?.path && !path && detected.source !== 'board' ? (
             <p className="muted">
               Norns is running from {detected.github_repo || detected.path}.{' '}
               <button
@@ -248,7 +271,7 @@ function BoardWorkspace({ board }: { board: BoardDetail }) {
               </button>
             </p>
           ) : null}
-          {save.isError ? <div className="error">Could not save the git repo.</div> : null}
+          {saveError ? <div className="error">{saveError}</div> : null}
           <div className="connector-actions">
             <button type="submit" className="btn btn-primary" disabled={save.isPending}>
               {save.isPending ? 'Saving…' : 'Save'}

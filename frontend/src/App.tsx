@@ -85,6 +85,9 @@ export default function App() {
 
   const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
   const pullingCount = selectedBoard?.cards.filter((card) => card.status === 'running').length ?? 0;
+  const llmReady = (runtime?.llm_configured ?? runtime?.openai_configured) !== false;
+  const boundGit = Boolean(selectedBoard?.workspace_path || selectedBoard?.git_url);
+  const showFirstRunChecklist = Boolean(selectedBoardId && (!llmReady || !boundGit));
 
   return (
     <div>
@@ -125,10 +128,27 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        {(runtime?.llm_configured ?? runtime?.openai_configured) === false ? (
-          <p className="notice" role="status">
-            {NO_API_KEY_HINT}
-          </p>
+        {!llmReady ? (
+          <div className="notice notice-cta" role="status">
+            <div>
+              <strong>Practice mode</strong>
+              <p>{NO_API_KEY_HINT}</p>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => setView('settings')}>
+              Open Settings
+            </button>
+          </div>
+        ) : null}
+        {showFirstRunChecklist && llmReady ? (
+          <div className="notice notice-cta" role="status">
+            <div>
+              <strong>Finish setup</strong>
+              <p>Bind a git repo for this board (top bar → Bind git), then run the sample card.</p>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => setView('board')}>
+              Back to board
+            </button>
+          </div>
         ) : null}
         {view === 'settings' ? (
           <Settings
@@ -146,7 +166,26 @@ export default function App() {
         ) : (
           <>
             {isLoading ? <div className="muted">Loading boards…</div> : null}
-            {!boards.length && !isLoading ? <div className="empty-board">Create a board in Settings to start orchestration.</div> : null}
+            {!boards.length && !isLoading ? (
+              <section className="onboarding" aria-labelledby="onboarding-title">
+                <h2 id="onboarding-title">Start your first board</h2>
+                <p className="muted">A short path from empty Control Room to a practice run.</p>
+                <ol className="onboarding-steps">
+                  <li>
+                    <strong>Create a board</strong> in Settings (includes a sample card).
+                  </li>
+                  <li>
+                    <strong>Add a model connector</strong> (DeepSeek, OpenAI, or Cursor) — or stay in practice mode.
+                  </li>
+                  <li>
+                    <strong>Bind git</strong> (optional) from the board top bar, then press Run on the sample card.
+                  </li>
+                </ol>
+                <button type="button" className="btn btn-primary" onClick={() => setView('settings')}>
+                  Open Settings to create a board
+                </button>
+              </section>
+            ) : null}
             {selectedBoardId ? <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} /> : null}
           </>
         )}

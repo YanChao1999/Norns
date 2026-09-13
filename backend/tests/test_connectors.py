@@ -145,6 +145,26 @@ def test_encryption_key_must_be_valid_fernet(value: str):
 
 
 @pytest.mark.asyncio
+async def test_fetch_llm_model_catalog_marks_unusable_on_auth_error():
+    from backend.app.connector_config import LlmCredentials, fetch_llm_model_catalog
+
+    with patch("openai.AsyncOpenAI") as client_cls:
+        client_cls.return_value.models.list = AsyncMock(side_effect=Exception("Error code: 401 - Incorrect API key"))
+        catalog = await fetch_llm_model_catalog(
+            LlmCredentials(
+                api_key="sk-fake",
+                base_url="https://api.openai.com/v1",
+                default_model="gpt-4o",
+                provider="openai",
+            )
+        )
+    assert catalog.source == "fallback"
+    assert "401" in catalog.error
+    assert catalog.entries
+    assert all(not entry.usable for entry in catalog.entries)
+
+
+@pytest.mark.asyncio
 async def test_fetch_llm_model_catalog_falls_back_without_key():
     from backend.app.connector_config import LlmCredentials, fetch_llm_model_catalog
 
