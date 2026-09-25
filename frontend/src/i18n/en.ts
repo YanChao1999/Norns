@@ -136,7 +136,7 @@ export const en = {
   'practice.approveHint': 'Click to practice approve. Nothing is written.',
 
   'settings.title': 'Settings · Connections & models',
-  'settings.intro': 'Connect models and tools, set the write gate, and choose appearance.',
+  'settings.intro': 'Connect models and tools, set the write gate, network proxy, and appearance.',
   'settings.newBoard': 'New board',
   'settings.newBoardHint': 'Create a board, then bind its git folder from the board header.',
   'settings.boardName': 'Name',
@@ -145,6 +145,7 @@ export const en = {
   'settings.sectionModels': 'Model keys',
   'settings.sectionConnectors': 'Tool connectors',
   'settings.sectionWriteGate': 'Write gate',
+  'settings.sectionNetwork': 'Network',
   'settings.sectionAppearance': 'Appearance',
   'settings.connected': 'Connected',
   'settings.notConnected': 'Not connected',
@@ -156,6 +157,12 @@ export const en = {
   'settings.writeGateNoBoard': 'Create or select a board first. This preference will apply when you create a new board.',
   'settings.writeGateUpdating': 'Updating stages…',
   'settings.writeGateBoard': 'Board: {name}',
+  'settings.proxyLabel': 'Use system proxy (HTTP_PROXY / HTTPS_PROXY / ALL_PROXY)',
+  'settings.proxyHint':
+    'On: honor Clash or company proxy env vars (socks:// is normalized to socks5://). Off: call models directly — useful on office networks when a local proxy breaks API calls.',
+  'settings.proxyDetected': 'Proxy env detected: {keys}',
+  'settings.proxyNone': 'No proxy env vars detected right now.',
+  'settings.proxyUpdating': 'Updating…',
   'settings.appearanceLight': 'Command Light',
   'settings.appearanceNight': 'Night (same shell)',
   'settings.modelsIntro':

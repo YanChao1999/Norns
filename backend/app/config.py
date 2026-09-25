@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     sandbox_backend: str = Field(default="directory", alias="SANDBOX_BACKEND")
     sandbox_root: str = Field(default="", alias="NORNS_SANDBOX_ROOT")
     sandbox_image: str = Field(default="", alias="NORNS_SANDBOX_IMAGE")
+    # When true, httpx/OpenAI honor HTTP(S)_PROXY / ALL_PROXY (Clash, corporate).
+    # When false, LLM and HTTP clients use direct egress (trust_env=False).
+    use_system_proxy: bool = Field(default=True, alias="USE_SYSTEM_PROXY")
 
     @field_validator("sandbox_backend")
     @classmethod

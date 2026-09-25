@@ -11,11 +11,11 @@ from .api.router import api_router
 from .config import get_settings
 from .database import AsyncSessionLocal, init_db
 from .orchestrator.recovery import recover_stale_runs
-from .proxy_env import apply_proxy_env_fixes
+from .proxy_env import httpx_trust_env
 from .ui_assets import discover_ui_dir
 
-# Clash-style socks:// breaks httpx/OpenAI before the first request; fix at import.
-apply_proxy_env_fixes()
+# Honor USE_SYSTEM_PROXY / preferences.json; normalize Clash socks:// when enabled.
+httpx_trust_env()
 
 logger = logging.getLogger("norns")
 

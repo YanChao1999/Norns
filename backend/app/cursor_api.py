@@ -100,9 +100,11 @@ def _cursor_models_from_items(items: list[Any]) -> list[CursorModelInfo]:
 async def _list_cursor_models_http(api_key: str, *, base_url: str = "") -> list[CursorModelInfo]:
     import httpx
 
+    from .proxy_env import httpx_trust_env
+
     url = _cursor_models_url(base_url)
     headers = {"Accept": "application/json"}
-    async with httpx.AsyncClient(timeout=12.0) as client:
+    async with httpx.AsyncClient(timeout=12.0, trust_env=httpx_trust_env()) as client:
         # Cloud Agents docs: Basic auth with API key as username and empty password.
         response = await client.get(url, auth=(api_key, ""), headers=headers)
         if response.status_code == 401:

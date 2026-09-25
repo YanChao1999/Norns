@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.app.proxy_env import apply_proxy_env_fixes, normalize_proxy_url
+from backend.app.proxy_env import (
+    apply_proxy_env_fixes,
+    httpx_trust_env,
+    normalize_proxy_url,
+    set_use_system_proxy,
+    use_system_proxy,
+)
 
 
 @pytest.mark.parametrize(
@@ -46,17 +53,76 @@ def test_apply_proxy_env_fixes_is_idempotent():
     assert env["all_proxy"] == "socks5://127.0.0.1:7897/"
 
 
+def test_use_system_proxy_defaults_true(monkeypatch):
+    monkeypatch.delenv("USE_SYSTEM_PROXY", raising=False)
+    monkeypatch.delenv("NORNS_HOME", raising=False)
+    assert use_system_proxy() is True
+
+
+def test_use_system_proxy_env_false(monkeypatch):
+    monkeypatch.setenv("USE_SYSTEM_PROXY", "false")
+    assert use_system_proxy() is False
+    assert httpx_trust_env() is False
+
+
+def test_set_use_system_proxy_persists(tmp_path: Path, monkeypatch):
+    home = tmp_path / "norns"
+    home.mkdir()
+    monkeypatch.setenv("NORNS_HOME", str(home))
+    monkeypatch.delenv("USE_SYSTEM_PROXY", raising=False)
+
+    assert set_use_system_proxy(False) is False
+    assert use_system_proxy() is False
+    prefs = home / "preferences.json"
+    assert prefs.is_file()
+    assert '"use_system_proxy": false' in prefs.read_text(encoding="utf-8")
+
+    monkeypatch.delenv("USE_SYSTEM_PROXY", raising=False)
+    assert use_system_proxy() is False
+
+    assert set_use_system_proxy(True) is True
+    assert use_system_proxy() is True
+
+
 @pytest.mark.asyncio
-async def test_create_async_openai_normalizes_socks_before_construct(monkeypatch):
+async def test_create_async_openai_skips_proxy_when_disabled(monkeypatch):
+    monkeypatch.setenv("USE_SYSTEM_PROXY", "false")
+    monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:7897/")
+    monkeypatch.setenv("HTTPS_PROXY", "socks://127.0.0.1:7897/")
+
+    captured: dict = {}
+
+    def fake_openai(**kwargs):
+        captured["kwargs"] = kwargs
+        client = AsyncMock()
+        client.close = AsyncMock()
+        return client
+
+    with patch("openai.AsyncOpenAI", side_effect=fake_openai):
+        from backend.app.llm_client import create_async_openai
+
+        client = create_async_openai(api_key="sk-test", base_url="https://api.deepseek.com/v1")
+
+    http_client = captured["kwargs"].get("http_client")
+    assert http_client is not None
+    assert getattr(http_client, "_trust_env", True) is False
+    # socks:// left alone when proxy is off (clients ignore env)
+    assert os.environ["ALL_PROXY"].startswith("socks://")
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_create_async_openai_normalizes_socks_when_enabled(monkeypatch):
+    monkeypatch.setenv("USE_SYSTEM_PROXY", "true")
     monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:7897/")
     monkeypatch.setenv("HTTPS_PROXY", "socks://127.0.0.1:7897/")
 
     constructed = {}
 
     def fake_openai(**kwargs):
-        # Construction-time env must already be socks5:// or OpenAI/httpx2 raises.
         constructed["all_proxy"] = os.environ.get("ALL_PROXY")
         constructed["https_proxy"] = os.environ.get("HTTPS_PROXY")
+        constructed["http_client"] = kwargs.get("http_client")
         client = AsyncMock()
         client.close = AsyncMock()
         return client
@@ -68,7 +134,7 @@ async def test_create_async_openai_normalizes_socks_before_construct(monkeypatch
 
     assert constructed["all_proxy"] == "socks5://127.0.0.1:7897/"
     assert constructed["https_proxy"] == "socks5://127.0.0.1:7897/"
-    assert os.environ["ALL_PROXY"] == "socks5://127.0.0.1:7897/"
+    assert constructed["http_client"] is None
     await client.close()
 
 
@@ -77,6 +143,7 @@ async def test_socks5_async_openai_constructs_without_transport_error(monkeypatc
     """Regression: Clash socks:// used to fail AsyncOpenAI() and leak aclose AttributeError."""
     for key in ("ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy"):
         monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("USE_SYSTEM_PROXY", "true")
     monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:7897/")
 
     from backend.app.llm_client import create_async_openai
@@ -87,9 +154,7 @@ async def test_socks5_async_openai_constructs_without_transport_error(monkeypatc
 
     client = create_async_openai(api_key="sk-test", base_url="https://api.deepseek.com/v1", timeout=1.0)
     try:
-        # Do not require a live proxy — only that construction succeeded.
         assert client is not None
     finally:
         await client.close()
-    # Drain any stray finalizer tasks from a failed half-init (should be none).
     await asyncio.sleep(0)
