@@ -39,11 +39,12 @@ jobs:
           if gh pr view "$BRANCH" --json number --jq .number >/dev/null 2>&1; then
             echo "PR for $BRANCH already exists"
           else
+            BODY="$(printf '%s\n\n%s\n' \
+              'Automated refresh of `assets/downloads-trend.svg` from the scheduled downloads chart workflow.' \
+              'Pushes go through a PR so branch protection on `main` (required `CI` check) is satisfied.')"
             gh pr create \
               --base main \
               --head "$BRANCH" \
               --title "chore: refresh PyPI downloads trend chart" \
-              --body "Automated refresh of \`assets/downloads-trend.svg\` from the scheduled downloads chart workflow.
-
-Pushes go through a PR so branch protection on \`main\` (required \`CI\` check) is satisfied."
+              --body "$BODY"
           fi
