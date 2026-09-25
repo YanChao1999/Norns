@@ -19,6 +19,8 @@ def test_init_creates_config(tmp_path: Path):
     assert 'backend = "inline"' in text
     assert "[sandbox]" in text
     assert 'backend = "directory"' in text
+    assert "[network]" in text
+    assert "use_system_proxy = true" in text
     assert "[cursor]" in text
     assert "[deepseek]" in text
     assert password
@@ -52,7 +54,17 @@ def test_cli_init(tmp_path: Path, capsys):
     assert "already initialized" in err
 
 
-def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
+def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path, monkeypatch):
+    # Track env keys apply_config mutates so teardown restores them for other tests.
+    for key in (
+        "ADMIN_PASSWORD",
+        "ADMIN_USERNAME",
+        "DATABASE_URL",
+        "QUEUE_BACKEND",
+        "NORNS_HOME",
+        "USE_SYSTEM_PROXY",
+    ):
+        monkeypatch.setenv(key, os.environ.get(key, "admin" if key == "ADMIN_PASSWORD" else ""))
     home = tmp_path / "home"
     init_home(home)
     runtime = apply_config(home)
@@ -66,6 +78,17 @@ def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
     assert os.environ["NORNS_ENV"] == "local"
     assert os.environ["CURSOR_BASE_URL"] == "https://api.cursor.com/v1"
     assert os.environ["DEEPSEEK_DEFAULT_MODEL"] == "deepseek-v4-flash"
+    assert os.environ["USE_SYSTEM_PROXY"] == "true"
+
+
+def test_apply_config_preferences_override_network(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("USE_SYSTEM_PROXY", "true")
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin")
+    home = tmp_path / "home"
+    init_home(home)
+    (home / "preferences.json").write_text('{"use_system_proxy": false}\n', encoding="utf-8")
+    apply_config(home)
+    assert os.environ["USE_SYSTEM_PROXY"] == "false"
 
 
 def test_electron_app_dir_ships_chromium_shell():

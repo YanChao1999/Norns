@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { useI18n } from '../i18n';
@@ -13,6 +13,12 @@ interface Props {
   onCreated: (boardId: string) => void;
   theme: ThemeId;
   onThemeChange: (theme: ThemeId) => void;
+}
+
+interface Preferences {
+  use_system_proxy: boolean;
+  proxy_env_detected: boolean;
+  proxy_env: Record<string, string>;
 }
 
 async function setStagesConfirmWrites(stages: Stage[], enabled: boolean): Promise<void> {
@@ -29,6 +35,12 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<ConnectorType | undefined>();
   const [gateError, setGateError] = useState('');
+  const [proxyError, setProxyError] = useState('');
+
+  const preferences = useQuery({
+    queryKey: ['preferences'],
+    queryFn: () => apiClient.get<Preferences>('/preferences')
+  });
 
   useEffect(() => {
     if (board?.stages) {
@@ -84,12 +96,27 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
     }
   });
 
+  const systemProxy = useMutation({
+    mutationFn: async (enabled: boolean) => apiClient.put<Preferences>('/preferences', { use_system_proxy: enabled }),
+    onSuccess: (data) => {
+      setProxyError('');
+      queryClient.setQueryData(['preferences'], data);
+    },
+    onError: (error) => {
+      setProxyError(error instanceof Error ? error.message : 'Failed to update proxy preference');
+      queryClient.invalidateQueries({ queryKey: ['preferences'] });
+    }
+  });
+
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (boardName) {
       createBoard.mutate();
     }
   };
+
+  const useProxy = preferences.data?.use_system_proxy ?? true;
+  const proxyKeys = preferences.data?.proxy_env ? Object.keys(preferences.data.proxy_env) : [];
 
   return (
     <div className="settings settings-page">
@@ -202,6 +229,35 @@ export function Settings({ board, onCreated, theme, onThemeChange }: Props) {
       <section className="settings-section">
         <div className="settings-section-head">
           <span className="settings-section-num">4</span>
+          <h2 className="settings-section-title">{t('settings.sectionNetwork')}</h2>
+        </div>
+        <div className="write-gate-row">
+          <span aria-hidden="true">⇄</span>
+          <span>{t('settings.proxyLabel')}</span>
+          <button
+            type="button"
+            className={`toggle${useProxy ? ' is-on' : ''}`}
+            role="switch"
+            aria-checked={useProxy}
+            disabled={preferences.isLoading || systemProxy.isPending}
+            onClick={() => systemProxy.mutate(!useProxy)}
+          >
+            <i />
+          </button>
+        </div>
+        <p className="muted settings-write-gate-hint">{t('settings.proxyHint')}</p>
+        {preferences.data?.proxy_env_detected ? (
+          <p className="muted">{t('settings.proxyDetected', { keys: proxyKeys.join(', ') })}</p>
+        ) : (
+          <p className="muted">{t('settings.proxyNone')}</p>
+        )}
+        {systemProxy.isPending ? <p className="muted">{t('settings.proxyUpdating')}</p> : null}
+        {proxyError ? <p className="error">{proxyError}</p> : null}
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-head">
+          <span className="settings-section-num">5</span>
           <h2 className="settings-section-title">{t('settings.sectionAppearance')}</h2>
         </div>
         <div className="appearance-grid">
