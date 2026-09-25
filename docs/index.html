@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Norns · v0.0.2</title>
+    <title>Norns · v0.0.3</title>
     <meta
       name="description"
       content="Norns is a Control Room for staged work. Agents run the columns. You decide what moves."
@@ -282,13 +282,13 @@
 
       <main id="top">
         <div class="site-hero">
-          <span class="pill">v0.0.2 · norns-ide</span>
+          <span class="pill">v0.0.3 · norns-ide</span>
           <h1>Agents work the columns. You decide what moves.</h1>
           <p class="site-lede">
             Each stage has its own agent. Connect a model, Polarion, Jira, GitHub. A card waits until you approve. The board below is the real Control Room — try it.
           </p>
           <div class="site-actions">
-            <a class="btn btn-primary" href="#install">Install 0.0.2</a>
+            <a class="btn btn-primary" href="#install">Install 0.0.3</a>
             <a class="btn" href="#look">See the UI</a>
           </div>
         </div>
@@ -653,11 +653,13 @@
         <section class="site-section" id="in">
           <div class="site-grid">
             <div>
-              <h2>In v0.0.2 now</h2>
+              <h2>In v0.0.3 now</h2>
               <ul>
                 <li>Install <code>norns-ide</code> from PyPI or TestPyPI; CLI is still <code>norns</code></li>
                 <li>Local Control Room: <code>norns init</code> / <code>norns run</code> (browser; optional Electron)</li>
                 <li>First-run checklist, sample card on new boards, and practice-mode banners when no usable model key</li>
+                <li>Command Light Control Room: cream theme, soft-join board chrome, Settings write gate, Delivery Machine Card detail</li>
+                <li>System proxy toggle in Settings (Clash/corporate <code>HTTP_PROXY</code> / <code>ALL_PROXY</code>, or direct egress); Clash <code>socks://</code> normalized to <code>socks5://</code></li>
                 <li>Visual state machine, including parallel planned split and soft join</li>
                 <li>Human approve/reject gates; agent recommendation is advisory; failed runs block the card</li>
                 <li>Directory or hardened Docker sandboxes under <code>~/.norns/sandboxes/</code></li>
@@ -681,7 +683,7 @@
         </section>
 
         <section class="site-section" id="install">
-          <h2>Install 0.0.2</h2>
+          <h2>Install 0.0.3</h2>
           <p class="site-lede">Python 3.12+. The PyPI name is <code>norns-ide</code> (<code>norns</code> is taken). The command is <code>norns</code>. Init prints a generated admin password into <code>~/.norns/config.toml</code>.</p>
           <h3>PyPI</h3>
           <pre>uv tool install norns-ide
@@ -689,11 +691,11 @@ norns init
 norns run</pre>
           <p class="site-lede">Or <code>pip install norns-ide</code>, then the same <code>norns init</code> / <code>norns run</code>.</p>
           <h3>TestPyPI</h3>
-          <pre>pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ norns-ide==0.0.2
+          <pre>pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ norns-ide==0.0.3
 norns --version
 norns init
 norns run</pre>
-          <p class="site-lede"><code>--extra-index-url</code> keeps dependencies on real PyPI. With uv: <code>uv tool install --index-url https://test.pypi.org/simple --extra-index-url https://pypi.org/simple norns-ide==0.0.2</code>.</p>
+          <p class="site-lede"><code>--extra-index-url</code> keeps dependencies on real PyPI. With uv: <code>uv tool install --index-url https://test.pypi.org/simple --extra-index-url https://pypi.org/simple norns-ide==0.0.3</code>.</p>
           <h3>From a checkout</h3>
           <pre>git clone https://github.com/YanChao1999/Norns.git
 cd Norns
@@ -705,7 +707,7 @@ norns run</pre>
       </main>
 
       <footer class="site-footer">
-        <span>Norns 0.0.2 · Urd, Verdandi, Skuld</span>
+        <span>Norns 0.0.3 · Urd, Verdandi, Skuld</span>
         <a href="https://github.com/YanChao1999/Norns">github.com/YanChao1999/Norns</a>
       </footer>
     </div>
