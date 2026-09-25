@@ -384,10 +384,7 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
             {card?.id ? <TokenUsageMatrix cardId={card.id} /> : null}
 
             {card?.id && !card.parent_card_id ? (
-              <BakeoffComparePanel
-                cardId={card.id}
-                idle={card.status === 'idle' || card.status === 'blocked' || card.status === 'done'}
-              />
+              <BakeoffComparePanel cardId={card.id} idle={card.status === 'idle' || card.status === 'blocked' || card.status === 'done'} />
             ) : null}
 
             {expandedStageId ? (

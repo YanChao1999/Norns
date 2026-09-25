@@ -130,12 +130,7 @@ export function BakeoffComparePanel({ cardId, idle }: { cardId: string; idle: bo
         <form className="bakeoff-form" onSubmit={onSubmit}>
           <label>
             <span>{t('detail.bakeoffPrompt')}</span>
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              rows={3}
-              placeholder={t('detail.bakeoffPromptPlaceholder')}
-            />
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={3} placeholder={t('detail.bakeoffPromptPlaceholder')} />
           </label>
           <div className="bakeoff-arms">
             <label>
@@ -144,11 +139,7 @@ export function BakeoffComparePanel({ cardId, idle }: { cardId: string; idle: bo
             </label>
             <label>
               <span>{t('detail.bakeoffTools')} A</span>
-              <input
-                value={toolsA}
-                onChange={(event) => setToolsA(event.target.value)}
-                placeholder="norns,sandbox"
-              />
+              <input value={toolsA} onChange={(event) => setToolsA(event.target.value)} placeholder="norns,sandbox" />
             </label>
             <label>
               <span>{t('detail.bakeoffArmLabel')} B</span>
@@ -156,11 +147,7 @@ export function BakeoffComparePanel({ cardId, idle }: { cardId: string; idle: bo
             </label>
             <label>
               <span>{t('detail.bakeoffTools')} B</span>
-              <input
-                value={toolsB}
-                onChange={(event) => setToolsB(event.target.value)}
-                placeholder={t('detail.bakeoffToolsEmpty')}
-              />
+              <input value={toolsB} onChange={(event) => setToolsB(event.target.value)} placeholder={t('detail.bakeoffToolsEmpty')} />
             </label>
           </div>
           <button type="submit" disabled={startMutation.isPending || !idle}>
@@ -199,9 +186,7 @@ export function BakeoffComparePanel({ cardId, idle }: { cardId: string; idle: bo
                     <td>{toolsLabel(arm.tool_allowlist)}</td>
                     <td className="muted">
                       {arm.model || arm.usage.model || '—'}
-                      {arm.llm_provider || arm.usage.provider
-                        ? ` · ${arm.llm_provider || arm.usage.provider}`
-                        : ''}
+                      {arm.llm_provider || arm.usage.provider ? ` · ${arm.llm_provider || arm.usage.provider}` : ''}
                     </td>
                     <td>
                       <strong>{formatTokens(arm.usage.total_tokens)}</strong>

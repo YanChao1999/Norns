@@ -138,8 +138,7 @@ export const en = {
   'detail.usageUnknown': 'not reported',
   'detail.usagePractice': 'practice',
   'detail.bakeoffTitle': 'Agent bakeoff',
-  'detail.bakeoffHint':
-    'Run the same prompt on parallel arms with different tools (and later skills). Compare tokens, recommendation, and summary.',
+  'detail.bakeoffHint': 'Run the same prompt on parallel arms with different tools (and later skills). Compare tokens, recommendation, and summary.',
   'detail.bakeoffStart': 'New bakeoff',
   'detail.bakeoffCancel': 'Cancel',
   'detail.bakeoffRun': 'Run bakeoff',
