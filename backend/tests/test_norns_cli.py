@@ -54,7 +54,17 @@ def test_cli_init(tmp_path: Path, capsys):
     assert "already initialized" in err
 
 
-def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
+def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path, monkeypatch):
+    # Track env keys apply_config mutates so teardown restores them for other tests.
+    for key in (
+        "ADMIN_PASSWORD",
+        "ADMIN_USERNAME",
+        "DATABASE_URL",
+        "QUEUE_BACKEND",
+        "NORNS_HOME",
+        "USE_SYSTEM_PROXY",
+    ):
+        monkeypatch.setenv(key, os.environ.get(key, "admin" if key == "ADMIN_PASSWORD" else ""))
     home = tmp_path / "home"
     init_home(home)
     runtime = apply_config(home)
@@ -71,7 +81,9 @@ def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
     assert os.environ["USE_SYSTEM_PROXY"] == "true"
 
 
-def test_apply_config_preferences_override_network(tmp_path: Path):
+def test_apply_config_preferences_override_network(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("USE_SYSTEM_PROXY", "true")
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin")
     home = tmp_path / "home"
     init_home(home)
     (home / "preferences.json").write_text('{"use_system_proxy": false}\n', encoding="utf-8")

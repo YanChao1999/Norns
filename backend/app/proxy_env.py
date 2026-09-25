@@ -130,7 +130,12 @@ def use_system_proxy() -> bool:
 
 
 def set_use_system_proxy(enabled: bool, *, persist: bool = True) -> bool:
-    """Apply the preference for this process; optionally write preferences.json."""
+    """Apply the preference for this process; optionally write preferences.json.
+
+    Reads go through ``use_system_proxy()`` / env — do not clear ``get_settings``
+    cache here (that would re-read a polluted ``ADMIN_PASSWORD`` after ``norns``
+    ``apply_config`` in the same process).
+    """
     flag = bool(enabled)
     os.environ["USE_SYSTEM_PROXY"] = "true" if flag else "false"
     if persist:
@@ -140,12 +145,6 @@ def set_use_system_proxy(enabled: bool, *, persist: bool = True) -> bool:
             logger.info("USE_SYSTEM_PROXY=%s (not persisted; NORNS_HOME unset)", flag)
     if flag:
         apply_proxy_env_fixes()
-    try:
-        from .config import get_settings
-
-        get_settings.cache_clear()
-    except Exception:  # noqa: BLE001 — avoid import cycles / cold start issues
-        pass
     return flag
 
 
