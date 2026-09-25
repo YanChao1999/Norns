@@ -1,0 +1,65 @@
+name: TestPyPI acceptance
+
+# Install norns-ide from TestPyPI (or a built wheel) and walk a lean real-user path:
+# init → run → login → create board → sample card → preferences → logout.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact TestPyPI version (empty = latest norns-ide on TestPyPI)
+        required: false
+        type: string
+        default: ""
+      use_local_wheel:
+        description: Build a wheel from this ref instead of installing from TestPyPI
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    name: testpypi-acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.use_local_wheel }}
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build local wheel
+        if: ${{ inputs.use_local_wheel }}
+        run: |
+          pip install build
+          python -m build
+          echo "WHEEL=$(ls dist/norns_ide-*-py3-none-any.whl | head -1)" >> "$GITHUB_ENV"
+
+      - name: Make scripts executable
+        run: chmod +x scripts/acceptance_testpypi.sh
+
+      - name: Acceptance from TestPyPI
+        if: ${{ !inputs.use_local_wheel }}
+        env:
+          NORNS_ACCEPTANCE_PORT: "8765"
+        run: |
+          ARGS=()
+          if [[ -n "${{ inputs.version }}" ]]; then
+            ARGS+=(--version "${{ inputs.version }}")
+          fi
+          bash scripts/acceptance_testpypi.sh "${ARGS[@]}"
+
+      - name: Acceptance from local wheel
+        if: ${{ inputs.use_local_wheel }}
+        env:
+          NORNS_ACCEPTANCE_PORT: "8765"
+        run: bash scripts/acceptance_testpypi.sh --wheel "$WHEEL"

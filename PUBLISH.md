@@ -25,11 +25,28 @@ norns run
 6. Install from TestPyPI:
 
 ```bash
-pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ norns-ide
+# Prefer: download the project wheel only from TestPyPI, then install deps from real PyPI
+# (TestPyPI often has stub packages like a broken fastapi that break `-i test.pypi.org` installs.)
+pip download --no-deps -i https://test.pypi.org/simple/ -d /tmp/norns-wheels 'norns-ide==0.0.3'
+pip install /tmp/norns-wheels/norns_ide-*.whl
 norns --version
 ```
 
-`--extra-index-url` is required so dependencies still come from real PyPI.
+Shorthand that sometimes works (deps may still resolve from TestPyPI first — prefer the download recipe above):
+
+```bash
+pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ norns-ide
+```
+
+7. **Acceptance (lean real-user path)** — from a git checkout, after TestPyPI has the version you want:
+
+```bash
+# Install from TestPyPI into a throwaway venv, then:
+# init → run → login → create board → sample card → preferences → logout
+bash scripts/acceptance_testpypi.sh --version 0.0.3
+```
+
+Or in GitHub: **Actions → TestPyPI acceptance → Run workflow** (optional version pin, or build a wheel from the branch instead).
 
 ## Then production PyPI
 
