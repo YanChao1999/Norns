@@ -127,7 +127,7 @@ export const en = {
   'detail.confirmWriteStatus': 'Confirm write before systems update',
   'detail.usageTitle': 'Token usage · this task',
   'detail.usageHint': 'How each stage agent spent tokens on this card. Totals sum every finished run on the column.',
-  'detail.usageEmpty': 'No token counts yet — run a stage with OpenAI or DeepSeek to fill this matrix. Cursor runs may not report usage.',
+  'detail.usageEmpty': 'No token counts yet — run a stage with OpenAI, DeepSeek, or Cursor to fill this matrix.',
   'detail.usageLoading': 'Loading usage…',
   'detail.usageStage': 'Stage',
   'detail.usageModel': 'Model',
@@ -137,6 +137,7 @@ export const en = {
   'detail.usageCardTotal': 'Card total',
   'detail.usageUnknown': 'not reported',
   'detail.usagePractice': 'practice',
+  'detail.usageCursor': 'cursor sdk',
 
   'practice.title': 'Model key not connected',
   'practice.body': 'This is a preview: you can practice approve on cards, but nothing is written to Polarion or Jira.',

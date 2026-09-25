@@ -159,7 +159,13 @@ async def test_execute_agent_uses_cursor_cloud_agent_for_native_host(monkeypatch
         seen.update(kwargs)
         assert kwargs["api_key"] == "crsr_test"
         assert kwargs["model"] == "auto"
-        return "Cursor handoff text\nDECISION: approve\nREASON: looks good"
+        return "Cursor handoff text\nDECISION: approve\nREASON: looks good", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     text, tools, handoff = await _execute_agent(
@@ -194,7 +200,13 @@ async def test_cursor_confirm_writes_passes_cli_flags(monkeypatch):
 
     async def fake_cursor(**kwargs):
         seen.update(kwargs)
-        return "queued\nDECISION: approve\nREASON: waiting"
+        return "queued\nDECISION: approve\nREASON: waiting", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     await _execute_agent(
@@ -354,7 +366,13 @@ async def test_execute_agent_includes_work_instruction(monkeypatch):
 
     async def fake_cursor(**kwargs):
         seen.update(kwargs)
-        return "done\nDECISION: approve\nREASON: ok"
+        return "done\nDECISION: approve\nREASON: ok", {
+            "prompt_tokens": 12,
+            "completion_tokens": 4,
+            "total_tokens": 16,
+            "rounds": 1,
+            "source": "cursor",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     await _execute_agent(
@@ -393,7 +411,13 @@ async def test_execute_agent_includes_parallel_split_plan(monkeypatch):
             '{"stage_id":"t2","title":"Code","body":"impl","summary":"c"}]}\n'
             "```\n"
             "DECISION: approve\nREASON: planned"
-        )
+        ), {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     targets = [
@@ -442,7 +466,13 @@ async def test_execute_agent_does_not_send_openai_key_to_cursor(monkeypatch):
     async def fake_cursor(**kwargs):
         called["cursor"] = True
         del kwargs
-        return "should not run"
+        return "should not run", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     text, tools, handoff = await _execute_agent(

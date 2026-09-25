@@ -574,7 +574,7 @@ async def _execute_agent(
             f"{tool_hint}\n\n"
             f"{user_content}"
         )
-        content = await run_cursor_cloud_agent(
+        content, cursor_usage = await run_cursor_cloud_agent(
             api_key=resolved_key.strip(),
             prompt=prompt,
             model=model,
@@ -588,8 +588,7 @@ async def _execute_agent(
         content = with_llm_line(content, identity)
         handoff = await _build_handoff(content)
         handoff["llm"] = identity
-        # Cursor Cloud Agents do not expose OpenAI-style usage today.
-        handoff = attach_usage(handoff, empty_usage(source="unavailable", rounds=1), identity=identity)
+        handoff = attach_usage(handoff, cursor_usage, identity=identity)
         return content, [], handoff
 
     tools_payload = [tool.openai_tool for tool in runtime_tools]

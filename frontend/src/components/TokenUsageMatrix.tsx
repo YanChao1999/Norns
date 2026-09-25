@@ -88,6 +88,7 @@ export function TokenUsageMatrix({ cardId }: { cardId: string }) {
                   {row.provider ? ` · ${row.provider}` : ''}
                   {row.source === 'unavailable' ? ` (${t('detail.usageUnknown')})` : ''}
                   {row.source === 'practice' ? ` (${t('detail.usagePractice')})` : ''}
+                  {row.source === 'cursor' ? ` (${t('detail.usageCursor')})` : ''}
                 </td>
                 <td>{formatTokens(row.prompt_tokens)}</td>
                 <td>{formatTokens(row.completion_tokens)}</td>
