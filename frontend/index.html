@@ -6,8 +6,21 @@
     <title>Norns</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
-    <meta name="theme-color" content="#0d1117" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <meta name="theme-color" content="#F9F6EF" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('norns.theme');
+          document.documentElement.setAttribute('data-theme', t === 'night' ? 'night' : 'command-light');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'command-light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

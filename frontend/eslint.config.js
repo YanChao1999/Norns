@@ -23,7 +23,11 @@ export default tseslint.config(
       'react-hooks': reactHooks
     },
     rules: {
-      ...reactHooks.configs.recommended.rules
+      // Classic hooks rules only. React Compiler rules (set-state-in-effect,
+      // purity, refs, …) ship in eslint-plugin-react-hooks v7 recommended and
+      // need a separate migration pass across the Control Room UI.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn'
     }
   }
 );

@@ -1,22 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from './api/client';
 import { Board } from './components/Board';
 import { LoginForm } from './components/LoginForm';
+import { PracticeBanner, PracticeCard } from './components/PracticeBanner';
 import { Settings } from './components/Settings';
 import { StateMachineEditor } from './components/StateMachineEditor';
-import { NO_API_KEY_HINT } from './runHints';
+import { useI18n } from './i18n';
+import { boardHasParallel } from './softJoin';
+import { groupStages } from './boardLayout';
+import { applyTheme, readTheme, ThemeId } from './theme';
 import { BoardDetail, BoardSummary } from './types';
 
 type View = 'board' | 'machine' | 'settings';
 
 export default function App() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [username, setUsername] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [selectedBoardId, setSelectedBoardId] = useState<string>('');
   const [view, setView] = useState<View>('board');
+  const [theme, setTheme] = useState<ThemeId>(() => readTheme());
+  const [practiceDismissed, setPracticeDismissed] = useState(false);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,26 +86,34 @@ export default function App() {
     setView('board');
   };
 
+  const llmConfigured = runtime == null ? null : Boolean(runtime.llm_configured ?? runtime.openai_configured);
+  const showPractice = llmConfigured === false && !practiceDismissed;
+
+  const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
+  const pullingCount = selectedBoard?.cards.filter((card) => card.status === 'running').length ?? 0;
+  const hasParallel = useMemo(() => (selectedBoard ? boardHasParallel(groupStages(selectedBoard.stages)) : false), [selectedBoard]);
+
   if (!authChecked) {
-    return <div className="app-boot">Checking session</div>;
+    return <div className="app-boot">{t('app.checkingSession')}</div>;
   }
 
   if (!username) {
     return <LoginForm onLoggedIn={setUsername} />;
   }
 
-  const waitingCount = selectedBoard?.cards.filter((card) => card.status === 'waiting_approval' || card.status === 'waiting_tool_approval').length ?? 0;
-  const pullingCount = selectedBoard?.cards.filter((card) => card.status === 'running').length ?? 0;
-  const llmReady = (runtime?.llm_configured ?? runtime?.openai_configured) !== false;
   const boundGit = Boolean(selectedBoard?.workspace_path || selectedBoard?.git_url);
-  const showFirstRunChecklist = Boolean(selectedBoardId && (!llmReady || !boundGit));
+  const showFirstRunChecklist = Boolean(selectedBoardId && llmConfigured === true && !boundGit);
 
   return (
-    <div>
+    <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">Norns</span>
-          <span className="brand-sub">Control room</span>
+          <span className="brand-mark">{t('app.brand')}</span>
+          <span className="brand-divider" aria-hidden="true" />
+          <span className="brand-sub">
+            {t('app.controlRoom')}
+            {selectedBoard && view !== 'settings' ? ` · ${selectedBoard.name}` : ''}
+          </span>
         </div>
         <nav className="board-switcher" aria-label="Boards">
           {boards.map((board) => (
@@ -112,46 +131,47 @@ export default function App() {
           ))}
         </nav>
         <div className="topbar-meta">
-          {pullingCount ? <span className="wait-count is-pulling">{pullingCount} pulling</span> : null}
-          <span className={`wait-count${waitingCount ? '' : ' is-clear'}`}>{waitingCount} waiting</span>
+          <div className="theme-mark" title={t('app.themeMark')}>
+            <span className="theme-mark-icon" aria-hidden="true">
+              ···
+            </span>
+            <span>{t('app.themeMark')}</span>
+          </div>
           <button type="button" className={`chip${view === 'machine' ? ' is-active' : ''}`} onClick={() => setView('machine')} disabled={!selectedBoardId}>
-            Machine
+            {t('app.machine')}
           </button>
           <button type="button" className={`chip${view === 'settings' ? ' is-active' : ''}`} onClick={() => setView('settings')}>
-            Settings
+            {t('app.settings')}
           </button>
           <span className="user-name">{username}</span>
           <button type="button" className="btn btn-ghost" onClick={handleLogout}>
-            Log out
+            {t('app.logOut')}
           </button>
+        </div>
+        <div className="status-pills" aria-live="polite">
+          <span className="status-pill is-waiting">{t('status.awaitingConfirm', { count: waitingCount })}</span>
+          <span className="status-pill is-running">{t('status.inProgress', { count: pullingCount })}</span>
         </div>
       </header>
 
       <main className="workspace">
-        {!llmReady ? (
+        {showPractice && view === 'board' ? <PracticeBanner onGoSettings={() => setView('settings')} onContinue={() => setPracticeDismissed(true)} /> : null}
+        {showFirstRunChecklist && view === 'board' ? (
           <div className="notice notice-cta" role="status">
             <div>
-              <strong>Practice mode</strong>
-              <p>{NO_API_KEY_HINT}</p>
-            </div>
-            <button type="button" className="btn btn-primary" onClick={() => setView('settings')}>
-              Open Settings
-            </button>
-          </div>
-        ) : null}
-        {showFirstRunChecklist && llmReady ? (
-          <div className="notice notice-cta" role="status">
-            <div>
-              <strong>Finish setup</strong>
-              <p>Bind a git repo for this board (top bar → Bind git), then run the sample card.</p>
+              <strong>{t('onboarding.finishSetup')}</strong>
+              <p>{t('onboarding.bindGit')}</p>
             </div>
             <button type="button" className="btn btn-primary" onClick={() => setView('board')}>
-              Back to board
+              {t('onboarding.backToBoard')}
             </button>
           </div>
         ) : null}
         {view === 'settings' ? (
           <Settings
+            board={selectedBoard}
+            theme={theme}
+            onThemeChange={setTheme}
             onCreated={(boardId) => {
               setSelectedBoardId(boardId);
               setView('board');
@@ -161,34 +181,39 @@ export default function App() {
           selectedBoardId ? (
             <StateMachineEditor boardId={selectedBoardId} />
           ) : (
-            <div className="empty-board">Create a board in Settings before editing the state machine.</div>
+            <div className="empty-board">{t('app.emptyMachine')}</div>
           )
         ) : (
           <>
-            {isLoading ? <div className="muted">Loading boards…</div> : null}
+            {isLoading ? <div className="muted">{t('app.loadingBoards')}</div> : null}
             {!boards.length && !isLoading ? (
               <section className="onboarding" aria-labelledby="onboarding-title">
-                <h2 id="onboarding-title">Start your first board</h2>
-                <p className="muted">A short path from empty Control Room to a practice run.</p>
+                <h2 id="onboarding-title">{t('onboarding.title')}</h2>
+                <p className="muted">{t('onboarding.body')}</p>
                 <ol className="onboarding-steps">
                   <li>
-                    <strong>Create a board</strong> in Settings (includes a sample card).
+                    <strong>{t('onboarding.stepBoard')}</strong> {t('onboarding.stepBoardHint')}
                   </li>
                   <li>
-                    <strong>Add a model connector</strong> (DeepSeek, OpenAI, or Cursor) — or stay in practice mode.
+                    <strong>{t('onboarding.stepModel')}</strong> {t('onboarding.stepModelHint')}
                   </li>
                   <li>
-                    <strong>Bind git</strong> (optional) from the board top bar, then press Run on the sample card.
+                    <strong>{t('onboarding.stepGit')}</strong> {t('onboarding.stepGitHint')}
                   </li>
                 </ol>
                 <button type="button" className="btn btn-primary" onClick={() => setView('settings')}>
-                  Open Settings to create a board
+                  {t('onboarding.openSettings')}
                 </button>
               </section>
             ) : null}
-            {selectedBoardId ? <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} /> : null}
+            {selectedBoardId ? <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} practiceMode={llmConfigured === false} /> : null}
+            {llmConfigured === false && view === 'board' ? <PracticeCard /> : null}
           </>
         )}
+        <footer className="app-footer">
+          <span>{hasParallel ? t('app.footerParallel') : `${t('app.brand')} ${t('app.controlRoom')}`}</span>
+          <span>{llmConfigured === false ? t('app.footerPractice') : t('app.themeMark')}</span>
+        </footer>
       </main>
     </div>
   );
