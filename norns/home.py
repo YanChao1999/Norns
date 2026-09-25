@@ -57,6 +57,12 @@ def init_home(home: Path, *, force: bool = False) -> tuple[Path, str]:
                 "[queue]",
                 'backend = "inline"',
                 "",
+                "[network]",
+                "# Use HTTP(S)_PROXY / ALL_PROXY from the environment (Clash, corporate).",
+                "# Set false for direct egress — handy on company networks when a local",
+                "# proxy breaks OpenAI/DeepSeek calls. Toggle also lives in Settings.",
+                "use_system_proxy = true",
+                "",
                 "[sandbox]",
                 "# directory = copy only (default; isolation by convention).",
                 "# docker = copy + hardened container (bind copy only, cap-drop ALL, read-only rootfs).",
@@ -102,6 +108,7 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     server = data.get("server", {})
     auth = data.get("auth", {})
     queue = data.get("queue", {})
+    network = data.get("network", {})
     sandbox = data.get("sandbox", {})
     openai = data.get("openai", {})
     cursor = data.get("cursor", {})
@@ -137,4 +144,21 @@ def apply_config(home: Path, *, host: str | None = None, port: int | None = None
     os.environ["NORNS_ENV"] = "local"
     os.environ["CORS_ORIGINS"] = f"http://{resolved_host}:{resolved_port}"
     os.environ["NORNS_HOME"] = str(home)
+    # Preferences file (Settings UI) wins over config.toml when present.
+    prefs_path = home / "preferences.json"
+    proxy_from_prefs = None
+    if prefs_path.is_file():
+        try:
+            import json
+
+            prefs = json.loads(prefs_path.read_text(encoding="utf-8"))
+            if isinstance(prefs, dict) and "use_system_proxy" in prefs:
+                proxy_from_prefs = prefs["use_system_proxy"]
+        except (OSError, json.JSONDecodeError, TypeError):
+            proxy_from_prefs = None
+    if proxy_from_prefs is None and "use_system_proxy" in network:
+        proxy_from_prefs = network.get("use_system_proxy")
+    if proxy_from_prefs is not None:
+        flag = str(proxy_from_prefs).strip().lower() in {"1", "true", "yes", "on"}
+        os.environ["USE_SYSTEM_PROXY"] = "true" if flag else "false"
     return {"host": resolved_host, "port": resolved_port, "home": home}

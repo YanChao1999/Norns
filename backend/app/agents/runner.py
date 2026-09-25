@@ -6,7 +6,6 @@ import re
 from datetime import datetime
 from typing import Any
 
-from openai import AsyncOpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,6 +24,7 @@ from ..connector_config import (
 from ..cursor_api import run_cursor_cloud_agent
 from ..database import AsyncSessionLocal
 from ..faults import loop_tool_error_if_injected, runner_timeout_if_injected
+from ..llm_client import create_async_openai
 from ..logging_setup import compact_error_for_log
 from ..models import AgentRun, Board, Card, Connector, Stage
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
@@ -580,20 +580,23 @@ async def _execute_agent(
     tools_payload = [tool.openai_tool for tool in runtime_tools]
     tool_map = {tool.name: tool for tool in runtime_tools}
 
-    client = AsyncOpenAI(api_key=resolved_key.strip(), base_url=resolved_url)
+    client = create_async_openai(api_key=resolved_key.strip(), base_url=resolved_url)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
-    content, executed_tool_calls = await _run_openai_tool_loop(
-        client,
-        model=model,
-        temperature=temperature,
-        messages=messages,
-        tools_payload=tools_payload,
-        tool_map=tool_map,
-        confirm_writes=confirm_writes,
-    )
+    try:
+        content, executed_tool_calls = await _run_openai_tool_loop(
+            client,
+            model=model,
+            temperature=temperature,
+            messages=messages,
+            tools_payload=tools_payload,
+            tool_map=tool_map,
+            confirm_writes=confirm_writes,
+        )
+    finally:
+        await client.close()
     identity = llm_identity(provider, model)
     content = with_llm_line(content, identity)
     handoff = await _build_handoff(content)

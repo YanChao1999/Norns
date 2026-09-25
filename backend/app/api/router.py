@@ -16,6 +16,7 @@ from .boards import router as boards_router
 from .cards import router as cards_router
 from .connectors import router as connectors_router
 from .plugins import router as plugins_router
+from .preferences import router as preferences_router
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(auth_router)
@@ -23,6 +24,7 @@ api_router.include_router(boards_router)
 api_router.include_router(cards_router)
 api_router.include_router(connectors_router)
 api_router.include_router(plugins_router)
+api_router.include_router(preferences_router)
 
 
 @api_router.get("/workspace", tags=["workspace"], dependencies=[Depends(get_current_user)])

@@ -52,9 +52,11 @@ async def _render_via_plantuml_lib(source: str, server_url: str) -> str | None:
 
 async def _render_via_kroki(source: str, kroki_base: str) -> str | None:
     try:
+        from ..proxy_env import httpx_trust_env
+
         encoded = _encode_plantuml(source)
         url = f"{kroki_base.rstrip('/')}/plantuml/svg/{encoded}"
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, trust_env=httpx_trust_env()) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             return resp.text

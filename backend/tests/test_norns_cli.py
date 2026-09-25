@@ -19,6 +19,8 @@ def test_init_creates_config(tmp_path: Path):
     assert 'backend = "inline"' in text
     assert "[sandbox]" in text
     assert 'backend = "directory"' in text
+    assert "[network]" in text
+    assert "use_system_proxy = true" in text
     assert "[cursor]" in text
     assert "[deepseek]" in text
     assert password
@@ -66,6 +68,15 @@ def test_apply_config_sets_sqlite_and_inline_queue(tmp_path: Path):
     assert os.environ["NORNS_ENV"] == "local"
     assert os.environ["CURSOR_BASE_URL"] == "https://api.cursor.com/v1"
     assert os.environ["DEEPSEEK_DEFAULT_MODEL"] == "deepseek-v4-flash"
+    assert os.environ["USE_SYSTEM_PROXY"] == "true"
+
+
+def test_apply_config_preferences_override_network(tmp_path: Path):
+    home = tmp_path / "home"
+    init_home(home)
+    (home / "preferences.json").write_text('{"use_system_proxy": false}\n', encoding="utf-8")
+    apply_config(home)
+    assert os.environ["USE_SYSTEM_PROXY"] == "false"
 
 
 def test_electron_app_dir_ships_chromium_shell():

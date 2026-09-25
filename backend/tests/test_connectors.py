@@ -148,8 +148,10 @@ def test_encryption_key_must_be_valid_fernet(value: str):
 async def test_fetch_llm_model_catalog_marks_unusable_on_auth_error():
     from backend.app.connector_config import LlmCredentials, fetch_llm_model_catalog
 
-    with patch("openai.AsyncOpenAI") as client_cls:
-        client_cls.return_value.models.list = AsyncMock(side_effect=Exception("Error code: 401 - Incorrect API key"))
+    client = AsyncMock()
+    client.models.list = AsyncMock(side_effect=Exception("Error code: 401 - Incorrect API key"))
+    client.close = AsyncMock()
+    with patch("openai.AsyncOpenAI", return_value=client):
         catalog = await fetch_llm_model_catalog(
             LlmCredentials(
                 api_key="sk-fake",
@@ -162,6 +164,7 @@ async def test_fetch_llm_model_catalog_marks_unusable_on_auth_error():
     assert "401" in catalog.error
     assert catalog.entries
     assert all(not entry.usable for entry in catalog.entries)
+    client.close.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -185,8 +188,10 @@ async def test_fetch_llm_model_catalog_uses_remote_list():
     from backend.app.connector_config import LlmCredentials, fetch_llm_model_catalog
 
     remote = SimpleNamespace(data=[SimpleNamespace(id="deepseek-v4-pro"), SimpleNamespace(id="deepseek-v4-flash")])
-    with patch("openai.AsyncOpenAI") as client_cls:
-        client_cls.return_value.models.list = AsyncMock(return_value=remote)
+    client = AsyncMock()
+    client.models.list = AsyncMock(return_value=remote)
+    client.close = AsyncMock()
+    with patch("openai.AsyncOpenAI", return_value=client):
         catalog = await fetch_llm_model_catalog(
             LlmCredentials(
                 api_key="sk-test",
@@ -198,6 +203,7 @@ async def test_fetch_llm_model_catalog_uses_remote_list():
     assert catalog.source == "api"
     assert catalog.models[0] == "deepseek-v4-flash"
     assert "deepseek-v4-pro" in catalog.models
+    client.close.assert_awaited()
 
 
 @pytest.mark.asyncio

@@ -450,10 +450,13 @@ async def fetch_llm_model_catalog(creds: LlmCredentials) -> LlmModelCatalog:
                 entries=_catalog_entries(catalog, creds, display_names=display_names),
             )
 
-        from openai import AsyncOpenAI
+        from .llm_client import create_async_openai
 
-        client = AsyncOpenAI(api_key=creds.api_key.strip(), base_url=creds.base_url, timeout=8.0)
-        page = await client.models.list()
+        client = create_async_openai(api_key=creds.api_key.strip(), base_url=creds.base_url, timeout=8.0)
+        try:
+            page = await client.models.list()
+        finally:
+            await client.close()
         remote_ids = [str(item.id) for item in page.data if getattr(item, "id", None)]
         models = filter_chat_model_ids(creds.provider, remote_ids, default_model=creds.default_model)
         catalog = LlmModelCatalog(
