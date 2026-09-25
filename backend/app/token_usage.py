@@ -42,10 +42,14 @@ def usage_from_cursor(raw: Any, *, rounds: int = 1) -> dict[str, Any]:
     if raw is None:
         return empty_usage(source="unavailable", rounds=rounds)
     nested = getattr(raw, "usage", None)
-    unwrap = nested is not None and not isinstance(raw, dict) and (
-        hasattr(nested, "input_tokens")
-        or hasattr(nested, "output_tokens")
-        or (isinstance(nested, dict) and _has_token_fields(nested))
+    unwrap = (
+        nested is not None
+        and not isinstance(raw, dict)
+        and (
+            hasattr(nested, "input_tokens")
+            or hasattr(nested, "output_tokens")
+            or (isinstance(nested, dict) and _has_token_fields(nested))
+        )
     )
     if unwrap:
         # AgentUsage.usage or RunResult.usage → TokenUsage
