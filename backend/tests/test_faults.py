@@ -86,7 +86,7 @@ async def test_inject_loop_tool_error_skips_execute(monkeypatch):
         del arguments
         raise AssertionError("tool should not execute when loop_tool_error is injected")
 
-    content, executed = await _run_openai_tool_loop(
+    content, executed, _usage = await _run_openai_tool_loop(
         SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions())),
         model="gpt-4o",
         temperature=0.1,

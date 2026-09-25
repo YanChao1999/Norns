@@ -12,6 +12,7 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 - [x] **Command Light Control Room** — Command Light theme + Night stub, practice chrome, soft join UI, Settings write gate, card detail sheet (#48).
 - [x] **System proxy preference** — Settings → Network toggle (or `USE_SYSTEM_PROXY` / `[network] use_system_proxy`); Clash `socks://` normalized to `socks5://`; off = direct API egress (#52).
 - [ ] **Publish 0.0.3** — version bumped in-tree; tag `v0.0.3` and follow [PUBLISH.md](PUBLISH.md) when ready.
+- [ ] **Token usage matrix** — capture OpenAI/DeepSeek usage per stage run; card detail shows stage×tokens (Cursor often `unavailable`).
 
 ### Out of 0.0.3 (deferred)
 

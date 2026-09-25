@@ -279,7 +279,7 @@ async def test_openai_tool_loop_continues_after_empty_search():
             return script.pop(0)
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
-    content, executed = await _run_openai_tool_loop(
+    content, executed, usage = await _run_openai_tool_loop(
         client,
         model="gpt-4o",
         temperature=0.1,
@@ -296,6 +296,7 @@ async def test_openai_tool_loop_continues_after_empty_search():
     assert "PROJ-1" in content
     assert all(call.get("tools") for call in calls)
     assert len(calls) == 3
+    assert usage["rounds"] >= 1
 
 
 @pytest.mark.asyncio
@@ -545,7 +546,7 @@ async def test_openai_tool_loop_keeps_going_when_a_tool_raises():
         raise RuntimeError("Jira HTTP 400: Unbounded JQL queries are not allowed here.")
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
-    content, executed = await _run_openai_tool_loop(
+    content, executed, _usage = await _run_openai_tool_loop(
         client,
         model="deepseek-v4-flash",
         temperature=0.1,
