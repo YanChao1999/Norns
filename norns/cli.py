@@ -62,6 +62,10 @@ def main(argv: list[str] | None = None) -> int:
         except FileNotFoundError as exc:
             print(exc, file=sys.stderr)
             return 1
+        # Normalize Clash socks:// → socks5:// before Uvicorn/httpx load.
+        from backend.app.proxy_env import apply_proxy_env_fixes
+
+        apply_proxy_env_fixes()
         from norns.desktop import run_ide
 
         return run_ide(host=runtime["host"], port=int(runtime["port"]), open_window=not args.no_window)
