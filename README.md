@@ -47,7 +47,8 @@ uv sync --extra dev && uv run pre-commit install   # format, lint, tests on comm
 1. Log in as `admin` with the password from `norns init`.
 2. If there are no boards, the Control Room shows a short checklist and a **Settings** CTA.
 3. Create a board (includes a sample card), add DeepSeek / OpenAI / Cursor in Settings, optionally **Bind git**, then **Run** the sample card.
-4. Without a usable model key you stay in **practice mode** (banner + practice gate labels). Fake keys do not clear that banner — health probes the provider model list.
+4. If Clash or a company proxy breaks model calls, open **Settings → Network** and toggle **Use system proxy** (or set `USE_SYSTEM_PROXY` / `[network] use_system_proxy` in `config.toml`).
+5. Without a usable model key you stay in **practice mode** (banner + practice gate labels). Fake keys do not clear that banner — health probes the provider model list.
 
 ## Features
 
@@ -58,6 +59,7 @@ uv sync --extra dev && uv run pre-commit install   # format, lint, tests on comm
 - Isolated per-stage agents (no shared chat memory); human confirms approve/reject
 - Encrypted connectors (OpenAI, Cursor, DeepSeek, GitHub, Jira, Polarion)
 - Live Cursor model catalog for Agent selection; wait UI counts down to Cursor timeout
+- **System proxy** toggle in Settings (honor Clash/corporate `HTTP_PROXY` / `ALL_PROXY`, or call models directly)
 - Per-column tool allowlists (Norns, sandbox, GitHub, Jira, Polarion, extra MCP)
 - Directory or hardened Docker sandbox copies under `~/.norns/sandboxes/`
 - SQLite + in-process queue locally; PostgreSQL + Redis/ARQ when you need them
@@ -86,5 +88,6 @@ Human --> S3 : confirm
 - **Handoffs** — the only structured context for the next stage. On a gate, `recommendation` is advisory until a person confirms. Practice runs are labeled and do not auto-advance to `done` without a real model.
 - **Git bind** — each board has a checkout path and/or git URL (path must exist; URL must look like a remote). Stage agents inherit the board repo unless the column **Agent** overrides it. `GET /api/workspace?board_id=` reflects that binding.
 - **Connectors** — Python libraries only; agents never see raw credentials. Empty tool allowlist means no tools. Failed stage runs leave the card **blocked** (same as reject).
+- **Network / proxy** — Settings → Network (or `[network] use_system_proxy` / `USE_SYSTEM_PROXY`). On: honor `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` (Clash `socks://` is normalized to `socks5://`). Off: direct egress — useful on company networks when a local proxy breaks API calls.
 
 Optional stack (Postgres, Redis, Vite): copy `.env.example` → `.env`, then `docker compose up` → UI at `http://localhost:5173`.
