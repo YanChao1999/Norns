@@ -35,11 +35,17 @@ def _make_client():
 
 
 def test_preferences_proxy_toggle(tmp_path: Path, monkeypatch):
+    from backend.app.config import get_settings
+
     home = tmp_path / "norns"
     home.mkdir()
+    # Isolate from apply_config tests that leave a random ADMIN_PASSWORD in the env.
     monkeypatch.setenv("NORNS_HOME", str(home))
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin")
+    monkeypatch.setenv("ADMIN_USERNAME", "admin")
     monkeypatch.setenv("ALL_PROXY", "socks://127.0.0.1:7897/")
     monkeypatch.delenv("USE_SYSTEM_PROXY", raising=False)
+    get_settings.cache_clear()
 
     client, engine = _make_client()
     with client:
@@ -66,4 +72,5 @@ def test_preferences_proxy_toggle(tmp_path: Path, monkeypatch):
         assert os.environ["ALL_PROXY"].startswith("socks5://")
 
     app.dependency_overrides.clear()
+    get_settings.cache_clear()
     asyncio.run(engine.dispose())
