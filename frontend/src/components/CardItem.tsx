@@ -3,6 +3,7 @@ import { MouseEvent } from 'react';
 import { cardFaceSummary } from '../cardPreview';
 import { useCardGates } from '../hooks/useCardGates';
 import { useI18n } from '../i18n';
+import { PRACTICE_WAITING_HINT } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { Card } from '../types';
 import { formatElapsed } from '../waitProgress';
@@ -27,6 +28,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
   const waitingWrites = card.status === 'waiting_tool_approval';
   const running = card.status === 'running';
   const confirmWrite = waitingWrites;
+  const practice = Boolean(card.practice);
 
   const stop = (event: MouseEvent) => {
     event.stopPropagation();
@@ -38,7 +40,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
     <div
       role="button"
       tabIndex={0}
-      className={`gate-card is-${card.status}${confirmWrite ? ' is-confirm-write' : ''}${isOpen ? ' is-open' : ''}${locked ? ' is-locked' : ''}`}
+      className={`gate-card is-${card.status}${confirmWrite ? ' is-confirm-write' : ''}${isOpen ? ' is-open' : ''}${locked ? ' is-locked' : ''}${practice ? ' is-practice' : ''}`}
       onClick={() => onOpen(card)}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -48,19 +50,21 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
       }}
     >
       {confirmWrite ? <span className="gate-card-badge">{t('card.confirmWriteBadge')}</span> : null}
+      {practice ? <span className="gate-card-badge is-practice">{t('card.practiceBadge')}</span> : null}
 
       <div className={`gate-card-status${waiting || waitingWrites ? ' is-waiting' : ''}${running ? ' is-running' : ''}`}>
-        {STATUS_LABEL[card.status]}
+        {practice && waiting ? t('card.practiceWait') : STATUS_LABEL[card.status]}
         {running ? ` · ${t('card.elapsed')}` : ''}
       </div>
 
       <div className="gate-card-title">{card.title}</div>
+      {practice ? <div className="card-ext">{t('card.practiceLabel')}</div> : null}
       {card.external_id ? <div className="card-ext">{card.external_id}</div> : null}
 
       {waiting ? (
         <div className="gate-callout is-suggest">
           <strong>{t('card.suggestion')}</strong>
-          <span className="muted">{summary || card.recommendation_reason || t('card.suggestionDefault')}</span>
+          <span className="muted">{practice ? PRACTICE_WAITING_HINT : summary || card.recommendation_reason || t('card.suggestionDefault')}</span>
         </div>
       ) : null}
 
@@ -100,7 +104,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
               })
             }
           >
-            {t('card.approve')}
+            {practice ? t('practice.approve') : t('card.approve')}
           </button>
           <button
             type="button"

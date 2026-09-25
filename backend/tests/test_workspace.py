@@ -13,6 +13,27 @@ def test_github_repo_from_url():
     assert github_repo_from_url("YanChao1999/Norns") == "YanChao1999/Norns"
 
 
+def test_validate_workspace_binding(tmp_path: Path):
+    from backend.app.workspace import is_valid_git_url, validate_workspace_binding
+
+    existing = tmp_path / "repo"
+    existing.mkdir()
+    validate_workspace_binding(str(existing), "https://github.com/acme/app")
+    validate_workspace_binding("", "")
+    try:
+        validate_workspace_binding(str(tmp_path / "missing"), "")
+        raise AssertionError("expected missing path to fail")
+    except ValueError as exc:
+        assert "does not exist" in str(exc)
+    try:
+        validate_workspace_binding(str(existing), "totally-not-a-url")
+        raise AssertionError("expected bad url to fail")
+    except ValueError as exc:
+        assert "git_url" in str(exc)
+    assert is_valid_git_url("git@github.com:acme/app.git")
+    assert not is_valid_git_url("ftp://example.com/x")
+
+
 def _git_repo(root: Path, url: str) -> Path:
     root.mkdir()
     (root / ".git").mkdir()

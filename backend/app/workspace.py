@@ -39,6 +39,39 @@ def github_repo_from_url(url: str) -> str:
     return ""
 
 
+_GIT_REMOTE_RE = re.compile(
+    r"^(?:"
+    r"git@[\w.-]+:[\w.-]+/[\w.-]+(?:\.git)?"
+    r"|ssh://git@[\w.-]+/[\w.-]+/[\w.-]+(?:\.git)?"
+    r"|https?://[\w.-]+/[\w.-]+/[\w.-]+(?:\.git)?"
+    r"|[\w.-]+/[\w.-]+"
+    r")$",
+    re.I,
+)
+
+
+def is_valid_git_url(url: str) -> bool:
+    """True when empty or a parseable GitHub / git remote URL (not an arbitrary string)."""
+    text = str(url or "").strip()
+    if not text:
+        return True
+    if github_repo_from_url(text):
+        return True
+    return bool(_GIT_REMOTE_RE.match(text))
+
+
+def validate_workspace_binding(path: str, git_url: str) -> None:
+    """Raise ValueError when bound path/URL are invalid (#39)."""
+    path_text = str(path or "").strip()
+    url_text = str(git_url or "").strip()
+    if path_text:
+        root = Path(path_text).expanduser()
+        if not root.is_dir():
+            raise ValueError(f"Workspace path does not exist or is not a directory: {path_text}")
+    if url_text and not is_valid_git_url(url_text):
+        raise ValueError("git_url must be a GitHub owner/repo or git remote URL")
+
+
 def detect_git_root(start: str | Path | None) -> str:
     current = Path(start or Path.cwd()).expanduser().resolve()
     if current.is_file():

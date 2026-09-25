@@ -8,11 +8,25 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..card_preview import latest_recommendation
+from ..card_preview import latest_practice, latest_recommendation
 from ..database import get_session
 from ..models import AgentConfig, Board, Card, Stage, StageTransition
 from ..orchestrator.state_machine import TRANSITIONS, CardStatus
+from ..workspace import validate_workspace_binding
 from .auth import get_current_user
+
+
+def _apply_workspace_fields(
+    *, workspace_path: str | None = None, git_url: str | None = None
+) -> tuple[str | None, str | None]:
+    path = workspace_path.strip() if isinstance(workspace_path, str) else workspace_path
+    url = git_url.strip() if isinstance(git_url, str) else git_url
+    try:
+        validate_workspace_binding(path or "", url or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return path, url
+
 
 router = APIRouter(tags=["boards"], dependencies=[Depends(get_current_user)])
 
@@ -57,6 +71,7 @@ class CardRead(BaseModel):
     status: str
     recommendation: str | None = None
     recommendation_reason: str | None = None
+    practice: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -75,6 +90,7 @@ class CardRead(BaseModel):
             "status": data.status,
             "recommendation": recommendation,
             "recommendation_reason": reason,
+            "practice": latest_practice(data),
         }
 
 
@@ -204,11 +220,12 @@ async def list_boards(session: Annotated[AsyncSession, Depends(get_session)]) ->
 
 @router.post("/boards", response_model=BoardDetail, status_code=status.HTTP_201_CREATED)
 async def create_board(session: Annotated[AsyncSession, Depends(get_session)], payload: BoardCreate) -> Board:
+    path, url = _apply_workspace_fields(workspace_path=payload.workspace_path, git_url=payload.git_url)
     board = Board(
         name=payload.name,
         description=payload.description,
-        workspace_path=payload.workspace_path.strip(),
-        git_url=payload.git_url.strip(),
+        workspace_path=path or "",
+        git_url=url or "",
     )
     board.stages = [
         Stage(
@@ -217,7 +234,8 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             require_approval=True,
             agent_config=AgentConfig(
                 system_prompt="You are Urd. Analyze the incoming card and produce a clear structured handoff. Recommend DECISION: approve or reject; a human must confirm.",
-                model="gpt-4o",
+                model="",
+                llm_provider="",
                 temperature=0.7,
                 tool_allowlist=[],
             ),
@@ -228,7 +246,8 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             require_approval=True,
             agent_config=AgentConfig(
                 system_prompt="You are Verdandi. Do the approved work with tools (create tickets, update the card). Then hand off. Recommend DECISION: approve or reject; a human must confirm.",
-                model="gpt-4o",
+                model="",
+                llm_provider="",
                 temperature=0.7,
                 tool_allowlist=[],
             ),
@@ -239,7 +258,8 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
             require_approval=True,
             agent_config=AgentConfig(
                 system_prompt="You are Skuld. Finish delivery with tools if anything is still undone, then produce the final handoff and highlight risks. Recommend DECISION: approve or reject; a human must confirm.",
-                model="gpt-4o",
+                model="",
+                llm_provider="",
                 temperature=0.7,
                 tool_allowlist=[],
             ),
@@ -248,8 +268,20 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
     session.add(board)
     await session.flush()
     _seed_linear_transitions(session, board)
+    first = board.stages[0]
+    session.add(
+        Card(
+            board_id=board.id,
+            title="Sample: first practice run",
+            body=(
+                "Open this card and press **Run**. Without a model connector you get a practice handoff — "
+                "add DeepSeek, OpenAI, or Cursor in Settings for a real agent."
+            ),
+            status=CardStatus.IDLE,
+            current_stage_id=first.id,
+        )
+    )
     await session.commit()
-    await session.refresh(board)
     return await _get_board_or_404(session, board.id)
 
 
@@ -263,9 +295,14 @@ async def update_board(
     board_id: str, payload: BoardUpdate, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> Board:
     board = await _get_board_or_404(session, board_id)
-    for field, value in payload.model_dump(exclude_none=True).items():
-        if field in {"workspace_path", "git_url"} and isinstance(value, str):
-            value = value.strip()
+    data = payload.model_dump(exclude_none=True)
+    if "workspace_path" in data or "git_url" in data:
+        next_path = data.get("workspace_path", board.workspace_path)
+        next_url = data.get("git_url", board.git_url)
+        path, url = _apply_workspace_fields(workspace_path=next_path or "", git_url=next_url or "")
+        data["workspace_path"] = path or ""
+        data["git_url"] = url or ""
+    for field, value in data.items():
         setattr(board, field, value)
     await session.commit()
     return await _get_board_or_404(session, board_id)
@@ -325,14 +362,15 @@ async def create_stage(
         confirm_writes=payload.confirm_writes,
         auto_start=payload.auto_start,
     )
+    agent_path, agent_url = _apply_workspace_fields(workspace_path=payload.workspace_path, git_url=payload.git_url)
     stage.agent_config = AgentConfig(
         system_prompt=payload.system_prompt,
         model=payload.model,
         llm_provider=payload.llm_provider,
         temperature=payload.temperature,
         tool_allowlist=payload.tool_allowlist,
-        workspace_path=payload.workspace_path.strip(),
-        git_url=payload.git_url.strip(),
+        workspace_path=agent_path or "",
+        git_url=agent_url or "",
     )
     session.add(stage)
     await session.flush()
@@ -400,10 +438,14 @@ async def update_stage(
             stage.agent_config.temperature = payload.temperature
         if payload.tool_allowlist is not None:
             stage.agent_config.tool_allowlist = payload.tool_allowlist
-        if payload.workspace_path is not None:
-            stage.agent_config.workspace_path = payload.workspace_path.strip()
-        if payload.git_url is not None:
-            stage.agent_config.git_url = payload.git_url.strip()
+        if payload.workspace_path is not None or payload.git_url is not None:
+            next_path = (
+                payload.workspace_path if payload.workspace_path is not None else stage.agent_config.workspace_path
+            )
+            next_url = payload.git_url if payload.git_url is not None else stage.agent_config.git_url
+            agent_path, agent_url = _apply_workspace_fields(workspace_path=next_path or "", git_url=next_url or "")
+            stage.agent_config.workspace_path = agent_path or ""
+            stage.agent_config.git_url = agent_url or ""
 
     await session.commit()
     if payload.auto_start is True:

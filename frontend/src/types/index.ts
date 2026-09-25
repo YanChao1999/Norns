@@ -35,6 +35,7 @@ export interface Card {
   status: CardStatus;
   recommendation?: string | null;
   recommendation_reason?: string | null;
+  practice?: boolean;
   created_at?: string;
   updated_at?: string;
 }

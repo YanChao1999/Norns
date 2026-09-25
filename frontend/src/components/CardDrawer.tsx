@@ -20,7 +20,7 @@ import {
 } from '../cardJourney';
 import { Handoff, approveLabel, rejectLabel } from '../gateLabels';
 import { useI18n } from '../i18n';
-import { PLACEHOLDER_RUN_HINT, isPlaceholderRun } from '../runHints';
+import { PLACEHOLDER_RUN_HINT, PRACTICE_APPROVE_LABEL, PRACTICE_REJECT_LABEL, isPlaceholderRun } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { AgentRun, BoardDetail, Card } from '../types';
 import { appendOperatorQuestion } from '../writeGate';
@@ -477,8 +477,8 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                     ✓
                   </span>
                   <span>
-                    <strong>{approveLabel(approveLines, board, handoff) || t('detail.approveTitle')}</strong>
-                    <small>{t('detail.approveHint')}</small>
+                    <strong>{placeholderRun ? PRACTICE_APPROVE_LABEL : approveLabel(approveLines, board, handoff) || t('detail.approveTitle')}</strong>
+                    <small>{placeholderRun ? t('practice.approveHint') : t('detail.approveHint')}</small>
                   </span>
                 </button>
                 <button
@@ -491,7 +491,7 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                     ×
                   </span>
                   <span>
-                    <strong>{rejectLabel(rejectLines, board, handoff) || t('detail.rejectTitle')}</strong>
+                    <strong>{placeholderRun ? PRACTICE_REJECT_LABEL : rejectLabel(rejectLines, board, handoff) || t('detail.rejectTitle')}</strong>
                     <small>{t('detail.rejectHint')}</small>
                   </span>
                 </button>

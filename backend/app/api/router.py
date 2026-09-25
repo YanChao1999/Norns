@@ -60,7 +60,7 @@ async def workspace(
 async def health(session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, object]:
     settings = get_settings()
     result = await session.execute(select(Connector).where(Connector.is_active.is_(True)))
-    llm_configured = llm_is_configured(list(result.scalars().all()), settings)
+    llm_configured = await llm_is_configured(list(result.scalars().all()), settings)
     return {
         "status": "ok",
         "llm_configured": llm_configured,

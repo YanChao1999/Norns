@@ -13,7 +13,7 @@ Named after Urd, Verdandi, and Skuld.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/github/license/YanChao1999/Norns.svg)](LICENSE)
 
-Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
+**v0.0.2** · Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
 
 ## Downloads
 
@@ -40,7 +40,14 @@ norns init && norns run
 uv sync --extra dev && uv run pre-commit install   # format, lint, tests on commit
 ```
 
-`norns run --no-window` starts the server without a browser. Data lives under `~/.norns` (`--home` / `NORNS_HOME`). `norns init --force` replaces config and deletes `norns.db`. Set `openai.api_key` in `~/.norns/config.toml` for a real model instead of a placeholder handoff. Publishing: [PUBLISH.md](PUBLISH.md).
+`norns run --no-window` starts the server without a browser. Data lives under `~/.norns` (`--home` / `NORNS_HOME`). `norns init --force` replaces config and deletes `norns.db`. Publishing: [PUBLISH.md](PUBLISH.md).
+
+### First run
+
+1. Log in as `admin` with the password from `norns init`.
+2. If there are no boards, the Control Room shows a short checklist and a **Settings** CTA.
+3. Create a board (includes a sample card), add DeepSeek / OpenAI / Cursor in Settings, optionally **Bind git**, then **Run** the sample card.
+4. Without a usable model key you stay in **practice mode** (banner + practice gate labels). Fake keys do not clear that banner — health probes the provider model list.
 
 ## Features
 
@@ -48,7 +55,9 @@ uv sync --extra dev && uv run pre-commit install   # format, lint, tests on comm
 - Visual machine editor: stages, parallel tracks, human gates vs auto-advance
 - Isolated per-stage agents (no shared chat memory); human confirms approve/reject
 - Encrypted connectors (OpenAI, Cursor, DeepSeek, GitHub, Jira, Polarion)
+- Live Cursor model catalog for Agent selection; wait UI counts down to Cursor timeout
 - Per-column tool allowlists (Norns, sandbox, GitHub, Jira, Polarion, extra MCP)
+- Directory or hardened Docker sandbox copies under `~/.norns/sandboxes/`
 - SQLite + in-process queue locally; PostgreSQL + Redis/ARQ when you need them
 
 ```plantuml
@@ -71,8 +80,9 @@ Human --> S3 : confirm
 ## How it works
 
 - **Boards / stages** — workflow and per-column agents. Two default lines from a stage **split** a card (`handoff.tracks`). Later columns (Review, Merge, …) are a **soft join**: each fork arrives and runs on its own. **Auto-start idle cards** on a column until a human gate (or write confirm) stops it.
-- **Sandbox** — local workspace runs copy under `~/.norns/sandboxes/` (`directory`, hardened `docker`, or `none`). Host/Cursor file tools use the bind-mounted copy path; **command** isolation for `docker` is via the **sandbox** plugin (`sandbox_run` → docker exec). Allowlist **sandbox** for reproduce / env-build.
-- **Handoffs** — the only structured context for the next stage. On a gate, `recommendation` is advisory until a person confirms.
-- **Connectors** — Python libraries only; agents never see raw credentials. Empty tool allowlist means no tools.
+- **Sandbox** — local workspace runs copy under `~/.norns/sandboxes/` (`directory`, hardened `docker`, or `none`). Host/Cursor file tools use the bind-mounted copy path; **command** isolation for `docker` is via the **sandbox** plugin (`sandbox_run` → docker exec). Allowlist **sandbox** for reproduce / env-build. Set `[sandbox] backend` in `~/.norns/config.toml`.
+- **Handoffs** — the only structured context for the next stage. On a gate, `recommendation` is advisory until a person confirms. Practice runs are labeled and do not auto-advance to `done` without a real model.
+- **Git bind** — each board has a checkout path and/or git URL (path must exist; URL must look like a remote). Stage agents inherit the board repo unless the column **Agent** overrides it. `GET /api/workspace?board_id=` reflects that binding.
+- **Connectors** — Python libraries only; agents never see raw credentials. Empty tool allowlist means no tools. Failed stage runs leave the card **blocked** (same as reject).
 
 Optional stack (Postgres, Redis, Vite): copy `.env.example` → `.env`, then `docker compose up` → UI at `http://localhost:5173`.

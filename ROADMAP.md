@@ -1,36 +1,44 @@
 # Roadmap
 
-Shipped on `main`: 0.0.1 Control Room loop (boards, Machine editor, human gates, parallel split/join, local `norns init` / `norns run`).
+Shipped on `main` through **0.0.2**: Control Room loop, pip/`norns-ide` install, LLM connectors, planned parallel splits + sandbox, Cursor live models / wait countdown, PyPI download trend in the README, and A-class first-run / practice / git-bind fixes (#47).
 
-This file is the first-use backlog. **Now:** pip / uv install (`feat/pip-uv-install`). Everything else stays here until it has its own branch.
+This file is the remaining backlog. Open GitHub issues without an `A` label still track follow-ups; A-class alpha feedback from #18–#39 is closed on `main`.
 
 ## Now
 
-- [x] **pip / uv install** — `uv tool install .` / `pip install .` on `feat/pip-uv-install`. CI checks the wheel, sdist, `twine`, packaged UI, and `/api/health` plus the Control Room HTML.
-- [ ] **Publish 0.0.1 to PyPI as `norns-ide`** — `norns` is taken on PyPI. Follow [PUBLISH.md](PUBLISH.md): TestPyPI first (`workflow_dispatch`), then PyPI (trusted publisher / GitHub Release). Install with `pip install norns-ide` or `uv tool install norns-ide`.
-- [ ] **Parallel planned split + sandbox** (`feat/parallel-planned-split-sandbox`) — soft join (no wait/merge); previous column plans `handoff.tracks`; directory or Docker sandbox per agent run; microVM / gVisor reserved.
+- [x] **pip / uv install** — `uv tool install norns-ide` / `pip install norns-ide` (or `uv tool install .` from a checkout). CI checks the wheel, sdist, packaged UI, and `/api/health`.
+- [x] **Publish 0.0.2 as `norns-ide`** — on PyPI / TestPyPI. Follow [PUBLISH.md](PUBLISH.md) for the next cut.
+- [x] **Parallel planned split + sandbox** — soft join (no wait/merge); previous column plans `handoff.tracks`; directory or hardened Docker sandbox per agent run.
+- [ ] **Next PyPI cut** — bump version and release when the items below warrant it.
 
-## First-use Settings (users cannot finish setup in the UI)
+## First-use / Control Room (alpha A-class)
 
-- [x] **Connector form in Settings** — add/edit/disable OpenAI, Cursor, DeepSeek, Jira, GitHub, Polarion. OpenAI / Cursor / DeepSeek are model connectors (`api_key`, optional `base_url` / `default_model`). Jira needs `server`, `username`, `token`. GitHub needs `token` (optional `base_url`). Polarion needs `server`, `username`, `password`, optional `project`.
-- [x] **API key in Settings** — OpenAI-compatible keys are encrypted connectors (OpenAI, Cursor, DeepSeek). Env/`config.toml` still works as a fallback.
-- [x] **Agent setup path** — explain that the column **Agent** button opens prompt / model / tools; an empty tool allowlist grants no tools; checking `norns` / `sandbox` / `jira` / `github` / `polarion` (or an MCP connector) attaches those plugins. Cursor stages get MCP; OpenAI-compatible stages get function tools.
+- [x] **Connector form in Settings** — OpenAI, Cursor, DeepSeek, Jira, GitHub, Polarion (plus MCP / workspace).
+- [x] **API key in Settings** — encrypted connectors; env/`config.toml` still works as a fallback.
+- [x] **Agent setup path** — column **Agent** opens prompt / model / tools; empty allowlist grants no tools.
+- [x] **Empty state after login** — checklist CTA into Settings; create board → model → optional Bind git → run.
+- [x] **Sample card on new boards** — seeded “first practice run” card so the board is not empty.
+- [x] **Practice vs real** — practice banner + Settings CTA when `llm_configured` is false; practice chips / gate labels; practice does not auto-pass to `done`.
+- [x] **Fake-key health** — model-list auth failure keeps `usable` / `llm_configured` false.
+- [x] **Failed runs → blocked** — stage failures align with human reject (`blocked`), not `idle`.
+- [x] **Bind git validation** — path must exist; `git_url` must look like a git remote; `/api/workspace?board_id=` reflects the board.
 - [ ] **Warn when tools have no connector** — do not silently grant nothing.
-- [ ] **Empty state after login** — with no boards, land in Settings (or a short checklist): create board → API key → connector if you need tools → open the board.
 - [ ] **Login copy** — username is `admin`; password was printed by `norns init` and is in `~/.norns/config.toml`.
 
 ## Docs / install leftovers
 
-- [x] **Pages install snippet** — `docs/index.html` install path is PyPI / TestPyPI `norns-ide` for 0.0.2 (checkout `uv tool install .` remains as a fallback).
-- [ ] **Sample board / card** — optional seeded work so the first session is not an empty board.
+- [x] **Pages install snippet** — `docs/index.html` install path is PyPI / TestPyPI `norns-ide` for 0.0.2.
+- [x] **README downloads** — monthly badge + daily trend chart (`assets/downloads-trend.svg`).
 
 ## After first use / publish
 
-- [x] **Hardened Docker sandbox** — only the sandbox copy bind-mounted, `--cap-drop ALL`, read-only rootfs, no-new-privileges, tmpfs for scratch (`sandbox.backend = "docker"`). Host-side agent tools still see the copy path; containerized `run_in_sandbox` is the hard jail.
-- [x] **Sandbox MCP plugin** — allowlist `sandbox` for `sandbox_info` / `sandbox_run` / list-read-write / `sandbox_copy_in` so agents can reproduce issues and build envs inside the per-run copy (docker exec when hardened Docker is active).
+- [x] **Hardened Docker sandbox** — bind-mounted copy only, `--cap-drop ALL`, read-only rootfs, no-new-privileges (`sandbox.backend = "docker"`).
+- [x] **Sandbox MCP plugin** — allowlist `sandbox` for info / run / list-read-write / copy-in.
+- [x] **Cursor live model catalog** — `GET /v1/models` (with SDK fallback); remap OpenAI-only ids for Cursor Cloud Agents.
+- [x] **Wait countdown** — UI counts down toward Cursor timeout instead of only elapsed time.
 - [ ] **Sandbox microVM backend** — stronger isolation when containers are not enough (`sandbox.backend = "microvm"`). Prefer hardened `docker` until then.
-- [ ] **gVisor + agent runtime policy** — user-space kernel (gVisor or similar) plus a policy layer that controls what agents may exec, read, write, and reach on the network (`sandbox.backend = "gvisor"` reserved).
-- [ ] **Alembic** — in-place upgrades for `~/.norns` SQLite and Postgres after 0.0.1 is published.
+- [ ] **gVisor + agent runtime policy** — user-space kernel plus policy for exec / IO / network (`sandbox.backend = "gvisor"` reserved).
+- [ ] **Alembic** — in-place upgrades for `~/.norns` SQLite and Postgres after a stable published line.
 - [ ] **Polarion field writes** — still setattr after allowlist; harden if Polarion is a real connector.
 - [ ] **Worker heartbeat / lease** — stale-run recovery is age-based (`STALE_RUN_SECONDS`) and can race a live ARQ worker.
 - [ ] **Multi-user / RBAC** — still one admin username/password.

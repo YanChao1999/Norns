@@ -49,7 +49,7 @@ async def test_inject_runner_timeout_via_run_stage(monkeypatch):
         await _run_stage(session, card.id, stage.id, "run-inject")
         await session.refresh(card)
         run = (await session.execute(select(AgentRun).where(AgentRun.id == "run-inject"))).scalar_one()
-        assert card.status == CardStatus.IDLE
+        assert card.status == CardStatus.BLOCKED
         assert run.status == "failed"
         assert "timed out" in (run.model_output or "").lower()
     await engine.dispose()

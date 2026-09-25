@@ -101,6 +101,9 @@ export default function App() {
     return <LoginForm onLoggedIn={setUsername} />;
   }
 
+  const boundGit = Boolean(selectedBoard?.workspace_path || selectedBoard?.git_url);
+  const showFirstRunChecklist = Boolean(selectedBoardId && llmConfigured === true && !boundGit);
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -153,6 +156,17 @@ export default function App() {
 
       <main className="workspace">
         {showPractice && view === 'board' ? <PracticeBanner onGoSettings={() => setView('settings')} onContinue={() => setPracticeDismissed(true)} /> : null}
+        {showFirstRunChecklist && view === 'board' ? (
+          <div className="notice notice-cta" role="status">
+            <div>
+              <strong>{t('onboarding.finishSetup')}</strong>
+              <p>{t('onboarding.bindGit')}</p>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => setView('board')}>
+              {t('onboarding.backToBoard')}
+            </button>
+          </div>
+        ) : null}
         {view === 'settings' ? (
           <Settings
             board={selectedBoard}
@@ -172,7 +186,26 @@ export default function App() {
         ) : (
           <>
             {isLoading ? <div className="muted">{t('app.loadingBoards')}</div> : null}
-            {!boards.length && !isLoading ? <div className="empty-board">{t('app.emptyBoard')}</div> : null}
+            {!boards.length && !isLoading ? (
+              <section className="onboarding" aria-labelledby="onboarding-title">
+                <h2 id="onboarding-title">{t('onboarding.title')}</h2>
+                <p className="muted">{t('onboarding.body')}</p>
+                <ol className="onboarding-steps">
+                  <li>
+                    <strong>{t('onboarding.stepBoard')}</strong> {t('onboarding.stepBoardHint')}
+                  </li>
+                  <li>
+                    <strong>{t('onboarding.stepModel')}</strong> {t('onboarding.stepModelHint')}
+                  </li>
+                  <li>
+                    <strong>{t('onboarding.stepGit')}</strong> {t('onboarding.stepGitHint')}
+                  </li>
+                </ol>
+                <button type="button" className="btn btn-primary" onClick={() => setView('settings')}>
+                  {t('onboarding.openSettings')}
+                </button>
+              </section>
+            ) : null}
             {selectedBoardId ? <Board boardId={selectedBoardId} onEditMachine={() => setView('machine')} practiceMode={llmConfigured === false} /> : null}
             {llmConfigured === false && view === 'board' ? <PracticeCard /> : null}
           </>
