@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import { useI18n } from '../i18n';
 import { STATUS_LABEL } from '../status';
 import { BoardDetail, CardStatus, CardStatusMachine, Stage, StageTransition } from '../types';
 import { AgentConfigModal } from './AgentConfig';
@@ -155,6 +156,7 @@ function freeLane(stages: Stage[], order: number, preferred: number, selfId: str
 }
 
 export function StateMachineEditor({ boardId }: Props) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const graphRef = useRef<HTMLDivElement | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -317,11 +319,7 @@ export function StateMachineEditor({ boardId }: Props) {
       <div className="board-head">
         <div>
           <h1>State machine · {board.name}</h1>
-          <p>
-            Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage. After parallel
-            tracks, add your own later column (Review, Merge, …) and draw a line from each track into it — each card arrives and runs on its own as soon as it
-            is ready (open a PR, merge to main, etc.). There is no wait-for-all barrier.
-          </p>
+          <p>{t('machine.intro')}</p>
         </div>
       </div>
 
@@ -614,6 +612,7 @@ function StageInspector({
   onDelete,
   onSelectLine
 }: StageInspectorProps) {
+  const { t } = useI18n();
   const [name, setName] = useState(stage.name);
   const [column, setColumn] = useState(stage.order);
   const [row, setRow] = useState(stageRow(stage));
@@ -714,10 +713,7 @@ function StageInspector({
           disabled={busy}
         />
       </label>
-      <p className="muted">
-        Adds a new row in the next column and a second default line so both tracks run. To review or merge later, create that column yourself and draw a line
-        from each parallel row into it — each forked card runs there independently when it arrives (PR review, merge to main, …).
-      </p>
+      <p className="muted">{t('machine.parallelHint')}</p>
       <div className="machine-inspector-actions">
         <button
           type="button"
