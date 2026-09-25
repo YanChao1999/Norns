@@ -13,7 +13,7 @@ Named after Urd, Verdandi, and Skuld.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/github/license/YanChao1999/Norns.svg)](LICENSE)
 
-**v0.0.2** · Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
+**v0.0.3** · Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
 
 ## Downloads
 
@@ -52,7 +52,9 @@ uv sync --extra dev && uv run pre-commit install   # format, lint, tests on comm
 ## Features
 
 - Local Control Room in the browser (`norns init` / `norns run`); optional Electron window
-- Visual machine editor: stages, parallel tracks, human gates vs auto-advance
+- **Command Light** cream theme (Night stub) with English i18n scaffolding
+- Visual machine editor: stages, parallel tracks, soft join, human gates vs auto-advance
+- Delivery Machine Card detail sheet: journey, confirm writes, Ask agent
 - Isolated per-stage agents (no shared chat memory); human confirms approve/reject
 - Encrypted connectors (OpenAI, Cursor, DeepSeek, GitHub, Jira, Polarion)
 - Live Cursor model catalog for Agent selection; wait UI counts down to Cursor timeout

@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   refresh:
@@ -18,14 +19,31 @@ jobs:
           python-version: "3.12"
       - name: Generate chart
         run: python scripts/generate_downloads_chart.py
-      - name: Commit if changed
+      - name: Open PR if chart changed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet -- assets/downloads-trend.svg; then
             echo "No chart changes"
             exit 0
           fi
+
+          BRANCH="chore/downloads-trend-refresh"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
           git add assets/downloads-trend.svg
           git commit -m "Refresh PyPI downloads trend chart."
-          git push
+          git push -u origin "$BRANCH" --force
+
+          if gh pr view "$BRANCH" --json number --jq .number >/dev/null 2>&1; then
+            echo "PR for $BRANCH already exists"
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore: refresh PyPI downloads trend chart" \
+              --body "Automated refresh of \`assets/downloads-trend.svg\` from the scheduled downloads chart workflow.
+
+Pushes go through a PR so branch protection on \`main\` (required \`CI\` check) is satisfied."
+          fi

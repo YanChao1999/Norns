@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped on `main` through **0.0.2**: Control Room loop, pip/`norns-ide` install, LLM connectors, planned parallel splits + sandbox, Cursor live models / wait countdown, PyPI download trend in the README, and A-class first-run / practice / git-bind fixes (#47).
+Shipped on `main` through **0.0.3** (prep): everything in 0.0.2, plus Command Light Control Room UX (#48) — cream theme, soft-join board chrome, Settings write gate, Ask agent, Delivery Machine Card detail — and A-class first-run / practice / git-bind fixes (#47).
 
 This file is the remaining backlog. Open GitHub issues without an `A` label still track follow-ups; A-class alpha feedback from #18–#39 is closed on `main`.
 
@@ -9,7 +9,14 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 - [x] **pip / uv install** — `uv tool install norns-ide` / `pip install norns-ide` (or `uv tool install .` from a checkout). CI checks the wheel, sdist, packaged UI, and `/api/health`.
 - [x] **Publish 0.0.2 as `norns-ide`** — on PyPI / TestPyPI. Follow [PUBLISH.md](PUBLISH.md) for the next cut.
 - [x] **Parallel planned split + sandbox** — soft join (no wait/merge); previous column plans `handoff.tracks`; directory or hardened Docker sandbox per agent run.
-- [ ] **Next PyPI cut** — bump version and release when the items below warrant it.
+- [x] **Command Light Control Room** — Command Light theme + Night stub, practice chrome, soft join UI, Settings write gate, card detail sheet (#48).
+- [ ] **Publish 0.0.3** — version bumped in-tree; tag `v0.0.3` and follow [PUBLISH.md](PUBLISH.md) when ready.
+
+### Out of 0.0.3 (deferred)
+
+- Warn when tools have no connector; login copy polish
+- Sandbox microVM / gVisor backends
+- Alembic migrations, multi-user / RBAC, worker lease hardening
 
 ## First-use / Control Room (alpha A-class)
 
@@ -27,7 +34,7 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 
 ## Docs / install leftovers
 
-- [x] **Pages install snippet** — `docs/index.html` install path is PyPI / TestPyPI `norns-ide` for 0.0.2.
+- [x] **Pages install snippet** — `docs/index.html` install path is PyPI / TestPyPI `norns-ide` for 0.0.3.
 - [x] **README downloads** — monthly badge + daily trend chart (`assets/downloads-trend.svg`).
 
 ## After first use / publish
