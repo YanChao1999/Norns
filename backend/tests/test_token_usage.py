@@ -4,7 +4,9 @@ from backend.app.token_usage import add_usage, attach_usage, empty_usage, usage_
 
 
 def test_usage_from_response_object():
-    response = type("R", (), {"usage": type("U", (), {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15})()})()
+    response = type(
+        "R", (), {"usage": type("U", (), {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15})()}
+    )()
     usage = usage_from_response(response)
     assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "rounds": 1, "source": "api"}
 
@@ -21,7 +23,9 @@ def test_add_usage_sums_rounds():
 
 
 def test_attach_usage_on_handoff():
-    handoff = attach_usage({"summary": "ok"}, empty_usage(source="practice"), identity={"provider": "practice", "model": "none"})
+    handoff = attach_usage(
+        {"summary": "ok"}, empty_usage(source="practice"), identity={"provider": "practice", "model": "none"}
+    )
     usage = usage_from_handoff(handoff)
     assert usage["source"] == "practice"
     assert usage["provider"] == "practice"

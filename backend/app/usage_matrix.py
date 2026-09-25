@@ -25,7 +25,9 @@ async def card_usage_matrix(session: AsyncSession, card_id: str) -> dict[str, An
         return None
     board = card.board
     stages = sorted(board.stages, key=lambda item: (item.order, item.lane or 0, item.name)) if board else []
-    runs_result = await session.execute(select(AgentRun).where(AgentRun.card_id == card_id).order_by(AgentRun.created_at))
+    runs_result = await session.execute(
+        select(AgentRun).where(AgentRun.card_id == card_id).order_by(AgentRun.created_at)
+    )
     runs = list(runs_result.scalars().all())
 
     by_stage: list[dict[str, Any]] = []

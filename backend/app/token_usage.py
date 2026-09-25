@@ -67,7 +67,9 @@ def add_usage(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict
     }
 
 
-def attach_usage(handoff: dict[str, Any], usage: dict[str, Any] | None, *, identity: dict[str, Any] | None = None) -> dict[str, Any]:
+def attach_usage(
+    handoff: dict[str, Any], usage: dict[str, Any] | None, *, identity: dict[str, Any] | None = None
+) -> dict[str, Any]:
     payload = dict(handoff or {})
     entry = dict(usage or empty_usage())
     if identity:
