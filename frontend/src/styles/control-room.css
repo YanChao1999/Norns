@@ -2755,6 +2755,124 @@ details.disclosure summary {
   background: var(--surface);
 }
 
+.board-usage-summary {
+  margin: 10px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--elevated) 80%, var(--surface));
+}
+
+.board-usage-summary.is-loading {
+  padding: 8px 12px;
+}
+
+.board-usage-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.board-usage-toggle:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.board-usage-label {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.board-usage-figures {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-usage-chevron {
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.board-usage-panel {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.board-usage-hint {
+  margin: 10px 0 8px;
+  font-size: 0.88rem;
+  max-width: 62ch;
+}
+
+.board-usage-table-wrap {
+  overflow-x: auto;
+}
+
+.board-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.board-usage-table th,
+.board-usage-table td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.board-usage-table th:nth-child(n + 3),
+.board-usage-table td:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-usage-cards {
+  margin-top: 10px;
+}
+
+.board-usage-cards h4 {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.board-usage-cards ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.board-usage-cards li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-usage-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .token-usage {
   border: 1px solid var(--line);
   border-radius: 12px;

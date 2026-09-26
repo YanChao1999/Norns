@@ -13,6 +13,7 @@ import { CardHistory } from './CardHistory';
 import { Column } from './Column';
 import { Dialog } from './Dialog';
 import { SoftJoinBridge } from './SoftJoinBridge';
+import { TokenUsageDashboard } from './TokenUsageDashboard';
 
 interface Props {
   boardId: string;
@@ -87,6 +88,7 @@ export function Board({ boardId, onEditMachine, practiceMode = false }: Props) {
           ) : null}
         </div>
       </div>
+      <TokenUsageDashboard boardId={boardId} />
 
       {parallelMode ? (
         <StageRail

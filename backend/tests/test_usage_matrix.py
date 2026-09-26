@@ -114,5 +114,81 @@ def test_card_usage_matrix_across_stages():
         second = next(row for row in body["by_stage"] if row["stage_id"] == stages[1]["id"])
         assert second["model"] == "gpt-4o"
 
+        board_usage = client.get(f"/api/boards/{board['id']}/usage")
+        assert board_usage.status_code == 200
+        board_body = board_usage.json()
+        assert board_body["board_id"] == board["id"]
+        assert board_body["totals"]["prompt_tokens"] == 1800
+        assert board_body["totals"]["completion_tokens"] == 600
+        assert board_body["totals"]["total_tokens"] == 2400
+        assert board_body["card_count"] == 1
+        assert board_body["run_count"] == 2
+        assert any(row["total_tokens"] == 1200 for row in board_body["by_stage"])
+        assert board_body["by_card"][0]["card_id"] == card_id
+        assert board_body["by_card"][0]["total_tokens"] == 2400
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())
+
+
+def test_board_usage_matrix_sums_multiple_cards():
+    client, engine, SessionLocal = _make_client()
+    with client:
+        assert client.post("/api/auth/login", json={"username": "admin", "password": "admin"}).status_code == 200
+        board = client.post("/api/boards", json={"name": "Board usage"}).json()
+        detail = client.get(f"/api/boards/{board['id']}").json()
+        stages = sorted(detail["stages"], key=lambda item: item["order"])
+        first_card = detail["cards"][0]["id"] if detail.get("cards") else client.get(f"/api/boards/{board['id']}/cards").json()[0]["id"]
+        second = client.post(
+            f"/api/boards/{board['id']}/cards",
+            json={"title": "Second task", "body": "more work"},
+        )
+        assert second.status_code == 201
+        second_card = second.json()["id"]
+
+        async def seed():
+            async with SessionLocal() as session:
+                for card_id, prompt, completion in (
+                    (first_card, 500, 100),
+                    (second_card, 1500, 300),
+                ):
+                    card = await session.get(Card, card_id)
+                    assert card is not None
+                    session.add(
+                        AgentRun(
+                            card_id=card.id,
+                            stage_id=stages[0]["id"],
+                            status="completed",
+                            inputs={},
+                            tool_calls=[],
+                            model_output="ok",
+                            handoff={
+                                "summary": "ok",
+                                "usage": {
+                                    "prompt_tokens": prompt,
+                                    "completion_tokens": completion,
+                                    "total_tokens": prompt + completion,
+                                    "rounds": 1,
+                                    "source": "api",
+                                    "provider": "openai",
+                                    "model": "gpt-4o",
+                                },
+                            },
+                        )
+                    )
+                    card.status = CardStatus.IDLE
+                await session.commit()
+
+        asyncio.run(seed())
+        usage = client.get(f"/api/boards/{board['id']}/usage")
+        assert usage.status_code == 200
+        body = usage.json()
+        assert body["totals"]["prompt_tokens"] == 2000
+        assert body["totals"]["completion_tokens"] == 400
+        assert body["totals"]["total_tokens"] == 2400
+        assert body["card_count"] == 2
+        assert body["by_card"][0]["total_tokens"] == 1800
+        assert body["by_card"][1]["total_tokens"] == 600
+
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
