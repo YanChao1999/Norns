@@ -8,12 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..bakeoff import BakeoffError, bakeoff_compare, start_bakeoff
 from ..database import get_session
 from ..models import AgentRun, Approval, Board, Card
 from ..orchestrator.auto_start import maybe_auto_start_card
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.gates import approve_card, approve_pending_writes, reject_card, reject_pending_writes
 from ..orchestrator.state_machine import CardStatus, start_card_run
+from ..usage_matrix import card_usage_matrix
 from .auth import SessionUser, get_current_user
 
 router = APIRouter(tags=["cards"], dependencies=[Depends(get_current_user)])
@@ -34,6 +36,26 @@ class CardUpdate(BaseModel):
 class ApprovalRequest(BaseModel):
     approved: bool
     comment: str | None = None
+
+
+class BakeoffArm(BaseModel):
+    label: str | None = None
+    system_prompt: str | None = None
+    model: str = ""
+    llm_provider: str = ""
+    temperature: float = 0.2
+    tool_allowlist: list[str] = Field(default_factory=list)
+    workspace_path: str = ""
+    git_url: str = ""
+
+
+class BakeoffStart(BaseModel):
+    """Same prompt across arms; each arm gets its own AgentConfig (model/tools/prompt)."""
+
+    prompt: str | None = None
+    arms: list[BakeoffArm] = Field(min_length=2, max_length=6)
+    require_approval: bool = False
+    auto_start: bool = True
 
 
 class ApprovalRead(BaseModel):
@@ -186,6 +208,48 @@ async def list_runs(card_id: str, session: Annotated[AsyncSession, Depends(get_s
         select(AgentRun).where(AgentRun.card_id == card_id).order_by(AgentRun.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+@router.get("/cards/{card_id}/usage")
+async def card_usage(card_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, Any]:
+    """Token usage matrix for one task (card) across stage agents."""
+    matrix = await card_usage_matrix(session, card_id)
+    if matrix is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return matrix
+
+
+@router.post("/cards/{card_id}/bakeoff", status_code=status.HTTP_202_ACCEPTED)
+async def create_bakeoff(
+    card_id: str, payload: BakeoffStart, session: Annotated[AsyncSession, Depends(get_session)]
+) -> dict[str, Any]:
+    """Fork the card into parallel arms with different agent settings; same prompt for each."""
+    try:
+        return await start_bakeoff(
+            session,
+            card_id,
+            [arm.model_dump() for arm in payload.arms],
+            prompt=payload.prompt,
+            require_approval=payload.require_approval,
+            auto_start=payload.auto_start,
+        )
+    except BakeoffError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_409_CONFLICT
+        if "at least two" in detail.lower() or "at most" in detail.lower() or "unique" in detail.lower():
+            status_code = status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except EnqueueError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+
+@router.get("/cards/{card_id}/bakeoff")
+async def get_bakeoff_compare(card_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, Any]:
+    """Compare bakeoff arms: tools/model, tokens, summary, recommendation."""
+    report = await bakeoff_compare(session, card_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return report
 
 
 @router.post("/cards/{card_id}/run", response_model=dict[str, str], status_code=status.HTTP_202_ACCEPTED)

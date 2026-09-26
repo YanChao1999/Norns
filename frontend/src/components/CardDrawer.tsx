@@ -26,6 +26,8 @@ import { AgentRun, BoardDetail, Card } from '../types';
 import { appendOperatorQuestion } from '../writeGate';
 import { Dialog } from './Dialog';
 import { MarkdownPreview } from './MarkdownPreview';
+import { BakeoffComparePanel } from './BakeoffCompare';
+import { TokenUsageMatrix } from './TokenUsageMatrix';
 import { WaitLive } from './WaitLive';
 
 interface Props {
@@ -73,6 +75,8 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
     const sameCard = previousStatus.current.id === card?.id;
     if (sameCard && previousStatus.current.status === 'running' && card?.status && card.status !== 'running') {
       void queryClient.invalidateQueries({ queryKey: ['runs', card.id] });
+      void queryClient.invalidateQueries({ queryKey: ['usage', card.id] });
+      void queryClient.invalidateQueries({ queryKey: ['bakeoff', card.id] });
     }
     previousStatus.current = { id: card?.id, status: card?.status };
   }, [card?.id, card?.status, queryClient]);
@@ -88,6 +92,7 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      queryClient.invalidateQueries({ queryKey: ['usage', card?.id] });
     }
   });
 
@@ -100,6 +105,7 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      queryClient.invalidateQueries({ queryKey: ['usage', card?.id] });
     }
   });
 
@@ -108,10 +114,12 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      queryClient.invalidateQueries({ queryKey: ['usage', card?.id] });
     },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      queryClient.invalidateQueries({ queryKey: ['usage', card?.id] });
       setRunStarted(false);
     }
   });
@@ -137,6 +145,7 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
       setAskNotice(result === 'ran' ? t('detail.askAgentRunning') : t('detail.askAgentSaved'));
       queryClient.invalidateQueries({ queryKey: ['board', card?.board_id] });
       queryClient.invalidateQueries({ queryKey: ['runs', card?.id] });
+      queryClient.invalidateQueries({ queryKey: ['usage', card?.id] });
     },
     onError: () => {
       setRunStarted(false);
@@ -370,6 +379,12 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                   })}
                 </div>
               </section>
+            ) : null}
+
+            {card?.id ? <TokenUsageMatrix cardId={card.id} /> : null}
+
+            {card?.id && !card.parent_card_id ? (
+              <BakeoffComparePanel cardId={card.id} idle={card.status === 'idle' || card.status === 'blocked' || card.status === 'done'} />
             ) : null}
 
             {expandedStageId ? (

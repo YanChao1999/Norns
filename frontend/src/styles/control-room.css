@@ -2755,6 +2755,154 @@ details.disclosure summary {
   background: var(--surface);
 }
 
+.token-usage {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.token-usage-table-wrap {
+  overflow-x: auto;
+}
+
+.token-usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.token-usage-table th,
+.token-usage-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.token-usage-table th:nth-child(n + 3),
+.token-usage-table td:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-usage-table tfoot td {
+  border-bottom: none;
+  padding-top: 10px;
+}
+
+.bakeoff-compare {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+}
+
+.bakeoff-compare-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.bakeoff-compare-head h3 {
+  margin: 0;
+}
+
+.bakeoff-form {
+  display: grid;
+  gap: 10px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.bakeoff-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.88rem;
+}
+
+.bakeoff-form textarea,
+.bakeoff-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--elevated);
+  color: inherit;
+  font: inherit;
+}
+
+.bakeoff-arms {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.bakeoff-table-wrap {
+  overflow-x: auto;
+}
+
+.bakeoff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.bakeoff-table th,
+.bakeoff-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.bakeoff-table th:nth-child(n + 4),
+.bakeoff-table td:nth-child(n + 4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bakeoff-table tfoot td {
+  border-bottom: none;
+  padding-top: 10px;
+}
+
+.bakeoff-status {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.bakeoff-summary {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 28ch;
+}
+
+.bakeoff-rec {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.bakeoff-rec-approve {
+  color: var(--ok, #2f6b3a);
+}
+
+.bakeoff-rec-reject {
+  color: var(--danger, #8b3a2f);
+}
+
+@media (max-width: 720px) {
+  .bakeoff-arms {
+    grid-template-columns: 1fr;
+  }
+}
+
 .machine-card-journey {
   border: 1px solid var(--line);
   border-radius: 12px;
