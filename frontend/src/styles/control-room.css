@@ -2786,6 +2786,17 @@ details.disclosure summary {
   font-variant-numeric: tabular-nums;
 }
 
+.token-usage-prompt-note {
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  max-width: 62ch;
+}
+
+.token-usage-run-row td {
+  background: color-mix(in srgb, var(--elevated) 70%, transparent);
+  font-size: 0.88rem;
+}
+
 .token-usage-table tfoot td {
   border-bottom: none;
   padding-top: 10px;
