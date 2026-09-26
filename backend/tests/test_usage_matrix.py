@@ -138,7 +138,11 @@ def test_board_usage_matrix_sums_multiple_cards():
         board = client.post("/api/boards", json={"name": "Board usage"}).json()
         detail = client.get(f"/api/boards/{board['id']}").json()
         stages = sorted(detail["stages"], key=lambda item: item["order"])
-        first_card = detail["cards"][0]["id"] if detail.get("cards") else client.get(f"/api/boards/{board['id']}/cards").json()[0]["id"]
+        first_card = (
+            detail["cards"][0]["id"]
+            if detail.get("cards")
+            else client.get(f"/api/boards/{board['id']}/cards").json()[0]["id"]
+        )
         second = client.post(
             f"/api/boards/{board['id']}/cards",
             json={"title": "Second task", "body": "more work"},
