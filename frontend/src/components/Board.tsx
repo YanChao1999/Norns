@@ -13,6 +13,7 @@ import { CardHistory } from './CardHistory';
 import { Column } from './Column';
 import { Dialog } from './Dialog';
 import { SoftJoinBridge } from './SoftJoinBridge';
+import { TokenUsageDashboard } from './TokenUsageDashboard';
 
 interface Props {
   boardId: string;
@@ -87,6 +88,10 @@ export function Board({ boardId, onEditMachine, practiceMode = false }: Props) {
           ) : null}
         </div>
       </div>
+      <TokenUsageDashboard
+        boardId={boardId}
+        active={board.cards.some((card) => card.status === 'running' || card.status === 'waiting_join' || card.status === 'waiting_tool_approval')}
+      />
 
       {parallelMode ? (
         <StageRail

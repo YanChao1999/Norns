@@ -12,6 +12,7 @@ from ..card_preview import latest_practice, latest_recommendation
 from ..database import get_session
 from ..models import AgentConfig, Board, Card, Stage, StageTransition
 from ..orchestrator.state_machine import TRANSITIONS, CardStatus
+from ..usage_matrix import board_usage_matrix
 from ..workspace import validate_workspace_binding
 from .auth import get_current_user
 
@@ -292,6 +293,15 @@ async def create_board(session: Annotated[AsyncSession, Depends(get_session)], p
 @router.get("/boards/{board_id}", response_model=BoardDetail)
 async def get_board(board_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> Board:
     return await _get_board_or_404(session, board_id)
+
+
+@router.get("/boards/{board_id}/usage")
+async def board_usage(board_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, Any]:
+    """Board-level token usage summary across all cards and stage agents."""
+    matrix = await board_usage_matrix(session, board_id)
+    if matrix is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+    return matrix
 
 
 @router.put("/boards/{board_id}", response_model=BoardDetail)

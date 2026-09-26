@@ -110,8 +110,18 @@ async def test_run_cursor_cloud_agent_uses_sdk_bridge(monkeypatch):
     client = _FakeBridgeClient()
 
     class FakeRun:
-        async def wait(self) -> None:
-            return None
+        id = "run-1"
+
+        async def wait(self):
+            return SimpleNamespace(
+                usage=SimpleNamespace(
+                    input_tokens=100,
+                    output_tokens=40,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    total_tokens=140,
+                )
+            )
 
         async def text(self) -> str:
             return "Stage handoff from Cursor SDK"
@@ -120,6 +130,18 @@ async def test_run_cursor_cloud_agent_uses_sdk_bridge(monkeypatch):
         async def send(self, prompt: str):
             created["prompt"] = prompt
             return FakeRun()
+
+        async def get_usage(self, *, run_id: str | None = None):
+            created["get_usage_run_id"] = run_id
+            return SimpleNamespace(
+                usage=SimpleNamespace(
+                    input_tokens=100,
+                    output_tokens=40,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    total_tokens=140,
+                )
+            )
 
         async def aclose(self) -> None:
             created["closed"] = True
@@ -141,13 +163,17 @@ async def test_run_cursor_cloud_agent_uses_sdk_bridge(monkeypatch):
     )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
-    text = await run_cursor_cloud_agent(
+    text, usage = await run_cursor_cloud_agent(
         api_key="crsr_test",
         prompt="Do the stage",
         model="auto",
         timeout_seconds=5.0,
     )
     assert text == "Stage handoff from Cursor SDK"
+    assert usage["source"] == "cursor"
+    assert usage["prompt_tokens"] == 100
+    assert usage["completion_tokens"] == 40
+    assert usage["total_tokens"] == 140
     assert created["prompt"] == "Do the stage"
     assert created["closed"] is True
     assert client.closed is True
@@ -185,7 +211,7 @@ async def test_run_cursor_cloud_agent_remaps_gpt4o(monkeypatch):
     )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
-    text = await run_cursor_cloud_agent(
+    text, usage = await run_cursor_cloud_agent(
         api_key="crsr_test",
         prompt="Do the stage",
         model="gpt-4o",
@@ -229,7 +255,7 @@ async def test_run_cursor_cloud_agent_attaches_repo(monkeypatch):
     )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
-    text = await run_cursor_cloud_agent(
+    text, usage = await run_cursor_cloud_agent(
         api_key="crsr_test",
         prompt="Ship it",
         model="composer-2",
@@ -278,7 +304,7 @@ async def test_run_cursor_uses_local_git_workspace(monkeypatch, tmp_path):
     )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
-    text = await run_cursor_cloud_agent(
+    text, usage = await run_cursor_cloud_agent(
         api_key="crsr_test",
         prompt="Edit the repo",
         workspace_path=str(repo),
@@ -322,7 +348,7 @@ async def test_run_cursor_cloud_agent_attaches_mcp_servers(monkeypatch):
     )
     monkeypatch.setattr("backend.app.cursor_api.AsyncAgent.create", staticmethod(fake_create))
 
-    text = await run_cursor_cloud_agent(
+    text, usage = await run_cursor_cloud_agent(
         api_key="crsr_test",
         prompt="Use tools",
         mcp_servers={"norns": {"command": "python", "args": ["-m", "norns.mcp"]}},

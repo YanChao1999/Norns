@@ -159,7 +159,13 @@ async def test_execute_agent_uses_cursor_cloud_agent_for_native_host(monkeypatch
         seen.update(kwargs)
         assert kwargs["api_key"] == "crsr_test"
         assert kwargs["model"] == "auto"
-        return "Cursor handoff text\nDECISION: approve\nREASON: looks good"
+        return "Cursor handoff text\nDECISION: approve\nREASON: looks good", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     text, tools, handoff = await _execute_agent(
@@ -194,7 +200,13 @@ async def test_cursor_confirm_writes_passes_cli_flags(monkeypatch):
 
     async def fake_cursor(**kwargs):
         seen.update(kwargs)
-        return "queued\nDECISION: approve\nREASON: waiting"
+        return "queued\nDECISION: approve\nREASON: waiting", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     await _execute_agent(
@@ -279,7 +291,7 @@ async def test_openai_tool_loop_continues_after_empty_search():
             return script.pop(0)
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
-    content, executed = await _run_openai_tool_loop(
+    content, executed, usage = await _run_openai_tool_loop(
         client,
         model="gpt-4o",
         temperature=0.1,
@@ -296,6 +308,62 @@ async def test_openai_tool_loop_continues_after_empty_search():
     assert "PROJ-1" in content
     assert all(call.get("tools") for call in calls)
     assert len(calls) == 3
+    assert usage["rounds"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_openai_tool_loop_preserves_partial_usage_on_later_failure():
+    search_call = SimpleNamespace(
+        id="call-search",
+        function=SimpleNamespace(name="jira_search", arguments='{"jql": "project = X"}'),
+    )
+
+    class FakeMessage:
+        def __init__(self, content=None, tool_calls=None):
+            self.content = content
+            self.tool_calls = tool_calls
+
+        def model_dump(self, exclude_none=True):
+            del exclude_none
+            return {"role": "assistant", "content": self.content}
+
+    first = SimpleNamespace(
+        choices=[SimpleNamespace(message=FakeMessage(tool_calls=[search_call]))],
+        usage=SimpleNamespace(prompt_tokens=111, completion_tokens=22, total_tokens=133),
+    )
+
+    class FakeCompletions:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def create(self, **kwargs):
+            del kwargs
+            self.calls += 1
+            if self.calls == 1:
+                return first
+            raise RuntimeError("provider down after first round")
+
+    async def search(arguments: dict) -> list:
+        del arguments
+        return []
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    with pytest.raises(RuntimeError) as raised:
+        await _run_openai_tool_loop(
+            client,
+            model="gpt-4o",
+            temperature=0.1,
+            messages=[{"role": "user", "content": "search"}],
+            tools_payload=[{"type": "function", "function": {"name": "jira_search"}}],
+            tool_map={"jira_search": RuntimeTool(name="jira_search", openai_tool={}, execute=search)},
+        )
+    partial = getattr(raised.value, "norns_usage", None)
+    assert isinstance(partial, dict)
+    assert partial["prompt_tokens"] == 111
+    assert partial["completion_tokens"] == 22
+    assert partial["total_tokens"] == 133
+    assert partial["rounds"] == 1
+    assert partial["source"] == "api"
 
 
 @pytest.mark.asyncio
@@ -353,7 +421,13 @@ async def test_execute_agent_includes_work_instruction(monkeypatch):
 
     async def fake_cursor(**kwargs):
         seen.update(kwargs)
-        return "done\nDECISION: approve\nREASON: ok"
+        return "done\nDECISION: approve\nREASON: ok", {
+            "prompt_tokens": 12,
+            "completion_tokens": 4,
+            "total_tokens": 16,
+            "rounds": 1,
+            "source": "cursor",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     await _execute_agent(
@@ -392,7 +466,13 @@ async def test_execute_agent_includes_parallel_split_plan(monkeypatch):
             '{"stage_id":"t2","title":"Code","body":"impl","summary":"c"}]}\n'
             "```\n"
             "DECISION: approve\nREASON: planned"
-        )
+        ), {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     targets = [
@@ -441,7 +521,13 @@ async def test_execute_agent_does_not_send_openai_key_to_cursor(monkeypatch):
     async def fake_cursor(**kwargs):
         called["cursor"] = True
         del kwargs
-        return "should not run"
+        return "should not run", {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "rounds": 1,
+            "source": "unavailable",
+        }
 
     monkeypatch.setattr("backend.app.agents.runner.run_cursor_cloud_agent", fake_cursor)
     text, tools, handoff = await _execute_agent(
@@ -545,7 +631,7 @@ async def test_openai_tool_loop_keeps_going_when_a_tool_raises():
         raise RuntimeError("Jira HTTP 400: Unbounded JQL queries are not allowed here.")
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
-    content, executed = await _run_openai_tool_loop(
+    content, executed, _usage = await _run_openai_tool_loop(
         client,
         model="deepseek-v4-flash",
         temperature=0.1,

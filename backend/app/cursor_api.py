@@ -161,8 +161,11 @@ async def run_cursor_cloud_agent(
     timeout_seconds: float = 1200.0,
     mcp_servers: Mapping[str, Mapping[str, Any]] | None = None,
     workspace_path: str = "",
-) -> str:
-    """Run a Cursor agent for a Norns stage using cursor-sdk only."""
+) -> tuple[str, dict[str, Any]]:
+    """Run a Cursor agent for a Norns stage using cursor-sdk only.
+
+    Returns ``(text, usage)`` where usage is normalized for the token matrix.
+    """
     del base_url, poll_seconds
     key = api_key.strip()
     if not key:
@@ -193,7 +196,7 @@ async def run_cursor_cloud_agent(
         try:
             run = await agent.send(prompt)
             try:
-                await asyncio.wait_for(run.wait(), timeout=timeout_seconds)
+                result = await asyncio.wait_for(run.wait(), timeout=timeout_seconds)
             except TimeoutError:
                 raise RuntimeError(
                     f"Cursor cloud agent did not finish within {int(timeout_seconds)}s. "
@@ -202,13 +205,44 @@ async def run_cursor_cloud_agent(
             text = (await run.text() or "").strip()
             if not text:
                 raise RuntimeError("Cursor SDK agent finished with an empty result")
-            return text
+            usage = await _cursor_usage_after_run(agent, run, result)
+            return text, usage
         finally:
             close = getattr(agent, "close", None) or getattr(agent, "aclose", None)
             if close is not None:
-                result = close()
-                if asyncio.iscoroutine(result):
-                    await result
+                close_result = close()
+                if asyncio.iscoroutine(close_result):
+                    await close_result
+
+
+async def _cursor_usage_after_run(agent: Any, run: Any, wait_result: Any) -> dict[str, Any]:
+    """Best-effort token usage from RunResult.usage, then agent.get_usage()."""
+    from .token_usage import empty_usage, usage_from_cursor
+
+    mapped = usage_from_cursor(getattr(wait_result, "usage", None), rounds=1)
+    if mapped.get("source") == "cursor" and (
+        mapped.get("total_tokens", 0) > 0
+        or mapped.get("prompt_tokens", 0) > 0
+        or mapped.get("completion_tokens", 0) > 0
+    ):
+        return mapped
+
+    get_usage = getattr(agent, "get_usage", None)
+    if get_usage is None:
+        return empty_usage(source="unavailable", rounds=1)
+    try:
+        run_id = str(getattr(run, "id", "") or "").strip()
+        # Cloud agents accept run id; local agents may reject client-minted ids — retry bare.
+        try:
+            agent_usage = await get_usage(run_id=run_id) if run_id else await get_usage()
+        except Exception:  # noqa: BLE001 — usage is best-effort
+            agent_usage = await get_usage()
+        mapped = usage_from_cursor(agent_usage, rounds=1)
+        if mapped.get("source") == "cursor":
+            return mapped
+    except Exception:  # noqa: BLE001
+        return empty_usage(source="unavailable", rounds=1)
+    return empty_usage(source="unavailable", rounds=1)
 
 
 def _sdk_mcp_servers(servers: Mapping[str, Mapping[str, Any]] | None) -> dict[str, Any] | None:
