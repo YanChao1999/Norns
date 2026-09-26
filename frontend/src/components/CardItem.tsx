@@ -1,4 +1,4 @@
-import { MouseEvent } from 'react';
+import { MouseEvent, useEffect, useState } from 'react';
 
 import { cardFaceSummary } from '../cardPreview';
 import { useCardGates } from '../hooks/useCardGates';
@@ -6,7 +6,7 @@ import { useI18n } from '../i18n';
 import { PRACTICE_WAITING_HINT } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { Card } from '../types';
-import { formatElapsed } from '../waitProgress';
+import { formatElapsed, parseApiTime } from '../waitProgress';
 import { WaitLive } from './WaitLive';
 
 interface Props {
@@ -29,12 +29,23 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
   const running = card.status === 'running';
   const confirmWrite = waitingWrites;
   const practice = Boolean(card.practice);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!running) {
+      return;
+    }
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [running, card.updated_at, card.id]);
 
   const stop = (event: MouseEvent) => {
     event.stopPropagation();
   };
 
-  const elapsed = card.updated_at ? formatElapsed(Math.max(0, Date.now() - Date.parse(card.updated_at))) : '0:00';
+  const startMs = parseApiTime(card.updated_at);
+  const elapsed = startMs != null ? formatElapsed(Math.max(0, now - startMs)) : '0:00';
 
   return (
     <div
@@ -72,7 +83,7 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
         <div className="gate-callout is-running">
           <div className="gate-timer">
             <span className="muted">{t('card.elapsed')}</span>
-            <time>{elapsed}</time>
+            <time dateTime={card.updated_at || undefined}>{elapsed}</time>
           </div>
           <span className="muted">{t('card.runningPolarion')}</span>
           <WaitLive startedAt={card.updated_at} />

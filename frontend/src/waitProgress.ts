@@ -29,6 +29,22 @@ const STEPS: Array<{ afterMs: number; title: string; detail: string }> = [
   }
 ];
 
+/**
+ * Parse API timestamps. Backend stores naive UTC (`utc_now`) and FastAPI emits
+ * ``2026-09-26T08:00:00`` without a ``Z``. ``Date.parse`` treats that as *local*
+ * time, so west-of-UTC clients see a future start and Elapsed stays ``0:00``.
+ */
+export function parseApiTime(value: string | null | undefined): number | null {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return null;
+  }
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = !hasZone && raw.includes('T') ? `${raw}Z` : raw;
+  const ms = Date.parse(normalized);
+  return Number.isNaN(ms) ? null : ms;
+}
+
 /** Elapsed clock (tests / debugging). Prefer ``formatCountdown`` in the UI. */
 export function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
