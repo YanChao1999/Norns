@@ -379,7 +379,7 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
               </section>
             ) : null}
 
-            {card?.id ? <TokenUsageMatrix cardId={card.id} /> : null}
+            {card?.id ? <TokenUsageMatrix cardId={card.id} active={card.status === 'running' || card.status === 'waiting_tool_approval'} /> : null}
 
             {expandedStageId ? (
               <JourneyStageDetail stageId={expandedStageId} board={board} runs={runs.filter((run) => run.stage_id === expandedStageId)} />

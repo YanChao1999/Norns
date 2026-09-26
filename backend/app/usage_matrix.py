@@ -13,7 +13,11 @@ from .token_usage import add_usage, empty_usage, usage_from_handoff
 
 
 def _is_finalized(run: AgentRun) -> bool:
-    return str(run.status or "") in {"completed", "failed", "waiting_tool"} or run.completed_at is not None
+    """Match frontend ``isFinalizedRun`` — exclude active / waiting_tool runs."""
+    status = str(run.status or "")
+    if status in {"running", "pending", "waiting_tool"}:
+        return False
+    return status in {"completed", "failed"} or run.completed_at is not None
 
 
 async def card_usage_matrix(session: AsyncSession, card_id: str) -> dict[str, Any] | None:

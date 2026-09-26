@@ -196,3 +196,97 @@ def test_board_usage_matrix_sums_multiple_cards():
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())
+
+
+def test_usage_matrix_excludes_waiting_tool_and_active_runs():
+    client, engine, SessionLocal = _make_client()
+    with client:
+        assert client.post("/api/auth/login", json={"username": "admin", "password": "admin"}).status_code == 200
+        board = client.post("/api/boards", json={"name": "Active usage"}).json()
+        detail = client.get(f"/api/boards/{board['id']}").json()
+        stages = sorted(detail["stages"], key=lambda item: item["order"])
+        card_id = (
+            detail["cards"][0]["id"]
+            if detail.get("cards")
+            else client.get(f"/api/boards/{board['id']}/cards").json()[0]["id"]
+        )
+
+        async def seed():
+            async with SessionLocal() as session:
+                card = await session.get(Card, card_id)
+                assert card is not None
+                session.add(
+                    AgentRun(
+                        card_id=card.id,
+                        stage_id=stages[0]["id"],
+                        status="completed",
+                        inputs={},
+                        tool_calls=[],
+                        model_output="done",
+                        handoff={
+                            "summary": "done",
+                            "usage": {
+                                "prompt_tokens": 100,
+                                "completion_tokens": 20,
+                                "total_tokens": 120,
+                                "rounds": 1,
+                                "source": "api",
+                            },
+                        },
+                    )
+                )
+                session.add(
+                    AgentRun(
+                        card_id=card.id,
+                        stage_id=stages[0]["id"],
+                        status="waiting_tool",
+                        inputs={},
+                        tool_calls=[],
+                        model_output="waiting",
+                        handoff={
+                            "summary": "waiting",
+                            "usage": {
+                                "prompt_tokens": 900,
+                                "completion_tokens": 100,
+                                "total_tokens": 1000,
+                                "rounds": 2,
+                                "source": "api",
+                            },
+                        },
+                    )
+                )
+                session.add(
+                    AgentRun(
+                        card_id=card.id,
+                        stage_id=stages[1]["id"],
+                        status="running",
+                        inputs={},
+                        tool_calls=[],
+                        model_output="",
+                        handoff={
+                            "summary": "running",
+                            "usage": {
+                                "prompt_tokens": 50,
+                                "completion_tokens": 10,
+                                "total_tokens": 60,
+                                "rounds": 1,
+                                "source": "api",
+                            },
+                        },
+                    )
+                )
+                card.status = CardStatus.WAITING_TOOL_APPROVAL
+                await session.commit()
+
+        asyncio.run(seed())
+        usage = client.get(f"/api/cards/{card_id}/usage")
+        assert usage.status_code == 200
+        body = usage.json()
+        assert body["totals"]["total_tokens"] == 120
+        assert body["totals"]["prompt_tokens"] == 100
+        first = next(row for row in body["by_stage"] if row["stage_id"] == stages[0]["id"])
+        assert first["run_count"] == 1
+        assert first["total_tokens"] == 120
+
+    app.dependency_overrides.clear()
+    asyncio.run(engine.dispose())

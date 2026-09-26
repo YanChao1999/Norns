@@ -312,6 +312,61 @@ async def test_openai_tool_loop_continues_after_empty_search():
 
 
 @pytest.mark.asyncio
+async def test_openai_tool_loop_preserves_partial_usage_on_later_failure():
+    search_call = SimpleNamespace(
+        id="call-search",
+        function=SimpleNamespace(name="jira_search", arguments='{"jql": "project = X"}'),
+    )
+
+    class FakeMessage:
+        def __init__(self, content=None, tool_calls=None):
+            self.content = content
+            self.tool_calls = tool_calls
+
+        def model_dump(self, exclude_none=True):
+            del exclude_none
+            return {"role": "assistant", "content": self.content}
+
+    first = SimpleNamespace(
+        choices=[SimpleNamespace(message=FakeMessage(tool_calls=[search_call]))],
+        usage=SimpleNamespace(prompt_tokens=111, completion_tokens=22, total_tokens=133),
+    )
+
+    class FakeCompletions:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def create(self, **kwargs):
+            del kwargs
+            self.calls += 1
+            if self.calls == 1:
+                return first
+            raise RuntimeError("provider down after first round")
+
+    async def search(arguments: dict) -> list:
+        del arguments
+        return []
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    with pytest.raises(RuntimeError) as raised:
+        await _run_openai_tool_loop(
+            client,
+            model="gpt-4o",
+            temperature=0.1,
+            messages=[{"role": "user", "content": "search"}],
+            tools_payload=[{"type": "function", "function": {"name": "jira_search"}}],
+            tool_map={"jira_search": RuntimeTool(name="jira_search", openai_tool={}, execute=search)},
+        )
+    partial = getattr(raised.value, "norns_usage", None)
+    assert isinstance(partial, dict)
+    assert partial["prompt_tokens"] == 111
+    assert partial["completion_tokens"] == 22
+    assert partial["total_tokens"] == 133
+    assert partial["rounds"] == 1
+    assert partial["source"] == "api"
+
+
+@pytest.mark.asyncio
 async def test_openai_tool_loop_pauses_writes_when_confirm_enabled():
     create_call = SimpleNamespace(
         id="call-create",

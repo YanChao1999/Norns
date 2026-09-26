@@ -384,7 +384,7 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         detail = tool_error_text(exc)
         run.status = "failed"
         run.model_output = with_llm_line(f"Stage run stopped: {detail}", identity)
-        run.handoff = {
+        handoff = {
             "summary": run.model_output,
             "llm": identity,
             "recommendation": "reject",
@@ -392,6 +392,12 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
             "links": [],
             "attachment_metadata": [],
         }
+        partial_usage = getattr(exc, "norns_usage", None)
+        run.handoff = attach_usage(
+            handoff,
+            partial_usage if isinstance(partial_usage, dict) else None,
+            identity=identity,
+        )
         run.completed_at = utc_now()
         # Failed model/tool runs block the card (same as human reject), not idle (#31).
         reject_card_state(card)
@@ -632,28 +638,69 @@ async def _run_openai_tool_loop(
     executed_tool_calls: list[dict[str, Any]] = []
     usage = empty_usage(source="unavailable")
     message: Any = None
-    for _round in range(MAX_TOOL_ROUNDS):
-        response = await client.chat.completions.create(
-            model=model,
-            temperature=temperature,
-            messages=messages,
-            tools=tools_payload or None,
-        )
-        usage = add_usage(usage, usage_from_response(response))
-        message = response.choices[0].message
-        tool_calls = getattr(message, "tool_calls", None) or []
-        if not tool_calls:
-            break
-        messages.append(message.model_dump(exclude_none=True))
-        pending_writes: list[dict[str, Any]] = []
-        for tool_call in tool_calls:
-            name = tool_call.function.name
-            try:
-                parsed = json.loads(tool_call.function.arguments or "{}")
-                arguments = parsed if isinstance(parsed, dict) else {}
-            except json.JSONDecodeError:
-                result = {"error": "invalid JSON in tool arguments"}
-                executed_tool_calls.append({"round": _round + 1, "name": name, "arguments": {}, "result": result})
+    try:
+        for _round in range(MAX_TOOL_ROUNDS):
+            response = await client.chat.completions.create(
+                model=model,
+                temperature=temperature,
+                messages=messages,
+                tools=tools_payload or None,
+            )
+            usage = add_usage(usage, usage_from_response(response))
+            message = response.choices[0].message
+            tool_calls = getattr(message, "tool_calls", None) or []
+            if not tool_calls:
+                break
+            messages.append(message.model_dump(exclude_none=True))
+            pending_writes: list[dict[str, Any]] = []
+            for tool_call in tool_calls:
+                name = tool_call.function.name
+                try:
+                    parsed = json.loads(tool_call.function.arguments or "{}")
+                    arguments = parsed if isinstance(parsed, dict) else {}
+                except json.JSONDecodeError:
+                    result = {"error": "invalid JSON in tool arguments"}
+                    executed_tool_calls.append({"round": _round + 1, "name": name, "arguments": {}, "result": result})
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": name,
+                            "content": json.dumps(result, default=str),
+                        }
+                    )
+                    continue
+                if confirm_writes and is_write_tool(name):
+                    pending_writes.append({"name": name, "arguments": arguments})
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": name,
+                            "content": json.dumps(
+                                {
+                                    "status": "pending_approval",
+                                    "message": "Write queued for Control Room confirmation.",
+                                }
+                            ),
+                        }
+                    )
+                    continue
+                runtime_tool = tool_map.get(name)
+                if runtime_tool is None:
+                    result: Any = {"error": f"Unknown or disallowed tool: {name}"}
+                else:
+                    injected = loop_tool_error_if_injected(name)
+                    if injected is not None:
+                        result = injected
+                    else:
+                        try:
+                            result = await runtime_tool.execute(arguments)
+                        except Exception as exc:
+                            result = {"error": tool_error_text(exc)}
+                executed_tool_calls.append(
+                    {"round": _round + 1, "name": name, "arguments": arguments, "result": result}
+                )
                 messages.append(
                     {
                         "role": "tool",
@@ -662,55 +709,26 @@ async def _run_openai_tool_loop(
                         "content": json.dumps(result, default=str),
                     }
                 )
-                continue
-            if confirm_writes and is_write_tool(name):
-                pending_writes.append({"name": name, "arguments": arguments})
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "name": name,
-                        "content": json.dumps(
-                            {
-                                "status": "pending_approval",
-                                "message": "Write queued for Control Room confirmation.",
-                            }
-                        ),
-                    }
-                )
-                continue
-            runtime_tool = tool_map.get(name)
-            if runtime_tool is None:
-                result: Any = {"error": f"Unknown or disallowed tool: {name}"}
-            else:
-                injected = loop_tool_error_if_injected(name)
-                if injected is not None:
-                    result = injected
-                else:
-                    try:
-                        result = await runtime_tool.execute(arguments)
-                    except Exception as exc:
-                        result = {"error": tool_error_text(exc)}
-            executed_tool_calls.append({"round": _round + 1, "name": name, "arguments": arguments, "result": result})
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "name": name,
-                    "content": json.dumps(result, default=str),
-                }
-            )
-        if pending_writes:
-            raise WriteConfirmationRequired(pending_writes, executed_tool_calls, usage=usage)
-    else:
-        response = await client.chat.completions.create(model=model, temperature=temperature, messages=messages)
-        usage = add_usage(usage, usage_from_response(response))
-        message = response.choices[0].message
+            if pending_writes:
+                raise WriteConfirmationRequired(pending_writes, executed_tool_calls, usage=usage)
+        else:
+            response = await client.chat.completions.create(model=model, temperature=temperature, messages=messages)
+            usage = add_usage(usage, usage_from_response(response))
+            message = response.choices[0].message
 
-    content = (getattr(message, "content", None) if message is not None else None) or (
-        "No textual response returned by the model."
-    )
-    return content, executed_tool_calls, usage
+        content = (getattr(message, "content", None) if message is not None else None) or (
+            "No textual response returned by the model."
+        )
+        return content, executed_tool_calls, usage
+    except WriteConfirmationRequired:
+        raise
+    except Exception as exc:
+        # Preserve tokens already billed in earlier rounds for the failure handoff.
+        try:
+            setattr(exc, "norns_usage", usage)
+        except Exception:  # pragma: no cover - immutable exception types
+            pass
+        raise
 
 
 def parse_agent_recommendation(model_output: str) -> tuple[str | None, str | None]:

@@ -62,13 +62,13 @@ function promptShare(prompt: number, total: number): string {
   return `${Math.round((prompt / total) * 100)}%`;
 }
 
-export function TokenUsageDashboard({ boardId }: { boardId: string }) {
+export function TokenUsageDashboard({ boardId, active = false }: { boardId: string; active?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['board-usage', boardId],
     queryFn: () => apiClient.get<BoardUsageMatrix>(`/boards/${boardId}/usage`),
-    refetchInterval: 8000
+    refetchInterval: active ? 8000 : false
   });
 
   if (isLoading) {

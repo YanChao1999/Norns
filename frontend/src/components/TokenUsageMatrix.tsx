@@ -74,13 +74,13 @@ function sourceNote(source: string): string {
   return '';
 }
 
-export function TokenUsageMatrix({ cardId }: { cardId: string }) {
+export function TokenUsageMatrix({ cardId, active = false }: { cardId: string; active?: boolean }) {
   const { t } = useI18n();
   const [openStageId, setOpenStageId] = useState<string | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ['usage', cardId],
     queryFn: () => apiClient.get<CardUsageMatrix>(`/cards/${cardId}/usage`),
-    refetchInterval: 4000
+    refetchInterval: active ? 4000 : false
   });
 
   if (isLoading) {
