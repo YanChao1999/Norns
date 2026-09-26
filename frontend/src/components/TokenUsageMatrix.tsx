@@ -157,7 +157,7 @@ export function TokenUsageMatrix({ cardId }: { cardId: string }) {
                           </td>
                           <td className="muted">
                             {run.model || row.model || '—'}
-                            {sourceNote(run.source, t)}
+                            {sourceNote(run.source)}
                           </td>
                           <td>{run.rounds || '—'}</td>
                           <td>{formatTokens(run.prompt_tokens)}</td>
