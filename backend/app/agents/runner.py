@@ -725,10 +725,8 @@ async def _run_openai_tool_loop(
         raise
     except Exception as exc:
         # Preserve tokens already billed in earlier rounds for the failure handoff.
-        try:
-            setattr(exc, "norns_usage", usage)
-        except Exception:  # pragma: no cover - immutable exception types
-            pass
+        with contextlib.suppress(Exception):
+            exc.norns_usage = usage
         raise
 
 
