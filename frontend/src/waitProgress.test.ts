@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_CURSOR_TIMEOUT_MS, formatCountdown, formatElapsed, waitCopy } from './waitProgress';
+import { DEFAULT_CURSOR_TIMEOUT_MS, formatCountdown, formatElapsed, parseApiTime, waitCopy } from './waitProgress';
 
 describe('waitProgress', () => {
   it('formats elapsed as m:ss', () => {
@@ -8,6 +8,15 @@ describe('waitProgress', () => {
     expect(formatElapsed(12_000)).toBe('0:12');
     expect(formatElapsed(75_000)).toBe('1:15');
     expect(formatElapsed(28_810_000)).toBe('8:00:10');
+  });
+
+  it('treats naive API timestamps as UTC', () => {
+    const naive = '2026-09-26T12:00:00';
+    const withZ = '2026-09-26T12:00:00Z';
+    expect(parseApiTime(naive)).toBe(Date.parse(withZ));
+    expect(parseApiTime(withZ)).toBe(Date.parse(withZ));
+    expect(parseApiTime('2026-09-26T12:00:00+08:00')).toBe(Date.parse('2026-09-26T12:00:00+08:00'));
+    expect(parseApiTime('')).toBeNull();
   });
 
   it('counts down remaining time to 00:00:00', () => {

@@ -72,6 +72,8 @@ class CardRead(BaseModel):
     recommendation: str | None = None
     recommendation_reason: str | None = None
     practice: bool = False
+    created_at: Any | None = None
+    updated_at: Any | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -91,6 +93,8 @@ class CardRead(BaseModel):
             "recommendation": recommendation,
             "recommendation_reason": reason,
             "practice": latest_practice(data),
+            "created_at": data.created_at,
+            "updated_at": data.updated_at,
         }
 
 

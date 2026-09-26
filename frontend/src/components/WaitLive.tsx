@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
-import { DEFAULT_CURSOR_TIMEOUT_MS, waitCopy } from '../waitProgress';
+import { DEFAULT_CURSOR_TIMEOUT_MS, parseApiTime, waitCopy } from '../waitProgress';
 
 interface Props {
   startedAt?: string | null;
@@ -29,10 +29,7 @@ function useCursorTimeoutMs(overrideMs?: number): number {
 export function WaitLive({ startedAt, variant = 'card', timeoutMs }: Props) {
   const limitMs = useCursorTimeoutMs(timeoutMs);
   const [now, setNow] = useState(() => Date.now());
-  const startMs = useMemo(() => {
-    const parsed = startedAt ? Date.parse(startedAt) : Number.NaN;
-    return Number.isNaN(parsed) ? Date.now() : parsed;
-  }, [startedAt]);
+  const startMs = useMemo(() => parseApiTime(startedAt) ?? Date.now(), [startedAt]);
 
   useEffect(() => {
     setNow(Date.now());

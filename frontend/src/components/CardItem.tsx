@@ -1,4 +1,4 @@
-import { MouseEvent } from 'react';
+import { MouseEvent, useEffect, useRef, useState } from 'react';
 
 import { cardFaceSummary } from '../cardPreview';
 import { useCardGates } from '../hooks/useCardGates';
@@ -6,7 +6,7 @@ import { useI18n } from '../i18n';
 import { PRACTICE_WAITING_HINT } from '../runHints';
 import { STATUS_LABEL } from '../status';
 import { Card } from '../types';
-import { formatElapsed } from '../waitProgress';
+import { formatElapsed, parseApiTime } from '../waitProgress';
 import { WaitLive } from './WaitLive';
 
 interface Props {
@@ -29,12 +29,31 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
   const running = card.status === 'running';
   const confirmWrite = waitingWrites;
   const practice = Boolean(card.practice);
+  const [now, setNow] = useState(() => Date.now());
+  const startedAtMs = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!running) {
+      startedAtMs.current = null;
+      return;
+    }
+    if (startedAtMs.current == null) {
+      const parsed = parseApiTime(card.updated_at);
+      // Prefer API time when sane; otherwise freeze "now" so the clock still ticks.
+      startedAtMs.current = parsed != null && parsed <= Date.now() + 2_000 ? parsed : Date.now();
+    }
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [running, card.id, card.updated_at]);
 
   const stop = (event: MouseEvent) => {
     event.stopPropagation();
   };
 
-  const elapsed = card.updated_at ? formatElapsed(Math.max(0, Date.now() - Date.parse(card.updated_at))) : '0:00';
+  const startMs = startedAtMs.current ?? parseApiTime(card.updated_at);
+  const elapsed = startMs != null ? formatElapsed(Math.max(0, now - startMs)) : '0:00';
+  const waitStartedAt = startMs != null ? new Date(startMs).toISOString() : (card.updated_at ?? new Date().toISOString());
 
   return (
     <div
@@ -72,10 +91,10 @@ export function CardItem({ card, isOpen, isParallelLane = false, locked = false,
         <div className="gate-callout is-running">
           <div className="gate-timer">
             <span className="muted">{t('card.elapsed')}</span>
-            <time>{elapsed}</time>
+            <time dateTime={waitStartedAt}>{elapsed}</time>
           </div>
           <span className="muted">{t('card.runningPolarion')}</span>
-          <WaitLive startedAt={card.updated_at} />
+          <WaitLive startedAt={waitStartedAt} />
         </div>
       ) : null}
 
