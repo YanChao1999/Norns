@@ -14,6 +14,7 @@ from ..orchestrator.auto_start import maybe_auto_start_card
 from ..orchestrator.enqueue import EnqueueError, enqueue_stage_run
 from ..orchestrator.gates import approve_card, approve_pending_writes, reject_card, reject_pending_writes
 from ..orchestrator.state_machine import CardStatus, start_card_run
+from ..usage_matrix import card_usage_matrix
 from .auth import SessionUser, get_current_user
 
 router = APIRouter(tags=["cards"], dependencies=[Depends(get_current_user)])
@@ -186,6 +187,15 @@ async def list_runs(card_id: str, session: Annotated[AsyncSession, Depends(get_s
         select(AgentRun).where(AgentRun.card_id == card_id).order_by(AgentRun.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+@router.get("/cards/{card_id}/usage")
+async def card_usage(card_id: str, session: Annotated[AsyncSession, Depends(get_session)]) -> dict[str, Any]:
+    """Token usage matrix for one task (card) across stage agents."""
+    matrix = await card_usage_matrix(session, card_id)
+    if matrix is None:
+        raise HTTPException(status_code=404, detail="Card not found")
+    return matrix
 
 
 @router.post("/cards/{card_id}/run", response_model=dict[str, str], status_code=status.HTTP_202_ACCEPTED)
