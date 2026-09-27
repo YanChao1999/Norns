@@ -10,6 +10,7 @@ from ..connector_config import llm_is_configured
 from ..database import get_session
 from ..models import Connector, Stage
 from ..workspace import resolve_workspace, serialize_workspace
+from .abom import router as abom_router
 from .auth import get_current_user
 from .auth import router as auth_router
 from .boards import router as boards_router
@@ -24,6 +25,7 @@ api_router.include_router(boards_router)
 api_router.include_router(cards_router)
 api_router.include_router(connectors_router)
 api_router.include_router(plugins_router)
+api_router.include_router(abom_router)
 api_router.include_router(preferences_router)
 
 
