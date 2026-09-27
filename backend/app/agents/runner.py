@@ -39,6 +39,7 @@ from ..orchestrator.state_machine import (
     wait_for_tool_approval,
 )
 from ..plantuml.renderer import render_plantuml
+from ..plugins.abom_plugin import discover_linked_skills, skills_prompt_block
 from ..plugins.base import PluginContext
 from ..plugins.catalog import cursor_mcp_servers
 from ..plugins.tool_policy import is_write_tool
@@ -49,6 +50,7 @@ from ..token_usage import (
     attach_usage,
     empty_input_breakdown,
     empty_usage,
+    estimate_tokens,
     summarize_round_input,
     usage_from_response,
     with_input_breakdown,
@@ -478,6 +480,11 @@ async def _execute_agent(
 
     config = stage.agent_config
     system_prompt = config.system_prompt if config else "You are a focused orchestration stage agent."
+    workspace_path = ""
+    if workspace and getattr(workspace, "path", ""):
+        workspace_path = str(workspace.path or "")
+    linked_skills = discover_linked_skills(workspace_path)
+    skills_block = skills_prompt_block(linked_skills)
     stage_model = config.model if config else resolved_model
     model = resolve_stage_model(
         provider=provider,
@@ -585,7 +592,8 @@ async def _execute_agent(
         )
         prompt = (
             f"{system_prompt}\n\n"
-            "You are running as a Norns stage agent. Produce a clear textual handoff for the next column. "
+            + (f"{skills_block}\n\n" if skills_block else "")
+            + "You are running as a Norns stage agent. Produce a clear textual handoff for the next column. "
             "Do not modify repositories unless the task explicitly requires it."
             f"{tool_hint}\n\n"
             f"{user_content}"
@@ -604,6 +612,16 @@ async def _execute_agent(
         content = with_llm_line(content, identity)
         handoff = await _build_handoff(content)
         handoff["llm"] = identity
+        # Reference estimate: Cursor does not expose per-bucket usage.
+        if skills_block:
+            breakdown = empty_input_breakdown()
+            breakdown["skills"] = estimate_tokens(skills_block)
+            breakdown["system"] = estimate_tokens(system_prompt)
+            breakdown["task"] = estimate_tokens(user_content)
+            breakdown["estimated_prompt"] = breakdown["skills"] + breakdown["system"] + breakdown["task"]
+            cursor_usage = with_input_breakdown(cursor_usage, breakdown)
+        if linked_skills:
+            handoff["skills"] = [{"name": skill.name, "path": skill.path} for skill in linked_skills]
         handoff = attach_usage(handoff, cursor_usage, identity=identity)
         return content, [], handoff
 
@@ -613,8 +631,10 @@ async def _execute_agent(
     client = create_async_openai(api_key=resolved_key.strip(), base_url=resolved_url)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
     ]
+    if skills_block:
+        messages.append({"role": "system", "content": skills_block})
+    messages.append({"role": "user", "content": user_content})
     try:
         content, executed_tool_calls, usage = await _run_openai_tool_loop(
             client,
@@ -631,6 +651,8 @@ async def _execute_agent(
     content = with_llm_line(content, identity)
     handoff = await _build_handoff(content)
     handoff["llm"] = identity
+    if linked_skills:
+        handoff["skills"] = [{"name": skill.name, "path": skill.path} for skill in linked_skills]
     handoff = attach_usage(handoff, usage, identity=identity)
     return content, executed_tool_calls, handoff
 

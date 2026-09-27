@@ -60,7 +60,7 @@ uv sync --extra dev && uv run pre-commit install   # format, lint, tests on comm
 - Encrypted connectors (OpenAI, Cursor, DeepSeek, GitHub, Jira, Polarion)
 - Live Cursor model catalog for Agent selection; wait UI counts down to Cursor timeout
 - **System proxy** toggle in Settings (honor Clash/corporate `HTTP_PROXY` / `ALL_PROXY`, or call models directly)
-- Per-column tool allowlists (Norns, sandbox, GitHub, Jira, Polarion, extra MCP)
+- Per-column tool allowlists (Norns, sandbox, abom skills/MCP recipes, GitHub, Jira, Polarion, extra MCP)
 - Directory or hardened Docker sandbox copies under `~/.norns/sandboxes/`
 - SQLite + in-process queue locally; PostgreSQL + Redis/ARQ when you need them
 

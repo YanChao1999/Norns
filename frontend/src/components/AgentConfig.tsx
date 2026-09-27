@@ -5,7 +5,7 @@ import { apiClient } from '../api/client';
 import { Stage } from '../types';
 import { Dialog } from './Dialog';
 
-const FALLBACK_PLUGINS = ['norns', 'sandbox', 'github', 'jira', 'polarion'];
+const FALLBACK_PLUGINS = ['norns', 'sandbox', 'abom', 'github', 'jira', 'polarion'];
 
 interface PluginInfo {
   name: string;
@@ -272,9 +272,12 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
       <div className="field">
         <span>Plugins / MCP — empty allowlist grants none</span>
         <p className="muted">
-          Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build: run commands in the jail, read/write the copy), github, jira,
-          polarion, or an MCP connector from Settings. Cursor stages receive these as MCP servers; OpenAI/DeepSeek stages use the same tools as functions.
-          Confirm writes is per stage on Machine, not bound to column names.
+          Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build), abom (skills / prompts / MCP recipes from{' '}
+          <a href="https://yanchao1999.github.io/abom/" target="_blank" rel="noreferrer">
+            abom
+          </a>
+          ), github, jira, polarion, or an MCP connector from Settings. Cursor stages receive these as MCP servers; OpenAI/DeepSeek stages use the same tools as
+          functions. Confirm writes is per stage on Machine, not bound to column names.
         </p>
         <div className="tool-row">
           {availableTools.map((tool) => {
@@ -293,17 +296,129 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
                   }
                 />
                 {plugin?.title || tool}
-                {plugin && !plugin.available ? ' (no connector)' : ''}
+                {plugin && !plugin.available ? (tool === 'abom' ? ' (install abom CLI)' : ' (no connector)') : ''}
               </label>
             );
           })}
         </div>
       </div>
 
+      <AbomMaterials
+        workspacePath={form.workspace_path || boardWorkspace?.path || ''}
+        abomEnabled={form.tool_allowlist.includes('abom')}
+        abomAvailable={Boolean(plugins.find((item) => item.name === 'abom')?.available)}
+      />
+
       <button type="button" className="btn btn-primary" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
         {mutation.isPending ? 'Saving…' : 'Save config'}
       </button>
     </Dialog>
+  );
+}
+
+function AbomMaterials({ workspacePath, abomEnabled, abomAvailable }: { workspacePath: string; abomEnabled: boolean; abomAvailable: boolean }) {
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const { data: status } = useQuery({
+    queryKey: ['abom-status'],
+    queryFn: () => apiClient.get<{ installed: boolean; homepage: string; install: string }>('/abom/status'),
+    staleTime: 60_000
+  });
+
+  const { data: recipes, refetch: refetchRecipes } = useQuery({
+    queryKey: ['abom-recipes', query],
+    enabled: abomAvailable,
+    queryFn: () => apiClient.get<{ recipes: string[]; count: number }>(`/abom/recipes${query ? `?query=${encodeURIComponent(query)}` : ''}`)
+  });
+
+  const { data: skills, refetch: refetchSkills } = useQuery({
+    queryKey: ['abom-skills', workspacePath],
+    enabled: Boolean(workspacePath),
+    queryFn: () =>
+      apiClient.get<{ skills: Array<{ name: string; description: string; path: string }>; count: number }>(
+        `/abom/skills?workspace_path=${encodeURIComponent(workspacePath)}`
+      )
+  });
+
+  const installAndLink = async (line: string) => {
+    const name = line.split(/\s+/)[0];
+    if (!name) {
+      return;
+    }
+    setBusy(name);
+    setMessage(null);
+    try {
+      await apiClient.post('/abom/install', { name });
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      if (!/already installed/i.test(text)) {
+        setMessage(text);
+        setBusy(null);
+        return;
+      }
+    }
+    if (!workspacePath) {
+      setMessage(`Installed ${name}. Bind a board git folder to link skills into .abom/.`);
+      setBusy(null);
+      void refetchRecipes();
+      return;
+    }
+    try {
+      const linked = await apiClient.post<{ text: string }>('/abom/link', { name, target_repo: workspacePath });
+      setMessage(linked.text);
+      void refetchSkills();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+    setBusy(null);
+    void refetchRecipes();
+  };
+
+  return (
+    <div className="field abom-materials">
+      <span>abom skills &amp; MCP recipes</span>
+      <p className="muted">
+        Catalog from{' '}
+        <a href={status?.homepage || 'https://yanchao1999.github.io/abom/'} target="_blank" rel="noreferrer">
+          abom
+        </a>
+        . Enable the <strong>abom</strong> plugin so agents can install/link materials. Linked skills under the board folder&apos;s <code>.abom/</code> load
+        into the stage prompt automatically.
+      </p>
+      {!abomAvailable ? (
+        <p className="muted">CLI missing. {status?.install || 'pip install git+https://github.com/YanChao1999/abom.git'} then restart Norns.</p>
+      ) : null}
+      {!abomEnabled ? <p className="muted">Tip: check abom in Plugins above so the agent can call recipe tools mid-run.</p> : null}
+      {workspacePath ? (
+        <p className="muted">
+          Linked skills for <code>{workspacePath}</code>: {skills?.count ? skills.skills.map((item) => item.name).join(', ') : 'none yet'}
+        </p>
+      ) : (
+        <p className="muted">Bind a board git folder to link skills into that checkout.</p>
+      )}
+      <label className="field">
+        Filter recipes
+        <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="skill, mcp, prompt…" />
+      </label>
+      {abomAvailable ? (
+        <ul className="abom-recipe-list">
+          {(recipes?.recipes || []).slice(0, 12).map((line) => {
+            const name = line.split(/\s+/)[0];
+            return (
+              <li key={line}>
+                <span>{line}</span>
+                <button type="button" className="btn btn-ghost btn-compact" disabled={busy === name} onClick={() => void installAndLink(line)}>
+                  {busy === name ? '…' : 'Install + link'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {message ? <p className="muted">{message}</p> : null}
+    </div>
   );
 }
 

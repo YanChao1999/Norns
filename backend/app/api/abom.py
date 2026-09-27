@@ -1,0 +1,111 @@
+"""HTTP API for abom recipe catalog / install / link (Agent Bill of Materials)."""
+
+from __future__ import annotations
+
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from ..plugins.abom_plugin import abom_installed, discover_linked_skills
+from .auth import get_current_user
+
+router = APIRouter(prefix="/abom", tags=["abom"], dependencies=[Depends(get_current_user)])
+
+
+class RecipeAction(BaseModel):
+    name: str = Field(min_length=1)
+
+
+class LinkAction(BaseModel):
+    name: str = Field(min_length=1)
+    target_repo: str = Field(min_length=1)
+    link_name: str | None = None
+
+
+def _cli():
+    try:
+        from abom import cli as abom_cli
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "abom is not installed. pip install git+https://github.com/YanChao1999/abom.git "
+                "(https://yanchao1999.github.io/abom/)"
+            ),
+        ) from exc
+    return abom_cli
+
+
+def _run(call, *args, **kwargs) -> str:
+    cli = _cli()
+    try:
+        result = call(*args, **kwargs)
+    except Exception as exc:
+        error_type = getattr(cli, "AbomError", RuntimeError)
+        if isinstance(exc, error_type):
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if isinstance(result, list):
+        return "\n".join(str(item) for item in result)
+    return str(result)
+
+
+@router.get("/status")
+async def abom_status() -> dict[str, Any]:
+    return {
+        "installed": abom_installed(),
+        "homepage": "https://yanchao1999.github.io/abom/",
+        "install": "pip install git+https://github.com/YanChao1999/abom.git",
+    }
+
+
+@router.get("/recipes")
+async def list_recipes(query: Annotated[str | None, Query()] = None) -> dict[str, Any]:
+    cli = _cli()
+    lines = cli.cmd_recipes(query)
+    return {"recipes": lines, "count": len(lines)}
+
+
+@router.get("/recipes/{name}")
+async def show_recipe(name: str) -> dict[str, Any]:
+    return {"text": _run(_cli().cmd_show, name)}
+
+
+@router.post("/check")
+async def check_recipe(payload: RecipeAction) -> dict[str, Any]:
+    return {"text": _run(_cli().cmd_check, payload.name.strip())}
+
+
+@router.post("/install")
+async def install_recipe(payload: RecipeAction) -> dict[str, Any]:
+    return {"text": _run(_cli().cmd_install_recipe, payload.name.strip())}
+
+
+@router.get("/installed")
+async def list_installed(query: Annotated[str | None, Query()] = None) -> dict[str, Any]:
+    cli = _cli()
+    names = cli.cmd_search(query)
+    return {"installed": names, "count": len(names)}
+
+
+@router.post("/link")
+async def link_tool(payload: LinkAction) -> dict[str, Any]:
+    return {
+        "text": _run(
+            _cli().cmd_link,
+            payload.name.strip(),
+            payload.target_repo.strip(),
+            payload.link_name.strip() if payload.link_name else None,
+        )
+    }
+
+
+@router.get("/skills")
+async def list_linked_skills(workspace_path: Annotated[str, Query()]) -> dict[str, Any]:
+    skills = discover_linked_skills(workspace_path)
+    return {
+        "workspace_path": workspace_path,
+        "skills": [{"name": skill.name, "description": skill.description, "path": skill.path} for skill in skills],
+        "count": len(skills),
+    }
