@@ -4,12 +4,14 @@ from pathlib import Path
 
 from backend.app.plugins.abom_plugin import (
     AbomPlugin,
+    discover_linked_mcps,
     discover_linked_skills,
+    mcp_launch_for_material,
     parse_skill_markdown,
     skills_prompt_block,
 )
 from backend.app.plugins.base import PluginContext
-from backend.app.plugins.catalog import load_plugin_catalog
+from backend.app.plugins.catalog import cursor_mcp_servers, load_plugin_catalog
 from backend.app.token_usage import summarize_round_input
 
 
@@ -40,6 +42,24 @@ def test_parse_and_discover_linked_skills(tmp_path: Path):
 
     parsed = parse_skill_markdown("# bare\n", fallback_name="bare")
     assert parsed.name == "bare"
+
+
+def test_discover_linked_mcps_and_cursor_attach(tmp_path: Path):
+    mcp_dir = tmp_path / ".abom" / "demo-mcp"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "server.py").write_text("print('mcp')\n", encoding="utf-8")
+    linked = discover_linked_mcps(str(tmp_path))
+    assert len(linked) == 1
+    assert linked[0].name == "demo-mcp"
+    assert linked[0].args[-1].endswith("server.py")
+    launch = mcp_launch_for_material("demo-mcp", mcp_dir)
+    assert launch is not None
+    servers = cursor_mcp_servers(["abom"], [], workspace_path=str(tmp_path))
+    assert "abom_demo_mcp" in servers
+    assert servers["abom_demo_mcp"]["command"] == launch.command
+    assert servers["abom_demo_mcp"]["args"] == launch.args
+    # Without abom on the allowlist, linked MCPs stay detached.
+    assert "abom_demo_mcp" not in cursor_mcp_servers(["norns"], [], workspace_path=str(tmp_path))
 
 
 def test_input_breakdown_counts_skills_system_message():

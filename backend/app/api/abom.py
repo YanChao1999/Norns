@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from ..plugins.abom_plugin import abom_installed, discover_linked_skills
+from ..plugins.abom_plugin import abom_installed, discover_linked_mcps, discover_linked_skills
 from .auth import get_current_user
 
 router = APIRouter(prefix="/abom", tags=["abom"], dependencies=[Depends(get_current_user)])
@@ -104,8 +104,11 @@ async def link_tool(payload: LinkAction) -> dict[str, Any]:
 @router.get("/skills")
 async def list_linked_skills(workspace_path: Annotated[str, Query()]) -> dict[str, Any]:
     skills = discover_linked_skills(workspace_path)
+    mcps = discover_linked_mcps(workspace_path)
     return {
         "workspace_path": workspace_path,
         "skills": [{"name": skill.name, "description": skill.description, "path": skill.path} for skill in skills],
+        "mcps": [{"name": item.name, "command": item.command, "args": item.args, "path": item.path} for item in mcps],
         "count": len(skills),
+        "mcp_count": len(mcps),
     }

@@ -264,7 +264,10 @@ async def _run_stage(session: AsyncSession, card_id: str, stage_id: str, run_id:
         context=plugin_context,
     )
     mcp_preview = cursor_mcp_servers(
-        allowlist, connectors, confirm_writes=bool(getattr(stage, "confirm_writes", False))
+        allowlist,
+        connectors,
+        confirm_writes=bool(getattr(stage, "confirm_writes", False)),
+        workspace_path=source_workspace.path or None,
     )
     run.inputs = {
         **dict(run.inputs or {}),
@@ -483,7 +486,15 @@ async def _execute_agent(
     workspace_path = ""
     if workspace and getattr(workspace, "path", ""):
         workspace_path = str(workspace.path or "")
-    linked_skills = discover_linked_skills(workspace_path)
+    # Prefer the board/source checkout for .abom links — sandbox copies may drop symlinks.
+    materials_root = ""
+    if sandbox_handle is not None and getattr(sandbox_handle, "source_path", ""):
+        materials_root = str(sandbox_handle.source_path or "").strip()
+    if not materials_root and config and getattr(config, "workspace_path", ""):
+        materials_root = str(config.workspace_path or "").strip()
+    if not materials_root:
+        materials_root = workspace_path
+    linked_skills = discover_linked_skills(materials_root)
     skills_block = skills_prompt_block(linked_skills)
     stage_model = config.model if config else resolved_model
     model = resolve_stage_model(
@@ -573,6 +584,7 @@ async def _execute_agent(
             extra_env=extra_env or None,
             cwd=getattr(workspace, "path", "") or None,
             confirm_writes=confirm_writes,
+            workspace_path=materials_root or None,
         )
         attached = ", ".join(mcp_servers) if mcp_servers else "none"
         tool_hint = (

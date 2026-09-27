@@ -16,7 +16,9 @@ system prompt automatically.
 
 from __future__ import annotations
 
+import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,25 @@ from .base import Plugin, PluginContext, ToolSpec
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
 _SKILLS_HEADER = "## Linked agent skills (abom)"
+_MCP_MARKERS = ("package.json", "pyproject.toml", "index.ts", "index.js", "server.py", "main.py")
+
+
+def _abom_links_dir(workspace_path: str | None) -> Path | None:
+    root = Path(str(workspace_path or "").strip()).expanduser()
+    if not str(workspace_path or "").strip() or not root.is_dir():
+        return None
+    links = root / ".abom"
+    return links if links.is_dir() else None
+
+
+def _iter_abom_entries(workspace_path: str | None):
+    links = _abom_links_dir(workspace_path)
+    if links is None:
+        return
+    for entry in sorted(links.iterdir(), key=lambda item: item.name.lower()):
+        if entry.name.startswith("."):
+            continue
+        yield entry
 
 
 def abom_installed() -> bool:
@@ -89,30 +110,26 @@ def parse_skill_markdown(text: str, *, fallback_name: str) -> LinkedSkill:
     return LinkedSkill(name=name, description=description, body=body, path="")
 
 
+def _resolve_material_dir(entry: Path) -> Path | None:
+    """Resolve a ``.abom`` link entry to a material directory."""
+    if entry.is_dir():
+        return entry
+    if entry.is_symlink():
+        target = entry.resolve(strict=False)
+        return target if target.is_dir() else None
+    return None
+
+
 def discover_linked_skills(workspace_path: str | None) -> list[LinkedSkill]:
     """Find skills linked into ``{workspace}/.abom/*/SKILL.md`` via ``abom link``."""
-    root = Path(str(workspace_path or "").strip()).expanduser()
-    if not str(workspace_path or "").strip() or not root.is_dir():
-        return []
-    links = root / ".abom"
-    if not links.is_dir():
-        return []
     skills: list[LinkedSkill] = []
-    for entry in sorted(links.iterdir(), key=lambda item: item.name.lower()):
-        if entry.name.startswith("."):
+    for entry in _iter_abom_entries(workspace_path):
+        material = _resolve_material_dir(entry)
+        if material is None:
             continue
-        skill_md = entry / "SKILL.md" if entry.is_dir() else None
-        if skill_md is None or not skill_md.is_file():
-            # Linked path may point directly at a skill directory via symlink.
-            if entry.is_symlink():
-                target = entry.resolve(strict=False)
-                candidate = target / "SKILL.md" if target.is_dir() else None
-                if candidate and candidate.is_file():
-                    skill_md = candidate
-                else:
-                    continue
-            else:
-                continue
+        skill_md = material / "SKILL.md"
+        if not skill_md.is_file():
+            continue
         try:
             text = skill_md.read_text(encoding="utf-8")
         except OSError:
@@ -121,6 +138,78 @@ def discover_linked_skills(workspace_path: str | None) -> list[LinkedSkill]:
         skill.path = str(skill_md)
         skills.append(skill)
     return skills
+
+
+@dataclass(slots=True)
+class LinkedMcp:
+    name: str
+    command: str
+    args: list[str]
+    path: str
+
+
+def mcp_launch_for_material(name: str, material: Path) -> LinkedMcp | None:
+    """Infer a stdio MCP launch command from an abom mcp material directory."""
+    if not material.is_dir():
+        return None
+    if not any((material / marker).is_file() for marker in _MCP_MARKERS):
+        return None
+    for script in ("server.py", "main.py"):
+        candidate = material / script
+        if candidate.is_file():
+            return LinkedMcp(name=name, command=sys.executable, args=[str(candidate)], path=str(material))
+    package_json = material / "package.json"
+    if package_json.is_file():
+        try:
+            data = json.loads(package_json.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            data = {}
+        if isinstance(data, dict):
+            bin_field = data.get("bin")
+            if isinstance(bin_field, str) and bin_field.strip():
+                return LinkedMcp(
+                    name=name,
+                    command="node",
+                    args=[str((material / bin_field).resolve())],
+                    path=str(material),
+                )
+            if isinstance(bin_field, dict):
+                for value in bin_field.values():
+                    if isinstance(value, str) and value.strip():
+                        return LinkedMcp(
+                            name=name,
+                            command="node",
+                            args=[str((material / value).resolve())],
+                            path=str(material),
+                        )
+        for script in ("index.js", "dist/index.js", "build/index.js"):
+            candidate = material / script
+            if candidate.is_file():
+                return LinkedMcp(name=name, command="node", args=[str(candidate)], path=str(material))
+        if (material / "index.ts").is_file():
+            return LinkedMcp(
+                name=name,
+                command="npx",
+                args=["-y", "--prefix", str(material), "tsx", "index.ts"],
+                path=str(material),
+            )
+    return None
+
+
+def discover_linked_mcps(workspace_path: str | None) -> list[LinkedMcp]:
+    """Find MCP servers linked into ``{workspace}/.abom/`` via ``abom link``."""
+    servers: list[LinkedMcp] = []
+    for entry in _iter_abom_entries(workspace_path):
+        material = _resolve_material_dir(entry)
+        if material is None:
+            continue
+        # Skills win over MCP when both markers exist (skill dirs rarely have server.py).
+        if (material / "SKILL.md").is_file():
+            continue
+        launch = mcp_launch_for_material(entry.name, material)
+        if launch is not None:
+            servers.append(launch)
+    return servers
 
 
 def skills_prompt_block(skills: list[LinkedSkill], *, max_chars: int = 24_000) -> str:

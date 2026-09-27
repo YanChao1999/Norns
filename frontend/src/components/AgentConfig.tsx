@@ -337,9 +337,12 @@ function AbomMaterials({ workspacePath, abomEnabled, abomAvailable }: { workspac
     queryKey: ['abom-skills', workspacePath],
     enabled: Boolean(workspacePath),
     queryFn: () =>
-      apiClient.get<{ skills: Array<{ name: string; description: string; path: string }>; count: number }>(
-        `/abom/skills?workspace_path=${encodeURIComponent(workspacePath)}`
-      )
+      apiClient.get<{
+        skills: Array<{ name: string; description: string; path: string }>;
+        mcps?: Array<{ name: string; command: string; path: string }>;
+        count: number;
+        mcp_count?: number;
+      }>(`/abom/skills?workspace_path=${encodeURIComponent(workspacePath)}`)
   });
 
   const installAndLink = async (line: string) => {
@@ -385,7 +388,7 @@ function AbomMaterials({ workspacePath, abomEnabled, abomAvailable }: { workspac
           abom
         </a>
         . Enable the <strong>abom</strong> plugin so agents can install/link materials. Linked skills under the board folder&apos;s <code>.abom/</code> load
-        into the stage prompt automatically.
+        into the stage prompt automatically; linked MCP recipes attach as Cursor MCP servers when abom is enabled.
       </p>
       {!abomAvailable ? (
         <p className="muted">CLI missing. {status?.install || 'pip install git+https://github.com/YanChao1999/abom.git'} then restart Norns.</p>
@@ -394,6 +397,7 @@ function AbomMaterials({ workspacePath, abomEnabled, abomAvailable }: { workspac
       {workspacePath ? (
         <p className="muted">
           Linked skills for <code>{workspacePath}</code>: {skills?.count ? skills.skills.map((item) => item.name).join(', ') : 'none yet'}
+          {skills?.mcp_count ? ` · MCP: ${skills.mcps?.map((item) => item.name).join(', ')}` : ''}
         </p>
       ) : (
         <p className="muted">Bind a board git folder to link skills into that checkout.</p>
