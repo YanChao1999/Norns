@@ -308,11 +308,7 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
         abomEnabled={form.tool_allowlist.includes('abom')}
         abomAvailable={Boolean(plugins.find((item) => item.name === 'abom')?.available)}
         onEnableAbom={() =>
-          setForm((current) =>
-            current.tool_allowlist.includes('abom')
-              ? current
-              : { ...current, tool_allowlist: [...current.tool_allowlist, 'abom'] }
-          )
+          setForm((current) => (current.tool_allowlist.includes('abom') ? current : { ...current, tool_allowlist: [...current.tool_allowlist, 'abom'] }))
         }
       />
 
@@ -357,8 +353,7 @@ function AbomMaterials({
 
   const { data: status } = useQuery({
     queryKey: ['abom-status'],
-    queryFn: () =>
-      apiClient.get<{ installed: boolean; homepage: string; install: string; kinds?: string[] }>('/abom/status'),
+    queryFn: () => apiClient.get<{ installed: boolean; homepage: string; install: string; kinds?: string[] }>('/abom/status'),
     staleTime: 60_000
   });
 
@@ -377,10 +372,7 @@ function AbomMaterials({
   const { data: catalog, refetch: refetchCatalog } = useQuery({
     queryKey: ['abom-catalog', query, kind, workspacePath],
     enabled: abomAvailable,
-    queryFn: () =>
-      apiClient.get<{ recipes: RecipeCard[]; count: number; kinds: string[] }>(
-        `/abom/catalog${catalogQs ? `?${catalogQs}` : ''}`
-      )
+    queryFn: () => apiClient.get<{ recipes: RecipeCard[]; count: number; kinds: string[] }>(`/abom/catalog${catalogQs ? `?${catalogQs}` : ''}`)
   });
 
   const enableRecipe = async (recipe: RecipeCard) => {
@@ -427,15 +419,13 @@ function AbomMaterials({
         <a href={status?.homepage || 'https://yanchao1999.github.io/abom/'} target="_blank" rel="noreferrer">
           abom
         </a>
-        . <strong>Enable</strong> installs from the catalog and links into the board folder&apos;s <code>.abom/</code> so
-        skills load into the stage prompt (MCP recipes attach for Cursor stages).
+        . <strong>Enable</strong> installs from the catalog and links into the board folder&apos;s <code>.abom/</code> so skills load into the stage prompt (MCP
+        recipes attach for Cursor stages).
       </p>
       {!abomAvailable ? (
         <p className="muted">CLI missing. {status?.install || 'pip install git+https://github.com/YanChao1999/abom.git'} then restart Norns.</p>
       ) : null}
-      {!abomEnabled ? (
-        <p className="muted">Enabling a recipe also turns on the abom plugin for this column (save config to keep it).</p>
-      ) : null}
+      {!abomEnabled ? <p className="muted">Enabling a recipe also turns on the abom plugin for this column (save config to keep it).</p> : null}
       {!workspacePath ? <p className="muted">Bind a board git folder so Enable can link skills into that checkout.</p> : null}
       <div className="abom-kind-tabs" role="tablist" aria-label="Recipe kind">
         {kinds.map((item) => (
