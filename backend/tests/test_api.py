@@ -252,6 +252,8 @@ def test_board_cards_include_latest_recommendation():
         assert listed["recommendation"] == "reject"
         assert listed["recommendation_reason"] == "Polarion client is broken."
         assert listed["body"].startswith("## Urd handoff")
+        assert listed.get("updated_at"), "board cards must expose updated_at for Elapsed timer"
+        assert listed.get("created_at"), "board cards must expose created_at"
 
     app.dependency_overrides.clear()
     asyncio.run(engine.dispose())

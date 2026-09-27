@@ -1,5 +1,6 @@
 import { Handoff } from './gateLabels';
 import { AgentRun, BoardDetail, Card, Stage } from './types';
+import { parseApiTime } from './waitProgress';
 
 export type JourneyStepState = 'done' | 'current' | 'pending' | 'failed' | 'running';
 
@@ -156,7 +157,8 @@ export function formatRunTime(value: string | null | undefined): string {
   if (!value) {
     return '';
   }
-  const date = new Date(value);
+  const ms = parseApiTime(value);
+  const date = ms != null ? new Date(ms) : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
