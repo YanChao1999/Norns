@@ -154,6 +154,16 @@ export const en = {
   'detail.usageUnknown': 'not reported',
   'detail.usagePractice': 'practice',
   'detail.usageCursor': 'cursor sdk',
+  'detail.usageInputTitle': 'Input breakdown · reference',
+  'detail.usageInputHint':
+    'Estimated from the messages we assembled (chars÷4), summed across rounds. Not a provider invoice line. Tool schemas and tool results are re-sent every round.',
+  'detail.usageInputSystem': 'System',
+  'detail.usageInputTask': 'Task / card',
+  'detail.usageInputToolSchemas': 'Tool schemas (MCP)',
+  'detail.usageInputAssistant': 'Assistant turns',
+  'detail.usageInputToolResults': 'Tool results',
+  'detail.usageInputSkills': 'Skills',
+  'detail.usageInputEstimated': 'Estimated input',
 
   'practice.title': 'Model key not connected',
   'practice.body': 'This is a preview: you can practice approve on cards, but nothing is written to Polarion or Jira.',

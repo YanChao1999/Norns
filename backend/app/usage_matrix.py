@@ -9,7 +9,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .models import AgentRun, Board, Card
-from .token_usage import add_usage, empty_usage, usage_from_handoff
+from .token_usage import add_usage, empty_input_breakdown, empty_usage, usage_from_handoff
+
+
+def _usage_row(usage: dict[str, Any]) -> dict[str, Any]:
+    row = {
+        "prompt_tokens": usage["prompt_tokens"],
+        "completion_tokens": usage["completion_tokens"],
+        "total_tokens": usage["total_tokens"],
+        "rounds": usage["rounds"],
+        "source": usage["source"],
+        "provider": usage.get("provider") or "",
+        "model": usage.get("model") or "",
+    }
+    breakdown = usage.get("input_breakdown")
+    if isinstance(breakdown, dict) and int(breakdown.get("estimated_prompt") or 0) > 0:
+        row["input_breakdown"] = breakdown
+    return row
+
+
+def _totals_payload(totals: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "prompt_tokens": totals["prompt_tokens"],
+        "completion_tokens": totals["completion_tokens"],
+        "total_tokens": totals["total_tokens"],
+        "rounds": totals["rounds"],
+        "source": totals["source"],
+    }
+    breakdown = totals.get("input_breakdown")
+    if isinstance(breakdown, dict) and int(breakdown.get("estimated_prompt") or 0) > 0:
+        payload["input_breakdown"] = breakdown
+    elif int(totals.get("prompt_tokens") or 0) == 0:
+        payload["input_breakdown"] = empty_input_breakdown()
+    return payload
 
 
 def _is_finalized(run: AgentRun) -> bool:
@@ -40,27 +72,15 @@ async def card_usage_matrix(session: AsyncSession, card_id: str) -> dict[str, An
         stage_runs = [run for run in runs if run.stage_id == stage.id and _is_finalized(run)]
         stage_total = empty_usage(source="unavailable")
         run_rows: list[dict[str, Any]] = []
-        provider = ""
-        model = ""
         for run in stage_runs:
             usage = usage_from_handoff(run.handoff)
             stage_total = add_usage(stage_total, usage)
-            if usage.get("provider"):
-                provider = str(usage["provider"])
-            if usage.get("model"):
-                model = str(usage["model"])
             run_rows.append(
                 {
                     "run_id": run.id,
                     "status": run.status,
                     "created_at": run.created_at.isoformat() if run.created_at else None,
-                    "prompt_tokens": usage["prompt_tokens"],
-                    "completion_tokens": usage["completion_tokens"],
-                    "total_tokens": usage["total_tokens"],
-                    "rounds": usage["rounds"],
-                    "source": usage["source"],
-                    "provider": usage.get("provider") or "",
-                    "model": usage.get("model") or "",
+                    **_usage_row(usage),
                 }
             )
         totals = add_usage(totals, stage_total)
@@ -69,13 +89,7 @@ async def card_usage_matrix(session: AsyncSession, card_id: str) -> dict[str, An
                 "stage_id": stage.id,
                 "stage_name": stage.name,
                 "order": stage.order,
-                "prompt_tokens": stage_total["prompt_tokens"],
-                "completion_tokens": stage_total["completion_tokens"],
-                "total_tokens": stage_total["total_tokens"],
-                "rounds": stage_total["rounds"],
-                "source": stage_total["source"],
-                "provider": provider,
-                "model": model,
+                **_usage_row(stage_total),
                 "run_count": len(run_rows),
                 "runs": run_rows,
             }
@@ -84,13 +98,7 @@ async def card_usage_matrix(session: AsyncSession, card_id: str) -> dict[str, An
     return {
         "card_id": card.id,
         "board_id": card.board_id,
-        "totals": {
-            "prompt_tokens": totals["prompt_tokens"],
-            "completion_tokens": totals["completion_tokens"],
-            "total_tokens": totals["total_tokens"],
-            "rounds": totals["rounds"],
-            "source": totals["source"],
-        },
+        "totals": _totals_payload(totals),
         "by_stage": by_stage,
     }
 
@@ -120,28 +128,16 @@ async def board_usage_matrix(session: AsyncSession, board_id: str) -> dict[str, 
     for stage in stages:
         stage_runs = [run for run in finalized if run.stage_id == stage.id]
         stage_total = empty_usage(source="unavailable")
-        provider = ""
-        model = ""
         for run in stage_runs:
             usage = usage_from_handoff(run.handoff)
             stage_total = add_usage(stage_total, usage)
-            if usage.get("provider"):
-                provider = str(usage["provider"])
-            if usage.get("model"):
-                model = str(usage["model"])
         totals = add_usage(totals, stage_total)
         by_stage.append(
             {
                 "stage_id": stage.id,
                 "stage_name": stage.name,
                 "order": stage.order,
-                "prompt_tokens": stage_total["prompt_tokens"],
-                "completion_tokens": stage_total["completion_tokens"],
-                "total_tokens": stage_total["total_tokens"],
-                "rounds": stage_total["rounds"],
-                "source": stage_total["source"],
-                "provider": provider,
-                "model": model,
+                **_usage_row(stage_total),
                 "run_count": len(stage_runs),
             }
         )
@@ -160,11 +156,7 @@ async def board_usage_matrix(session: AsyncSession, board_id: str) -> dict[str, 
             {
                 "card_id": card.id,
                 "title": card.title,
-                "prompt_tokens": card_total["prompt_tokens"],
-                "completion_tokens": card_total["completion_tokens"],
-                "total_tokens": card_total["total_tokens"],
-                "rounds": card_total["rounds"],
-                "source": card_total["source"],
+                **_usage_row(card_total),
                 "run_count": len(card_runs),
             }
         )
@@ -172,13 +164,7 @@ async def board_usage_matrix(session: AsyncSession, board_id: str) -> dict[str, 
 
     return {
         "board_id": board.id,
-        "totals": {
-            "prompt_tokens": totals["prompt_tokens"],
-            "completion_tokens": totals["completion_tokens"],
-            "total_tokens": totals["total_tokens"],
-            "rounds": totals["rounds"],
-            "source": totals["source"],
-        },
+        "totals": _totals_payload(totals),
         "card_count": len(by_card),
         "run_count": len(finalized),
         "by_stage": by_stage,

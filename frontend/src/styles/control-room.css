@@ -2920,6 +2920,44 @@ details.disclosure summary {
   padding-top: 10px;
 }
 
+.token-usage-input {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.token-usage-input h4 {
+  margin: 0 0 4px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.token-usage-input-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-usage-input-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.token-usage-input-value {
+  white-space: nowrap;
+}
+
+.token-usage-input-total {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
 .machine-card-journey {
   border: 1px solid var(--line);
   border-radius: 12px;

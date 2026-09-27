@@ -309,6 +309,11 @@ async def test_openai_tool_loop_continues_after_empty_search():
     assert all(call.get("tools") for call in calls)
     assert len(calls) == 3
     assert usage["rounds"] >= 1
+    breakdown = usage.get("input_breakdown") or {}
+    assert breakdown.get("kind") == "estimate"
+    assert breakdown.get("tool_schemas", 0) > 0
+    assert breakdown.get("task", 0) > 0
+    assert breakdown.get("estimated_prompt", 0) > 0
 
 
 @pytest.mark.asyncio

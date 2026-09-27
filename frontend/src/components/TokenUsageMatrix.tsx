@@ -4,6 +4,18 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { useI18n } from '../i18n';
 
+export interface InputBreakdown {
+  method?: string;
+  kind?: string;
+  system: number;
+  task: number;
+  tool_schemas: number;
+  assistant: number;
+  tool_results: number;
+  skills: number;
+  estimated_prompt: number;
+}
+
 export interface RunUsageRow {
   run_id: string;
   status: string;
@@ -15,6 +27,7 @@ export interface RunUsageRow {
   source: string;
   provider: string;
   model: string;
+  input_breakdown?: InputBreakdown;
 }
 
 export interface StageUsageRow {
@@ -29,6 +42,7 @@ export interface StageUsageRow {
   model: string;
   run_count: number;
   runs?: RunUsageRow[];
+  input_breakdown?: InputBreakdown;
 }
 
 export interface CardUsageMatrix {
@@ -40,6 +54,7 @@ export interface CardUsageMatrix {
     total_tokens: number;
     rounds: number;
     source: string;
+    input_breakdown?: InputBreakdown;
   };
   by_stage: StageUsageRow[];
 }
@@ -72,6 +87,56 @@ function sourceNote(source: string): string {
     return ' (cursor sdk)';
   }
   return '';
+}
+
+const BREAKDOWN_ROWS: Array<{
+  key: keyof InputBreakdown;
+  label:
+    | 'detail.usageInputSystem'
+    | 'detail.usageInputTask'
+    | 'detail.usageInputToolSchemas'
+    | 'detail.usageInputAssistant'
+    | 'detail.usageInputToolResults'
+    | 'detail.usageInputSkills';
+}> = [
+  { key: 'system', label: 'detail.usageInputSystem' },
+  { key: 'task', label: 'detail.usageInputTask' },
+  { key: 'tool_schemas', label: 'detail.usageInputToolSchemas' },
+  { key: 'assistant', label: 'detail.usageInputAssistant' },
+  { key: 'tool_results', label: 'detail.usageInputToolResults' },
+  { key: 'skills', label: 'detail.usageInputSkills' }
+];
+
+function InputBreakdownPanel({ breakdown }: { breakdown: InputBreakdown }) {
+  const { t } = useI18n();
+  const estimated = breakdown.estimated_prompt || 0;
+  if (!estimated) {
+    return null;
+  }
+  return (
+    <div className="token-usage-input">
+      <h4>{t('detail.usageInputTitle')}</h4>
+      <p className="muted">{t('detail.usageInputHint')}</p>
+      <ul className="token-usage-input-list">
+        {BREAKDOWN_ROWS.map((row) => {
+          const value = Number(breakdown[row.key] || 0);
+          return (
+            <li key={row.key}>
+              <span>{t(row.label)}</span>
+              <span className="token-usage-input-value">
+                {formatTokens(value)}
+                <span className="muted"> · {promptShare(value, estimated)}</span>
+              </span>
+            </li>
+          );
+        })}
+        <li className="token-usage-input-total">
+          <span>{t('detail.usageInputEstimated')}</span>
+          <strong>{formatTokens(estimated)}</strong>
+        </li>
+      </ul>
+    </div>
+  );
 }
 
 export function TokenUsageMatrix({ cardId, active = false }: { cardId: string; active?: boolean }) {
@@ -191,6 +256,7 @@ export function TokenUsageMatrix({ cardId, active = false }: { cardId: string; a
           </tfoot>
         </table>
       </div>
+      {data.totals.input_breakdown ? <InputBreakdownPanel breakdown={data.totals.input_breakdown} /> : null}
     </section>
   );
 }

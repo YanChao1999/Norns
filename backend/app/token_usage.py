@@ -6,11 +6,24 @@ matrix of cost/effect across stages (agents) without a schema migration.
 OpenAI/DeepSeek: ``response.usage`` from chat completions.
 Cursor: ``TokenUsage`` / ``AgentUsage`` from cursor-sdk (``run.wait()`` or
 ``agent.get_usage()``).
+
+``input_breakdown`` is a *reference estimate* from the messages/tools we
+assembled (chars÷4), not a provider-billed attribution. Categories:
+
+- system — stage system prompt (skills land here until split further)
+- task — card body, handoff, runner instructions
+- tool_schemas — OpenAI/MCP tool definitions re-sent each round
+- assistant — model tool-call / text turns re-sent later
+- tool_results — tool/MCP return payloads re-sent later
+- skills — reserved for future dedicated skill injection
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+_BREAKDOWN_KEYS = ("system", "task", "tool_schemas", "assistant", "tool_results", "skills")
 
 
 def empty_usage(*, source: str = "unavailable", rounds: int = 0) -> dict[str, Any]:
@@ -21,6 +34,90 @@ def empty_usage(*, source: str = "unavailable", rounds: int = 0) -> dict[str, An
         "rounds": int(rounds),
         "source": source,
     }
+
+
+def empty_input_breakdown() -> dict[str, Any]:
+    return {
+        "method": "chars/4",
+        "kind": "estimate",
+        "system": 0,
+        "task": 0,
+        "tool_schemas": 0,
+        "assistant": 0,
+        "tool_results": 0,
+        "skills": 0,
+        "estimated_prompt": 0,
+    }
+
+
+def estimate_tokens(text: Any) -> int:
+    """Rough token estimate (chars÷4). Reference only — not tokenizer-accurate."""
+    if text is None:
+        return 0
+    if isinstance(text, (dict, list)):
+        try:
+            raw = json.dumps(text, default=str, ensure_ascii=False)
+        except TypeError:
+            raw = str(text)
+    else:
+        raw = str(text)
+    if not raw:
+        return 0
+    return max(1, (len(raw) + 3) // 4)
+
+
+def summarize_round_input(
+    messages: list[dict[str, Any]] | None,
+    tools_payload: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Estimate one chat-completions request's input composition."""
+    breakdown = empty_input_breakdown()
+    for message in messages or []:
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role") or "")
+        content = message.get("content")
+        extra = 0
+        tool_calls = message.get("tool_calls")
+        if tool_calls:
+            extra += estimate_tokens(tool_calls)
+        if role == "system":
+            breakdown["system"] += estimate_tokens(content) + extra
+        elif role == "user":
+            breakdown["task"] += estimate_tokens(content) + extra
+        elif role == "assistant":
+            breakdown["assistant"] += estimate_tokens(content) + extra
+        elif role == "tool":
+            breakdown["tool_results"] += estimate_tokens(content) + extra
+        else:
+            breakdown["task"] += estimate_tokens(content) + extra
+    if tools_payload:
+        breakdown["tool_schemas"] += estimate_tokens(tools_payload)
+    breakdown["estimated_prompt"] = sum(int(breakdown[key]) for key in _BREAKDOWN_KEYS)
+    return breakdown
+
+
+def add_input_breakdown(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict[str, Any]:
+    a = left if isinstance(left, dict) else empty_input_breakdown()
+    b = right if isinstance(right, dict) else empty_input_breakdown()
+    out = empty_input_breakdown()
+    for key in _BREAKDOWN_KEYS:
+        out[key] = int(a.get(key) or 0) + int(b.get(key) or 0)
+    out["estimated_prompt"] = sum(int(out[key]) for key in _BREAKDOWN_KEYS)
+    return out
+
+
+def with_input_breakdown(usage: dict[str, Any] | None, breakdown: dict[str, Any] | None) -> dict[str, Any]:
+    entry = dict(usage or empty_usage())
+    if isinstance(breakdown, dict) and int(breakdown.get("estimated_prompt") or 0) > 0:
+        entry["input_breakdown"] = {
+            **empty_input_breakdown(),
+            **{key: int(breakdown.get(key) or 0) for key in _BREAKDOWN_KEYS},
+            "estimated_prompt": int(breakdown.get("estimated_prompt") or 0),
+            "method": str(breakdown.get("method") or "chars/4"),
+            "kind": str(breakdown.get("kind") or "estimate"),
+        }
+    return entry
 
 
 def usage_from_response(response: Any) -> dict[str, Any]:
@@ -145,13 +242,20 @@ def add_usage(left: dict[str, Any] | None, right: dict[str, Any] | None) -> dict
     prompt = int(a.get("prompt_tokens") or 0) + int(b.get("prompt_tokens") or 0)
     completion = int(a.get("completion_tokens") or 0) + int(b.get("completion_tokens") or 0)
     total = int(a.get("total_tokens") or 0) + int(b.get("total_tokens") or 0)
-    return {
+    out: dict[str, Any] = {
         "prompt_tokens": prompt,
         "completion_tokens": completion,
         "total_tokens": total if total else prompt + completion,
         "rounds": int(a.get("rounds") or 0) + int(b.get("rounds") or 0),
         "source": source,
     }
+    for key in ("provider", "model"):
+        if a.get(key) or b.get(key):
+            out[key] = str(b.get(key) or a.get(key) or "")
+    merged = add_input_breakdown(a.get("input_breakdown"), b.get("input_breakdown"))
+    if int(merged.get("estimated_prompt") or 0) > 0:
+        out["input_breakdown"] = merged
+    return out
 
 
 def attach_usage(
@@ -172,7 +276,7 @@ def usage_from_handoff(handoff: Any) -> dict[str, Any]:
     raw = handoff.get("usage")
     if not isinstance(raw, dict):
         return empty_usage()
-    return {
+    out: dict[str, Any] = {
         "prompt_tokens": int(raw.get("prompt_tokens") or 0),
         "completion_tokens": int(raw.get("completion_tokens") or 0),
         "total_tokens": int(raw.get("total_tokens") or 0),
@@ -181,3 +285,13 @@ def usage_from_handoff(handoff: Any) -> dict[str, Any]:
         "provider": str(raw.get("provider") or (handoff.get("llm") or {}).get("provider") or ""),
         "model": str(raw.get("model") or (handoff.get("llm") or {}).get("model") or ""),
     }
+    breakdown = raw.get("input_breakdown")
+    if isinstance(breakdown, dict) and int(breakdown.get("estimated_prompt") or 0) > 0:
+        out["input_breakdown"] = {
+            **empty_input_breakdown(),
+            **{key: int(breakdown.get(key) or 0) for key in _BREAKDOWN_KEYS},
+            "estimated_prompt": int(breakdown.get("estimated_prompt") or 0),
+            "method": str(breakdown.get("method") or "chars/4"),
+            "kind": str(breakdown.get("kind") or "estimate"),
+        }
+    return out

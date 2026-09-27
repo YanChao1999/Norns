@@ -43,7 +43,16 @@ from ..plugins.base import PluginContext
 from ..plugins.catalog import cursor_mcp_servers
 from ..plugins.tool_policy import is_write_tool
 from ..sandbox import prepare_sandbox, sandbox_env_vars, serialize_sandbox
-from ..token_usage import add_usage, attach_usage, empty_usage, usage_from_response
+from ..token_usage import (
+    add_input_breakdown,
+    add_usage,
+    attach_usage,
+    empty_input_breakdown,
+    empty_usage,
+    summarize_round_input,
+    usage_from_response,
+    with_input_breakdown,
+)
 from ..tools.registry import RuntimeTool, create_default_registry
 from ..utc import utc_now
 from ..workspace import Workspace, resolve_workspace
@@ -638,9 +647,12 @@ async def _run_openai_tool_loop(
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     executed_tool_calls: list[dict[str, Any]] = []
     usage = empty_usage(source="unavailable")
+    input_breakdown = empty_input_breakdown()
     message: Any = None
     try:
         for _round in range(MAX_TOOL_ROUNDS):
+            round_input = summarize_round_input(messages, tools_payload or None)
+            input_breakdown = add_input_breakdown(input_breakdown, round_input)
             response = await client.chat.completions.create(
                 model=model,
                 temperature=temperature,
@@ -711,8 +723,11 @@ async def _run_openai_tool_loop(
                     }
                 )
             if pending_writes:
+                usage = with_input_breakdown(usage, input_breakdown)
                 raise WriteConfirmationRequired(pending_writes, executed_tool_calls, usage=usage)
         else:
+            round_input = summarize_round_input(messages, tools_payload or None)
+            input_breakdown = add_input_breakdown(input_breakdown, round_input)
             response = await client.chat.completions.create(model=model, temperature=temperature, messages=messages)
             usage = add_usage(usage, usage_from_response(response))
             message = response.choices[0].message
@@ -720,11 +735,13 @@ async def _run_openai_tool_loop(
         content = (getattr(message, "content", None) if message is not None else None) or (
             "No textual response returned by the model."
         )
+        usage = with_input_breakdown(usage, input_breakdown)
         return content, executed_tool_calls, usage
     except WriteConfirmationRequired:
         raise
     except Exception as exc:
         # Preserve tokens already billed in earlier rounds for the failure handoff.
+        usage = with_input_breakdown(usage, input_breakdown)
         with contextlib.suppress(Exception):
             exc.norns_usage = usage
         raise
