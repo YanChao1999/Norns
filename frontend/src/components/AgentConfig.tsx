@@ -272,7 +272,7 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
       <div className="field">
         <span>Plugins / MCP — empty allowlist grants none</span>
         <p className="muted">
-          Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build), abom (skills / prompts / MCP recipes from{' '}
+          Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build), abom (skill store from{' '}
           <a href="https://yanchao1999.github.io/abom/" target="_blank" rel="noreferrer">
             abom
           </a>
@@ -307,6 +307,13 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
         workspacePath={form.workspace_path || boardWorkspace?.path || ''}
         abomEnabled={form.tool_allowlist.includes('abom')}
         abomAvailable={Boolean(plugins.find((item) => item.name === 'abom')?.available)}
+        onEnableAbom={() =>
+          setForm((current) =>
+            current.tool_allowlist.includes('abom')
+              ? current
+              : { ...current, tool_allowlist: [...current.tool_allowlist, 'abom'] }
+          )
+        }
       />
 
       <button type="button" className="btn btn-primary" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
@@ -316,109 +323,173 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
   );
 }
 
-function AbomMaterials({ workspacePath, abomEnabled, abomAvailable }: { workspacePath: string; abomEnabled: boolean; abomAvailable: boolean }) {
+type RecipeKind = 'skill' | 'prompt' | 'mcp' | 'package' | '';
+
+interface RecipeCard {
+  name: string;
+  kind: string;
+  description: string;
+  homepage: string;
+  license: string;
+  git: string;
+  ref: string;
+  path: string | null;
+  installed: boolean;
+  linked: boolean;
+  enabled: boolean;
+}
+
+function AbomMaterials({
+  workspacePath,
+  abomEnabled,
+  abomAvailable,
+  onEnableAbom
+}: {
+  workspacePath: string;
+  abomEnabled: boolean;
+  abomAvailable: boolean;
+  onEnableAbom: () => void;
+}) {
   const [query, setQuery] = useState('');
+  const [kind, setKind] = useState<RecipeKind>('skill');
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const { data: status } = useQuery({
     queryKey: ['abom-status'],
-    queryFn: () => apiClient.get<{ installed: boolean; homepage: string; install: string }>('/abom/status'),
+    queryFn: () =>
+      apiClient.get<{ installed: boolean; homepage: string; install: string; kinds?: string[] }>('/abom/status'),
     staleTime: 60_000
   });
 
-  const { data: recipes, refetch: refetchRecipes } = useQuery({
-    queryKey: ['abom-recipes', query],
+  const catalogParams = new URLSearchParams();
+  if (query.trim()) {
+    catalogParams.set('query', query.trim());
+  }
+  if (kind) {
+    catalogParams.set('kind', kind);
+  }
+  if (workspacePath) {
+    catalogParams.set('workspace_path', workspacePath);
+  }
+  const catalogQs = catalogParams.toString();
+
+  const { data: catalog, refetch: refetchCatalog } = useQuery({
+    queryKey: ['abom-catalog', query, kind, workspacePath],
     enabled: abomAvailable,
-    queryFn: () => apiClient.get<{ recipes: string[]; count: number }>(`/abom/recipes${query ? `?query=${encodeURIComponent(query)}` : ''}`)
-  });
-
-  const { data: skills, refetch: refetchSkills } = useQuery({
-    queryKey: ['abom-skills', workspacePath],
-    enabled: Boolean(workspacePath),
     queryFn: () =>
-      apiClient.get<{
-        skills: Array<{ name: string; description: string; path: string }>;
-        mcps?: Array<{ name: string; command: string; path: string }>;
-        count: number;
-        mcp_count?: number;
-      }>(`/abom/skills?workspace_path=${encodeURIComponent(workspacePath)}`)
+      apiClient.get<{ recipes: RecipeCard[]; count: number; kinds: string[] }>(
+        `/abom/catalog${catalogQs ? `?${catalogQs}` : ''}`
+      )
   });
 
-  const installAndLink = async (line: string) => {
-    const name = line.split(/\s+/)[0];
-    if (!name) {
-      return;
-    }
-    setBusy(name);
+  const enableRecipe = async (recipe: RecipeCard) => {
+    setBusy(recipe.name);
     setMessage(null);
     try {
-      await apiClient.post('/abom/install', { name });
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      if (!/already installed/i.test(text)) {
-        setMessage(text);
-        setBusy(null);
-        return;
+      const result = await apiClient.post<{
+        name: string;
+        installed: boolean;
+        linked: boolean;
+        text: string;
+      }>('/abom/enable', {
+        name: recipe.name,
+        target_repo: workspacePath || null
+      });
+      onEnableAbom();
+      if (result.linked) {
+        setMessage(`Enabled ${recipe.name} for this board. Save config to keep the abom plugin on.`);
+      } else if (result.installed) {
+        setMessage(`Installed ${recipe.name}. Bind a board git folder, then Enable again to link it into .abom/.`);
+      } else {
+        setMessage(result.text);
       }
-    }
-    if (!workspacePath) {
-      setMessage(`Installed ${name}. Bind a board git folder to link skills into .abom/.`);
-      setBusy(null);
-      void refetchRecipes();
-      return;
-    }
-    try {
-      const linked = await apiClient.post<{ text: string }>('/abom/link', { name, target_repo: workspacePath });
-      setMessage(linked.text);
-      void refetchSkills();
+      void refetchCatalog();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
     setBusy(null);
-    void refetchRecipes();
   };
+
+  const kinds: Array<{ id: RecipeKind; label: string }> = [
+    { id: 'skill', label: 'Skills' },
+    { id: 'mcp', label: 'MCP' },
+    { id: 'prompt', label: 'Prompts' },
+    { id: 'package', label: 'Packages' },
+    { id: '', label: 'All' }
+  ];
 
   return (
     <div className="field abom-materials">
-      <span>abom skills &amp; MCP recipes</span>
+      <span>Skill store (abom)</span>
       <p className="muted">
-        Catalog from{' '}
+        Browse GitHub-backed recipes from{' '}
         <a href={status?.homepage || 'https://yanchao1999.github.io/abom/'} target="_blank" rel="noreferrer">
           abom
         </a>
-        . Enable the <strong>abom</strong> plugin so agents can install/link materials. Linked skills under the board folder&apos;s <code>.abom/</code> load
-        into the stage prompt automatically; linked MCP recipes attach as Cursor MCP servers when abom is enabled.
+        . <strong>Enable</strong> installs from the catalog and links into the board folder&apos;s <code>.abom/</code> so
+        skills load into the stage prompt (MCP recipes attach for Cursor stages).
       </p>
       {!abomAvailable ? (
         <p className="muted">CLI missing. {status?.install || 'pip install git+https://github.com/YanChao1999/abom.git'} then restart Norns.</p>
       ) : null}
-      {!abomEnabled ? <p className="muted">Tip: check abom in Plugins above so the agent can call recipe tools mid-run.</p> : null}
-      {workspacePath ? (
-        <p className="muted">
-          Linked skills for <code>{workspacePath}</code>: {skills?.count ? skills.skills.map((item) => item.name).join(', ') : 'none yet'}
-          {skills?.mcp_count ? ` · MCP: ${skills.mcps?.map((item) => item.name).join(', ')}` : ''}
-        </p>
-      ) : (
-        <p className="muted">Bind a board git folder to link skills into that checkout.</p>
-      )}
+      {!abomEnabled ? (
+        <p className="muted">Enabling a recipe also turns on the abom plugin for this column (save config to keep it).</p>
+      ) : null}
+      {!workspacePath ? <p className="muted">Bind a board git folder so Enable can link skills into that checkout.</p> : null}
+      <div className="abom-kind-tabs" role="tablist" aria-label="Recipe kind">
+        {kinds.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            role="tab"
+            aria-selected={kind === item.id}
+            className={`btn btn-ghost btn-compact${kind === item.id ? ' is-active' : ''}`}
+            onClick={() => setKind(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
       <label className="field">
-        Filter recipes
-        <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="skill, mcp, prompt…" />
+        Search store
+        <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="name or description…" />
       </label>
       {abomAvailable ? (
-        <ul className="abom-recipe-list">
-          {(recipes?.recipes || []).slice(0, 12).map((line) => {
-            const name = line.split(/\s+/)[0];
+        <ul className="abom-store-list">
+          {(catalog?.recipes || []).slice(0, 20).map((recipe) => {
+            const github = recipe.git.replace(/\.git$/, '').replace(/^git@github\.com:/, 'https://github.com/');
+            const enabled = recipe.enabled || recipe.linked;
             return (
-              <li key={line}>
-                <span>{line}</span>
-                <button type="button" className="btn btn-ghost btn-compact" disabled={busy === name} onClick={() => void installAndLink(line)}>
-                  {busy === name ? '…' : 'Install + link'}
+              <li key={recipe.name} className="abom-store-card">
+                <div className="abom-store-card-body">
+                  <div className="abom-store-card-head">
+                    <strong>{recipe.name}</strong>
+                    <span className="abom-kind-chip">{recipe.kind}</span>
+                    {enabled ? <span className="abom-status-chip is-on">enabled</span> : null}
+                    {!enabled && recipe.installed ? <span className="abom-status-chip">installed</span> : null}
+                  </div>
+                  <p>{recipe.description}</p>
+                  <p className="muted abom-store-meta">
+                    {recipe.license}
+                    {' · '}
+                    <a href={recipe.homepage || github} target="_blank" rel="noreferrer">
+                      source
+                    </a>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-compact"
+                  disabled={busy === recipe.name || enabled}
+                  onClick={() => void enableRecipe(recipe)}
+                >
+                  {busy === recipe.name ? '…' : enabled ? 'Enabled' : 'Enable'}
                 </button>
               </li>
             );
           })}
+          {catalog && catalog.recipes.length === 0 ? <li className="muted">No recipes match this filter.</li> : null}
         </ul>
       ) : null}
       {message ? <p className="muted">{message}</p> : null}

@@ -1042,26 +1042,78 @@ details.disclosure summary {
   font-size: 0.88em;
 }
 
+.abom-kind-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.abom-kind-tabs .btn.is-active {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--surface);
+}
+
+.abom-store-list,
 .abom-recipe-list {
   list-style: none;
   margin: 8px 0 0;
-  padding: 0;
+  padding: 8px;
   display: grid;
-  gap: 6px;
-  max-height: 220px;
+  gap: 8px;
+  max-height: 280px;
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 8px;
   background: var(--elevated);
 }
 
+.abom-store-card,
 .abom-recipe-list li {
   display: flex;
   justify-content: space-between;
   gap: 10px;
   align-items: start;
   font-size: 0.88rem;
+}
+
+.abom-store-card-body {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.abom-store-card-body p {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.abom-store-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.abom-kind-chip,
+.abom-status-chip {
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.abom-status-chip.is-on {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.abom-store-meta {
+  font-size: 0.8rem;
 }
 
 .abom-recipe-list li span {

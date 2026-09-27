@@ -28,6 +28,119 @@ from .base import Plugin, PluginContext, ToolSpec
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL)
 _SKILLS_HEADER = "## Linked agent skills (abom)"
 _MCP_MARKERS = ("package.json", "pyproject.toml", "index.ts", "index.js", "server.py", "main.py")
+RECIPE_KINDS = ("skill", "prompt", "mcp", "package")
+
+
+@dataclass(slots=True)
+class RecipeCard:
+    name: str
+    kind: str
+    description: str
+    homepage: str
+    license: str
+    git: str
+    ref: str
+    path: str | None
+    installed: bool = False
+    linked: bool = False
+
+
+def list_recipe_cards(
+    *,
+    query: str | None = None,
+    kind: str | None = None,
+    workspace_path: str | None = None,
+) -> list[RecipeCard]:
+    """Structured abom catalog for the skill-store UI."""
+    try:
+        from abom.cli import cmd_search
+        from abom.recipe import iter_recipes
+    except Exception as exc:  # pragma: no cover - optional dependency
+        raise RuntimeError(
+            "abom is not installed. Install it with: "
+            "pip install git+https://github.com/YanChao1999/abom.git "
+            "(docs: https://yanchao1999.github.io/abom/)"
+        ) from exc
+
+    installed = set(cmd_search(None))
+    linked_names = linked_recipe_names(workspace_path)
+    kind_filter = (kind or "").strip().lower() or None
+    cards: list[RecipeCard] = []
+    for recipe in iter_recipes(query):
+        if kind_filter and recipe.kind != kind_filter:
+            continue
+        cards.append(
+            RecipeCard(
+                name=recipe.name,
+                kind=recipe.kind,
+                description=recipe.description,
+                homepage=recipe.homepage,
+                license=recipe.license,
+                git=recipe.git,
+                ref=recipe.ref,
+                path=recipe.path,
+                installed=recipe.name in installed,
+                linked=recipe.name in linked_names,
+            )
+        )
+    return cards
+
+
+def linked_recipe_names(workspace_path: str | None) -> set[str]:
+    """Recipe names already symlinked under ``{workspace}/.abom/``."""
+    names: set[str] = set()
+    for entry in _iter_abom_entries(workspace_path):
+        names.add(entry.name)
+    return names
+
+
+def enable_recipe(name: str, *, target_repo: str | None = None) -> dict[str, Any]:
+    """Install a recipe from the catalog and optionally link it into a workspace."""
+    cli = _cli()
+    name = name.strip()
+    installed_names = set(cli.cmd_search(None))
+    messages: list[str] = []
+    newly_installed = False
+    if name not in installed_names:
+        messages.append(cli.cmd_install_recipe(name))
+        newly_installed = True
+    else:
+        messages.append(f"already installed: {name}")
+
+    linked = False
+    target = (target_repo or "").strip()
+    if target:
+        links = linked_recipe_names(target)
+        if name in links:
+            messages.append(f"already linked: {name}")
+            linked = True
+        else:
+            messages.append(cli.cmd_link(name, target, None))
+            linked = True
+    return {
+        "name": name,
+        "installed": True,
+        "newly_installed": newly_installed,
+        "linked": linked,
+        "target_repo": target or None,
+        "text": "\n".join(messages),
+    }
+
+
+def recipe_card_dict(card: RecipeCard) -> dict[str, Any]:
+    return {
+        "name": card.name,
+        "kind": card.kind,
+        "description": card.description,
+        "homepage": card.homepage,
+        "license": card.license,
+        "git": card.git,
+        "ref": card.ref,
+        "path": card.path,
+        "installed": card.installed,
+        "linked": card.linked,
+        "enabled": card.linked,
+    }
 
 
 def _abom_links_dir(workspace_path: str | None) -> Path | None:
@@ -255,7 +368,7 @@ class AbomPlugin(Plugin):
     name = "abom"
     title = "abom"
     description = (
-        "Agent bill of materials — list, check, install, and link skills, prompts, "
+        "Skill store via abom — browse, install, and enable GitHub-backed skills, prompts, "
         "MCP servers, and packages (https://yanchao1999.github.io/abom/)."
     )
     builtin = True
