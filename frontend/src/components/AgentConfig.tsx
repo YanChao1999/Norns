@@ -423,7 +423,7 @@ function AbomMaterials({
         recipes attach for Cursor stages).
       </p>
       {!abomAvailable ? (
-        <p className="muted">CLI missing. {status?.install || 'pip install git+https://github.com/YanChao1999/abom.git'} then restart Norns.</p>
+        <p className="muted">CLI missing. {status?.install || "pip install abom  # or: pip install 'norns-ide[abom]'"} then restart Norns.</p>
       ) : null}
       {!abomEnabled ? <p className="muted">Enabling a recipe also turns on the abom plugin for this column (save config to keep it).</p> : null}
       {!workspacePath ? <p className="muted">Bind a board git folder so Enable can link skills into that checkout.</p> : null}

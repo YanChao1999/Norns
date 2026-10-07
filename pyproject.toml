@@ -41,7 +41,7 @@ dev = [
   "twine>=6.0.0",
 ]
 abom = [
-  "abom @ git+https://github.com/YanChao1999/abom.git",
+  "abom>=0.0.3",
 ]
 
 [project.scripts]
