@@ -43,7 +43,7 @@ def _cli():
         raise HTTPException(
             status_code=503,
             detail=(
-                "abom is not installed. pip install git+https://github.com/YanChao1999/abom.git "
+                "abom is not installed. pip install abom or pip install 'norns-ide[abom]' "
                 "(https://yanchao1999.github.io/abom/)"
             ),
         ) from exc
@@ -69,7 +69,7 @@ async def abom_status() -> dict[str, Any]:
     return {
         "installed": abom_installed(),
         "homepage": "https://yanchao1999.github.io/abom/",
-        "install": "pip install git+https://github.com/YanChao1999/abom.git",
+        "install": "pip install abom  # or: pip install 'norns-ide[abom]'",
         "kinds": list(RECIPE_KINDS),
     }
 
@@ -85,7 +85,7 @@ async def recipe_catalog(
         raise HTTPException(
             status_code=503,
             detail=(
-                "abom is not installed. pip install git+https://github.com/YanChao1999/abom.git "
+                "abom is not installed. pip install abom or pip install 'norns-ide[abom]' "
                 "(https://yanchao1999.github.io/abom/)"
             ),
         )
@@ -133,7 +133,7 @@ async def enable_abom_recipe(payload: EnableAction) -> dict[str, Any]:
         raise HTTPException(
             status_code=503,
             detail=(
-                "abom is not installed. pip install git+https://github.com/YanChao1999/abom.git "
+                "abom is not installed. pip install abom or pip install 'norns-ide[abom]' "
                 "(https://yanchao1999.github.io/abom/)"
             ),
         )

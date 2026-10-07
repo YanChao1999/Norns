@@ -1,11 +1,15 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [[package]]
 name = "abom"
-version = "0.0.1"
-source = { git = "https://github.com/YanChao1999/abom.git#dfb42f609787896d1aa5def39eb9ed7e6436f895" }
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4b/e1/2db89a51f3c731569736743521c0bd0b2503428151246c9be133da449922/abom-0.0.3.tar.gz", hash = "sha256:2944770b091d39cc194a6027e43bf5f0ae0a28c831cb87d71cb0b764a6e172a7", size = 22328, upload-time = "2026-10-07T07:54:24.822Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/e6/7c60da547dea43a7c80fec60fa8057d6178f51c50cca360ba1a651b4a0f4/abom-0.0.3-py3-none-any.whl", hash = "sha256:cc34a665bc4d3a504717249bb74137a2dca726c530298a118eb3950653daa5cc", size = 16159, upload-time = "2026-10-07T07:54:23.73Z" },
+]
 
 [[package]]
 name = "aiosqlite"
@@ -1236,7 +1240,7 @@ wheels = [
 
 [[package]]
 name = "norns-ide"
-version = "0.0.3"
+version = "0.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -1274,7 +1278,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "abom", marker = "extra == 'abom'", git = "https://github.com/YanChao1999/abom.git" },
+    { name = "abom", marker = "extra == 'abom'", specifier = ">=0.0.3" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "arq", specifier = ">=0.26.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },

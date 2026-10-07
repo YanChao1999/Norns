@@ -4,9 +4,8 @@ Homepage: https://yanchao1999.github.io/abom/
 
 Install the CLI with::
 
-    pip install git+https://github.com/YanChao1999/abom.git
-    # or TestPyPI: pip install --index-url https://test.pypi.org/simple/ \\
-    #   --extra-index-url https://pypi.org/simple/ abom
+    pip install abom
+    # or with Norns: pip install 'norns-ide[abom]'
 
 When the ``abom`` plugin is on a stage allowlist, agents can list / check /
 install / link recipes (skills, prompts, MCP servers, packages). Linked skills
@@ -58,7 +57,7 @@ def list_recipe_cards(
     except Exception as exc:  # pragma: no cover - optional dependency
         raise RuntimeError(
             "abom is not installed. Install it with: "
-            "pip install git+https://github.com/YanChao1999/abom.git "
+            "pip install abom or pip install 'norns-ide[abom]' "
             "(docs: https://yanchao1999.github.io/abom/)"
         ) from exc
 
@@ -177,7 +176,7 @@ def _cli():
     except Exception as exc:  # pragma: no cover - optional dependency
         raise RuntimeError(
             "abom is not installed. Install it with: "
-            "pip install git+https://github.com/YanChao1999/abom.git "
+            "pip install abom or pip install 'norns-ide[abom]' "
             "(docs: https://yanchao1999.github.io/abom/)"
         ) from exc
     return abom_cli
