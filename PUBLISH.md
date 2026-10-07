@@ -27,7 +27,7 @@ norns run
 ```bash
 # Prefer: download the project wheel only from TestPyPI, then install deps from real PyPI
 # (TestPyPI often has stub packages like a broken fastapi that break `-i test.pypi.org` installs.)
-pip download --no-deps -i https://test.pypi.org/simple/ -d /tmp/norns-wheels 'norns-ide==0.0.3'
+pip download --no-deps -i https://test.pypi.org/simple/ -d /tmp/norns-wheels 'norns-ide==0.0.4'
 pip install /tmp/norns-wheels/norns_ide-*.whl
 norns --version
 ```
@@ -43,7 +43,7 @@ pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/
 ```bash
 # Install from TestPyPI into a throwaway venv, then:
 # init → run → login → create board → sample card → preferences → logout
-bash scripts/acceptance_testpypi.sh --version 0.0.3
+bash scripts/acceptance_testpypi.sh --version 0.0.4
 ```
 
 Or in GitHub: **Actions → TestPyPI acceptance → Run workflow** (optional version pin, or build a wheel from the branch instead).
@@ -60,7 +60,7 @@ Or in GitHub: **Actions → TestPyPI acceptance → Run workflow** (optional ver
 3. GitHub environment named `pypi` (optional: require reviewers).
 4. Either:
    - **Actions → Publish → Run workflow**, target `pypi`, or
-   - Create a GitHub Release (tag `v0.0.3`). A published release uploads to PyPI automatically.
+   - Create a GitHub Release (tag `v0.0.4`). A published release uploads to PyPI automatically.
 
 Do not upload the same version twice. Bump `version` in `pyproject.toml` and `norns/__init__.py` for the next release.
 
