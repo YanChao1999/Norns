@@ -1,17 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="command-light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Norns · v0.0.3</title>
     <meta
       name="description"
-      content="Norns is a Control Room for staged work. Agents run the columns. You decide what moves."
+      content="Norns is a local Control Room for staged work — agents run the columns, you approve what moves. v0.0.3: token usage, abom skill store, Command Light UI, sandbox, system proxy."
     />
-    <meta name="theme-color" content="#0d1117" />
+    <meta name="theme-color" content="#F9F6EF" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./control-room.css" />
     <style>
       .site-wrap {
@@ -105,11 +108,9 @@
         border-radius: var(--radius);
         overflow: hidden;
         background: var(--bg);
+        background-image: var(--paper-grain);
         min-height: 760px;
-      }
-
-      .app-frame .topbar {
-        flex-wrap: nowrap;
+        box-shadow: var(--shadow);
       }
 
       .app-frame .workspace {
@@ -240,6 +241,8 @@
       .app-frame .settings {
         max-width: none;
       }
+
+      .app-frame .preview-toast {
         position: absolute;
         bottom: 16px;
         left: 16px;
@@ -285,7 +288,8 @@
           <span class="pill">v0.0.3 · norns-ide</span>
           <h1>Agents work the columns. You decide what moves.</h1>
           <p class="site-lede">
-            Each stage has its own agent. Connect a model, Polarion, Jira, GitHub. A card waits until you approve. The board below is the real Control Room — try it.
+            Each stage has its own agent. Connect Cursor, DeepSeek, or OpenAI; enable GitHub, Jira, Polarion, sandbox, or the
+            <a href="https://yanchao1999.github.io/abom/">abom</a> skill store from column Agent. Cards wait for your approve/reject. The board below is an interactive preview — try it.
           </p>
           <div class="site-actions">
             <a class="btn btn-primary" href="#install">Install 0.0.3</a>
@@ -295,26 +299,33 @@
 
         <section id="look">
           <p class="demo-note">Preview — open a card, Settings, or a column Agent. Nothing writes to Polarion or Jira from this page.</p>
-          <div class="app-frame" id="app">
+          <div class="app-frame app-shell" id="app">
             <header class="topbar">
               <div class="brand">
                 <span class="brand-mark">Norns</span>
-                <span class="brand-sub">Control room</span>
+                <span class="brand-divider" aria-hidden="true"></span>
+                <span class="brand-sub">Control Room · Delivery</span>
               </div>
               <nav class="board-switcher" aria-label="Boards">
-                <button type="button" class="chip is-active">Delivery</button>
+                <button type="button" class="chip is-active" data-view="board">Delivery</button>
               </nav>
               <div class="topbar-meta">
-                <span class="wait-count is-pulling" id="pull-count">1 pulling</span>
-                <span class="wait-count" id="wait-count">2 waiting</span>
-                <button type="button" class="chip is-active" data-view="board">Board</button>
+                <div class="theme-mark" title="Command Light">
+                  <span class="theme-mark-icon" aria-hidden="true">···</span>
+                  <span>Command Light</span>
+                </div>
                 <button type="button" class="chip" data-view="machine">Machine</button>
                 <button type="button" class="chip" data-view="settings" id="settings-chip">Settings</button>
                 <span class="user-name">admin</span>
+                <button type="button" class="btn btn-ghost">Log out</button>
+              </div>
+              <div class="status-pills" aria-live="polite">
+                <span class="status-pill is-waiting" id="wait-count">2 awaiting confirm</span>
+                <span class="status-pill is-running" id="pull-count">1 in progress</span>
               </div>
             </header>
 
-            <div class="workspace" id="view-board">
+            <main class="workspace" id="view-board">
               <div class="board-head">
                 <div>
                   <h1>Delivery</h1>
@@ -410,9 +421,9 @@
                   </section>
                 </div>
               </div>
-            </div>
+            </main>
 
-            <div class="workspace" id="view-machine" hidden>
+            <main class="workspace" id="view-machine" hidden>
               <div class="machine">
                 <div class="machine-toolbar">
                   <h2>State machine</h2>
@@ -457,9 +468,9 @@
                   </aside>
                 </div>
               </div>
-            </div>
+            </main>
 
-            <div class="workspace" id="view-settings" hidden>
+            <main class="workspace" id="view-settings" hidden>
               <div class="settings">
                 <div class="board-head">
                   <div>
@@ -508,7 +519,7 @@
                   <button type="button" class="btn" id="add-connector">Add connector</button>
                 </section>
               </div>
-            </div>
+            </main>
 
             <div class="drawer-backdrop" id="backdrop" hidden></div>
             <aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-title">
@@ -618,11 +629,13 @@
                   Model
                   <input class="input" value="auto · Cursor" readonly />
                 </label>
-                <p class="muted" id="agent-blurb">This column runs a real Cursor agent. Empty plugin list means no tools.</p>
+                <p class="muted" id="agent-blurb">Pick model + plugins. Skill store (abom) installs GitHub skills into the board checkout.</p>
                 <div class="field">
                   <span>Plugins</span>
                   <div class="tool-row" id="agent-tools">
                     <label><input type="checkbox" checked disabled /> norns</label>
+                    <label><input type="checkbox" checked disabled /> sandbox</label>
+                    <label><input type="checkbox" checked disabled /> abom</label>
                     <label><input type="checkbox" checked disabled /> jira</label>
                     <label><input type="checkbox" disabled /> polarion</label>
                     <label><input type="checkbox" disabled /> github</label>
@@ -660,6 +673,11 @@
                 <li>First-run checklist, sample card on new boards, and practice-mode banners when no usable model key</li>
                 <li>Command Light Control Room: cream theme, soft-join board chrome, Settings write gate, Delivery Machine Card detail</li>
                 <li>System proxy toggle in Settings (Clash/corporate <code>HTTP_PROXY</code> / <code>ALL_PROXY</code>, or direct egress); Clash <code>socks://</code> normalized to <code>socks5://</code></li>
+                <li>Token usage per stage run, board-level summary, and reference input breakdown (system / task / tools / skills)</li>
+                <li>
+                  <a href="https://yanchao1999.github.io/abom/">abom</a> skill store in Agent Config — browse GitHub recipes, one-click
+                  <strong>Enable</strong> into <code>.abom/</code>; skills load into prompts; MCP recipes attach for Cursor
+                </li>
                 <li>Visual state machine, including parallel planned split and soft join</li>
                 <li>Human approve/reject gates; agent recommendation is advisory; failed runs block the card</li>
                 <li>Directory or hardened Docker sandboxes under <code>~/.norns/sandboxes/</code></li>
@@ -690,6 +708,11 @@
 norns init
 norns run</pre>
           <p class="site-lede">Or <code>pip install norns-ide</code>, then the same <code>norns init</code> / <code>norns run</code>.</p>
+          <h3>abom skill store (optional)</h3>
+          <pre>pip install "norns-ide[abom]"
+# or from a git checkout:
+pip install git+https://github.com/YanChao1999/abom.git</pre>
+          <p class="site-lede">Restart Norns after installing abom. Column Agent → Skill store → Enable recipes from the catalog.</p>
           <h3>TestPyPI</h3>
           <pre>pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ norns-ide==0.0.3
 norns --version

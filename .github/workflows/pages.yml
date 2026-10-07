@@ -2,9 +2,11 @@ name: GitHub Pages
 
 on:
   push:
-    branches: [main, feat/pip-uv-install, cursor/v0.0.1-first-production]
+    branches: [main]
     paths:
       - "docs/**"
+      - "frontend/src/styles/control-room.css"
+      - "scripts/sync-pages-css.sh"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -26,6 +28,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Sync Control Room CSS into docs
+        run: bash scripts/sync-pages-css.sh
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
