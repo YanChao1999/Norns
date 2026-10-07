@@ -21,7 +21,7 @@ from backend.app.tools.registry import create_default_registry
 
 def test_catalog_includes_builtin_plugins():
     catalog = load_plugin_catalog([])
-    assert {plugin.name for plugin in catalog.plugins} >= {"norns", "sandbox", "github", "jira", "polarion"}
+    assert {plugin.name for plugin in catalog.plugins} >= {"norns", "sandbox", "abom", "github", "jira", "polarion"}
     norns = catalog.by_name()["norns"]
     assert norns.available([]) is True
     assert catalog.by_name()["jira"].available([]) is False

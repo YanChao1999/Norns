@@ -3,6 +3,11 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
+name = "abom"
+version = "0.0.1"
+source = { git = "https://github.com/YanChao1999/abom.git#dfb42f609787896d1aa5def39eb9ed7e6436f895" }
+
+[[package]]
 name = "aiosqlite"
 version = "0.22.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1231,7 +1236,7 @@ wheels = [
 
 [[package]]
 name = "norns-ide"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
@@ -1254,6 +1259,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+abom = [
+    { name = "abom" },
+]
 dev = [
     { name = "build" },
     { name = "pre-commit" },
@@ -1266,6 +1274,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "abom", marker = "extra == 'abom'", git = "https://github.com/YanChao1999/abom.git" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "arq", specifier = ">=0.26.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
@@ -1291,7 +1300,7 @@ requires-dist = [
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "abom"]
 
 [[package]]
 name = "oauthlib"

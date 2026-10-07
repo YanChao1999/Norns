@@ -40,6 +40,9 @@ dev = [
   "build>=1.2.0",
   "twine>=6.0.0",
 ]
+abom = [
+  "abom @ git+https://github.com/YanChao1999/abom.git",
+]
 
 [project.scripts]
 norns = "norns.cli:main"
@@ -47,6 +50,7 @@ norns = "norns.cli:main"
 [project.entry-points."norns.plugins"]
 norns = "backend.app.plugins.norns:NornsPlugin"
 sandbox = "backend.app.plugins.sandbox:SandboxPlugin"
+abom = "backend.app.plugins.abom_plugin:AbomPlugin"
 github = "backend.app.plugins.adapters:github_plugin"
 jira = "backend.app.plugins.adapters:jira_plugin"
 polarion = "backend.app.plugins.adapters:polarion_plugin"

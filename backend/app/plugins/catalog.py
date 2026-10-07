@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from ..database import AsyncSessionLocal
 from ..models.connector import Connector, ConnectorType
+from .abom_plugin import AbomPlugin, discover_linked_mcps
 from .adapters import ExternalMcpPlugin, github_plugin, jira_plugin, polarion_plugin
 from .base import Plugin, PluginContext, ToolSpec
 from .norns import NornsPlugin
@@ -63,7 +64,7 @@ class PluginCatalog:
 
 
 def builtin_plugins() -> list[Plugin]:
-    return [NornsPlugin(), SandboxPlugin(), github_plugin(), jira_plugin(), polarion_plugin()]
+    return [NornsPlugin(), SandboxPlugin(), AbomPlugin(), github_plugin(), jira_plugin(), polarion_plugin()]
 
 
 def load_entry_point_plugins() -> list[Plugin]:
@@ -120,8 +121,13 @@ def cursor_mcp_servers(
     extra_env: Mapping[str, str] | None = None,
     cwd: str | None = None,
     confirm_writes: bool = False,
+    workspace_path: str | None = None,
 ) -> dict[str, Any]:
-    """Cursor SDK mcp_servers mapping for the stage allowlist."""
+    """Cursor SDK mcp_servers mapping for the stage allowlist.
+
+    When ``abom`` is allowlisted, MCP recipes linked under the board workspace's
+    ``.abom/`` directory are attached as extra stdio servers automatically.
+    """
     catalog = load_plugin_catalog(connectors)
     selected = catalog.selected(allowlist)
     servers: dict[str, Any] = {}
@@ -142,6 +148,18 @@ def cursor_mcp_servers(
                 "args": launch.get("args") or [],
                 "env": _stdio_env(launch.get("env"), extra_env, inherit_norns=False),
                 "cwd": cwd or None,
+            }
+    wanted = {name.strip().lower() for name in allowlist if name and name.strip()}
+    if "abom" in wanted:
+        for linked in discover_linked_mcps(workspace_path or cwd):
+            key = f"abom_{linked.name}".replace("-", "_")
+            if key in servers:
+                continue
+            servers[key] = {
+                "command": linked.command,
+                "args": list(linked.args),
+                "env": _stdio_env(None, extra_env, inherit_norns=False),
+                "cwd": linked.path,
             }
     return servers
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-Shipped on `main` through **0.0.3** (prep): everything in 0.0.2, plus Command Light Control Room UX (#48) — cream theme, soft-join board chrome, Settings write gate, Ask agent, Delivery Machine Card detail — A-class first-run / practice / git-bind fixes (#47), and system-proxy Settings (Clash `socks://` → `socks5://`, optional direct egress for company networks) (#52).
+Shipped on `main` through **0.0.3** (prep): everything in 0.0.2, plus Command Light Control Room UX (#48), A-class first-run / practice / git-bind fixes (#47), system-proxy Settings (#52), and token usage matrix / board summary (#54).
 
 This file is the remaining backlog. Open GitHub issues without an `A` label still track follow-ups; A-class alpha feedback from #18–#39 is closed on `main`.
 
@@ -11,8 +11,10 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 - [x] **Parallel planned split + sandbox** — soft join (no wait/merge); previous column plans `handoff.tracks`; directory or hardened Docker sandbox per agent run.
 - [x] **Command Light Control Room** — Command Light theme + Night stub, practice chrome, soft join UI, Settings write gate, card detail sheet (#48).
 - [x] **System proxy preference** — Settings → Network toggle (or `USE_SYSTEM_PROXY` / `[network] use_system_proxy`); Clash `socks://` normalized to `socks5://`; off = direct API egress (#52).
-- [ ] **Publish 0.0.3** — version bumped in-tree; tag `v0.0.3` and follow [PUBLISH.md](PUBLISH.md) when ready.
-- [x] **Token usage matrix** — capture OpenAI/DeepSeek/Cursor usage per stage run; card detail shows stage×tokens (Cursor via SDK `get_usage` / run result; may still be `unavailable` if the agent reports none).
+- [x] **Token usage matrix** — capture OpenAI/DeepSeek/Cursor usage per stage run; card detail + board summary; input breakdown reference for MCP/tools/skills (#54).
+- [x] **abom skill store** — Agent Config skill store; **Enable** installs + links GitHub recipes into `.abom/`; skills inject into prompts; MCP recipes auto-attach for Cursor ([abom](https://yanchao1999.github.io/abom/), [#59](https://github.com/YanChao1999/Norns/pull/59) — CI green, ready to merge).
+- [ ] **Publish 0.0.3** — version bumped in-tree; tag `v0.0.3` and follow [PUBLISH.md](PUBLISH.md) after #59 lands.
+- [ ] **Agent bakeoff** — same prompt on parallel arms with different tools/settings; compare tokens + outcome ([#55](https://github.com/YanChao1999/Norns/pull/55) draft — rebase onto `main` after #59; currently conflicts).
 
 ### Out of 0.0.3 (deferred)
 

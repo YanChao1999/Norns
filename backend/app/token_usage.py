@@ -82,7 +82,12 @@ def summarize_round_input(
         if tool_calls:
             extra += estimate_tokens(tool_calls)
         if role == "system":
-            breakdown["system"] += estimate_tokens(content) + extra
+            text = content if isinstance(content, str) else str(content or "")
+            # Second system message injected from abom-linked SKILL.md files.
+            if text.lstrip().startswith("## Linked agent skills"):
+                breakdown["skills"] += estimate_tokens(content) + extra
+            else:
+                breakdown["system"] += estimate_tokens(content) + extra
         elif role == "user":
             breakdown["task"] += estimate_tokens(content) + extra
         elif role == "assistant":
