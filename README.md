@@ -13,7 +13,7 @@ Named after Urd, Verdandi, and Skuld.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/github/license/YanChao1999/Norns.svg)](LICENSE)
 
-**v0.0.3** · Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
+**v0.0.4** · Site: [yanchao1999.github.io/Norns](https://yanchao1999.github.io/Norns/) · Backlog: [ROADMAP.md](ROADMAP.md)
 
 ## Downloads
 
