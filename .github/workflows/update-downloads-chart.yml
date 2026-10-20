@@ -36,8 +36,11 @@ jobs:
           git commit -m "Refresh PyPI downloads trend chart."
           git push -u origin "$BRANCH" --force
 
-          if gh pr view "$BRANCH" --json number --jq .number >/dev/null 2>&1; then
-            echo "PR for $BRANCH already exists"
+          # Only treat an *open* PR as existing. `gh pr view $BRANCH` also matches
+          # merged PRs from the same head name, which blocked refreshes after #57.
+          OPEN_PR="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$OPEN_PR" ]; then
+            echo "Open PR #$OPEN_PR for $BRANCH already exists"
           else
             BODY="$(printf '%s\n\n%s\n' \
               'Automated refresh of `assets/downloads-trend.svg` from the scheduled downloads chart workflow.' \
