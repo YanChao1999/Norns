@@ -29,8 +29,10 @@ export const en = {
   'board.humanGate': 'Human gate',
   'board.autoAdvance': 'Auto-advance',
   'board.confirmWrites': 'Confirm writes',
-  'board.noPlugins': 'no plugins',
+  'board.noPlugins': 'no tools — open Agent',
+  'board.noToolsWarn': 'No tools enabled. Empty allowlist grants nothing until you check plugins under Agent.',
   'board.ownRepo': 'own repo',
+  'board.agent': 'Agent',
   'board.parallel': 'parallel',
   'board.row': 'Row {row}',
   'board.inParallel': 'in parallel (parallel run)',
@@ -44,7 +46,6 @@ export const en = {
   'board.settledCount': '{count} settled item(s)',
   'board.approveNeWritten': 'Approve ≠ written to systems',
   'board.editMachine': 'Edit state machine',
-  'board.agent': 'Agent',
   'board.usageTitle': 'Token usage',
   'board.usageLoading': 'Loading usage…',
   'board.usageEmpty': 'No usage yet',
@@ -212,11 +213,17 @@ export const en = {
   'login.brand': 'Norns',
   'login.title': 'Control room',
   'login.subtitle': 'Sign in to operate boards and approval gates.',
+  'login.hint': 'Username is admin. Password was printed by norns init (also in ~/.norns/config.toml).',
   'login.username': 'Username',
   'login.password': 'Password',
   'login.submit': 'Sign in',
   'login.pending': 'Signing in…',
   'login.error': 'Invalid username or password.',
+  'agent.emptyAllowlist':
+    'No tools enabled. An empty allowlist grants nothing — check plugins below before you expect Jira, GitHub, or Polarion calls.',
+  'agent.missingConnector':
+    'Enabled but not usable: {names}. Add the connector in Settings (or install the CLI) before this stage can use them.',
+  'agent.toolsHeading': 'Plugins / MCP — empty allowlist grants none',
 
   'machine.intro':
     'Draw lines to split, join, or go back. Column and row only place stages. Parallel work needs two default lines from the same stage. After parallel tracks, add a later column (Review, Merge, …) and draw a line from each track into it. Cards arrive and run as soon as they are ready — soft join locks confirm-write on that later stage until every parallel lane has settled.',

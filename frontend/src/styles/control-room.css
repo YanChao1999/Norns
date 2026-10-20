@@ -704,6 +704,12 @@ a {
   font-size: 13px;
 }
 
+.login-card .login-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .error {
   color: var(--blocked);
   font-size: 13px;
@@ -2030,6 +2036,10 @@ details.disclosure summary {
 .station-tools {
   color: var(--muted);
   font-size: 12px;
+}
+
+.station-tools.is-warn {
+  color: var(--waiting);
 }
 
 .station-empty {

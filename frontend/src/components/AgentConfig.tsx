@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
+import { useI18n } from '../i18n';
+import { isEmptyAllowlist, unavailableAllowlisted } from '../toolAllowlistHints';
 import { Stage } from '../types';
 import { Dialog } from './Dialog';
 
@@ -52,6 +54,7 @@ function parseSelection(value: string): { llm_provider: string; model: string } 
 }
 
 export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(() => initialForm(stage));
 
@@ -72,6 +75,8 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
     queryFn: () => apiClient.get<PluginInfo[]>('/plugins')
   });
   const availableTools = plugins.length ? plugins.map((plugin) => plugin.name) : FALLBACK_PLUGINS;
+  const emptyAllowlist = isEmptyAllowlist(form.tool_allowlist);
+  const missingPlugins = useMemo(() => unavailableAllowlisted(form.tool_allowlist, plugins), [form.tool_allowlist, plugins]);
 
   const entries = useMemo(() => {
     const fromApi = catalog?.entries ?? [];
@@ -270,7 +275,7 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
       </div>
 
       <div className="field">
-        <span>Plugins / MCP — empty allowlist grants none</span>
+        <span>{t('agent.toolsHeading')}</span>
         <p className="muted">
           Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build), abom (skill store from{' '}
           <a href="https://yanchao1999.github.io/abom/" target="_blank" rel="noreferrer">
@@ -279,6 +284,18 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
           ), github, jira, polarion, or an MCP connector from Settings. Cursor stages receive these as MCP servers; OpenAI/DeepSeek stages use the same tools as
           functions. Confirm writes is per stage on Machine, not bound to column names.
         </p>
+        {emptyAllowlist ? (
+          <p className="notice" role="status">
+            {t('agent.emptyAllowlist')}
+          </p>
+        ) : null}
+        {missingPlugins.length ? (
+          <p className="notice" role="status">
+            {t('agent.missingConnector', {
+              names: missingPlugins.map((plugin) => plugin.title || plugin.name).join(', ')
+            })}
+          </p>
+        ) : null}
         <div className="tool-row">
           {availableTools.map((tool) => {
             const plugin = plugins.find((item) => item.name === tool);
