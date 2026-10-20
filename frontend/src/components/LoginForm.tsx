@@ -36,6 +36,7 @@ export function LoginForm({ onLoggedIn }: Props) {
           <p className="brand-sub">{t('login.brand')}</p>
           <h1>{t('login.title')}</h1>
           <p>{t('login.subtitle')}</p>
+          <p className="muted login-hint">{t('login.hint')}</p>
         </div>
         <label className="field">
           {t('login.username')}

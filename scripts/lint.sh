@@ -13,8 +13,10 @@ node --check norns/electron/main.js
 
 echo "==> ESLint"
 cd frontend
+# Use lockfile deps (eslint 10+). Reinstalling eslint@9 majors here crashes npm
+# arborist with "Cannot read properties of null (reading 'edgesOut')".
 npm ci
-npx eslint . --max-warnings=0
+npm run lint
 
 echo "==> Prettier"
-npx prettier --check .
+npm run format:check

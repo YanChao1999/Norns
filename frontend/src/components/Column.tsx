@@ -34,7 +34,9 @@ export function Column({
   compact = false
 }: Props) {
   const { t } = useI18n();
-  const tools = stage.agent_config?.tool_allowlist?.length ? stage.agent_config.tool_allowlist.join(' · ') : t('board.noPlugins');
+  const allowlist = stage.agent_config?.tool_allowlist ?? [];
+  const noTools = !allowlist.length;
+  const tools = noTools ? t('board.noPlugins') : allowlist.join(' · ');
   const roleBits = [stage.require_approval ? t('board.humanGate') : t('board.autoAdvance'), stage.confirm_writes ? t('board.confirmWrites') : null].filter(
     Boolean
   );
@@ -48,7 +50,7 @@ export function Column({
             {parallel ? `${t('board.row', { row })} · ${t('board.parallel')} · ` : ''}
             {roleBits.join(' · ')}
           </p>
-          <p className="station-tools">
+          <p className={`station-tools${noTools ? ' is-warn' : ''}`} title={noTools ? t('board.noToolsWarn') : undefined}>
             ({tools}
             {stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ` · ${t('board.ownRepo')}` : ''})
           </p>

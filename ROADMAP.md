@@ -14,12 +14,11 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 - [x] **Token usage matrix** — capture OpenAI/DeepSeek/Cursor usage per stage run; card detail + board summary; input breakdown reference for MCP/tools/skills (#54).
 - [x] **abom skill store** — Agent Config skill store; **Enable** installs + links GitHub recipes into `.abom/`; skills inject into prompts; MCP recipes auto-attach for Cursor ([abom](https://yanchao1999.github.io/abom/), #59).
 - [x] **Publish 0.0.3** — early cut on PyPI (2026-09-26); superseded by 0.0.4 for abom + token usage.
-- [ ] **Publish 0.0.4** — version bumped in-tree; tag `v0.0.4` and follow [PUBLISH.md](PUBLISH.md) (TestPyPI → acceptance → PyPI).
+- [x] **Publish 0.0.4** — on PyPI (`norns-ide==0.0.4`, optional `[abom]`); tag [v0.0.4](https://github.com/YanChao1999/Norns/releases/tag/v0.0.4).
 - [ ] **Agent bakeoff** — same prompt on parallel arms with different tools/settings; compare tokens + outcome ([#55](https://github.com/YanChao1999/Norns/pull/55) draft — rebase onto `main`).
 
 ### Out of 0.0.4 (deferred)
 
-- Warn when tools have no connector; login copy polish
 - Sandbox microVM / gVisor backends
 - Alembic migrations, multi-user / RBAC, worker lease hardening
 
@@ -34,8 +33,8 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 - [x] **Fake-key health** — model-list auth failure keeps `usable` / `llm_configured` false.
 - [x] **Failed runs → blocked** — stage failures align with human reject (`blocked`), not `idle`.
 - [x] **Bind git validation** — path must exist; `git_url` must look like a git remote; `/api/workspace?board_id=` reflects the board.
-- [ ] **Warn when tools have no connector** — do not silently grant nothing.
-- [ ] **Login copy** — username is `admin`; password was printed by `norns init` and is in `~/.norns/config.toml`.
+- [x] **Warn when tools have no connector** — Agent dialog notices for empty allowlist and checked plugins without a connector/CLI; board column shows `no tools — open Agent`.
+- [x] **Login copy** — username is `admin`; password was printed by `norns init` and is in `~/.norns/config.toml`.
 
 ## Docs / install leftovers
 
