@@ -13,15 +13,7 @@ node --check norns/electron/main.js
 
 echo "==> ESLint"
 cd frontend
-npm install --no-save --no-package-lock \
-  eslint@9 \
-  @eslint/js@9 \
-  typescript-eslint@8 \
-  eslint-plugin-react-hooks@5 \
-  eslint-config-prettier@10 \
-  globals@15 \
-  prettier@3 \
-  typescript@5
+npm ci
 npx eslint . --max-warnings=0
 
 echo "==> Prettier"
