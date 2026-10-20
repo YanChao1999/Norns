@@ -12,10 +12,7 @@ export function isEmptyAllowlist(allowlist: string[] | null | undefined): boolea
 }
 
 /** Plugins on the allowlist that cannot run (missing connector / CLI). */
-export function unavailableAllowlisted(
-  allowlist: string[] | null | undefined,
-  plugins: PluginAvailability[]
-): PluginAvailability[] {
+export function unavailableAllowlisted(allowlist: string[] | null | undefined, plugins: PluginAvailability[]): PluginAvailability[] {
   if (!allowlist?.length || !plugins.length) {
     return [];
   }

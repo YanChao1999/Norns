@@ -219,10 +219,8 @@ export const en = {
   'login.submit': 'Sign in',
   'login.pending': 'Signing in…',
   'login.error': 'Invalid username or password.',
-  'agent.emptyAllowlist':
-    'No tools enabled. An empty allowlist grants nothing — check plugins below before you expect Jira, GitHub, or Polarion calls.',
-  'agent.missingConnector':
-    'Enabled but not usable: {names}. Add the connector in Settings (or install the CLI) before this stage can use them.',
+  'agent.emptyAllowlist': 'No tools enabled. An empty allowlist grants nothing — check plugins below before you expect Jira, GitHub, or Polarion calls.',
+  'agent.missingConnector': 'Enabled but not usable: {names}. Add the connector in Settings (or install the CLI) before this stage can use them.',
   'agent.toolsHeading': 'Plugins / MCP — empty allowlist grants none',
 
   'machine.intro':
