@@ -476,6 +476,11 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                     <small>{t('detail.rejectHint')}</small>
                   </span>
                 </button>
+                {writeMutation.isError ? (
+                  <p className="notice" role="alert">
+                    {writeMutation.error instanceof Error ? writeMutation.error.message : String(writeMutation.error)}
+                  </p>
+                ) : null}
               </>
             ) : null}
 

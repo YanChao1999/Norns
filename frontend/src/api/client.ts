@@ -12,7 +12,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    let detail = message || `Request failed: ${response.status}`;
+    try {
+      const parsed = JSON.parse(message) as { detail?: unknown };
+      if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+        detail = parsed.detail;
+      }
+    } catch {
+      /* keep raw body */
+    }
+    throw new Error(detail);
   }
 
   if (response.status === 204) {

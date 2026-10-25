@@ -282,6 +282,14 @@ async def trigger_card_run(card_id: str, session: Annotated[AsyncSession, Depend
 
 
 def _gate_http_exception(exc: ValueError) -> HTTPException:
+    """Map gate ValueErrors to HTTP status.
+
+    Only true missing resources are 404. Tool/sandbox failures often include
+    ``not found`` in the message (e.g. ``Command not found``) and must stay 409
+    so the Control Room can surface the real detail instead of a silent miss.
+    """
     detail = str(exc)
-    status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_409_CONFLICT
+    lowered = detail.lower().strip()
+    missing = lowered in {"card not found", "board not found"} or lowered.startswith("card not found")
+    status_code = status.HTTP_404_NOT_FOUND if missing else status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=detail)

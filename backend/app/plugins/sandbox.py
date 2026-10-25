@@ -317,6 +317,16 @@ def _normalize_command(raw: Any) -> list[str]:
     text = str(raw or "").strip()
     if not text:
         raise ValueError("command is required")
+    # Models often pass argv as a JSON array string: '["grep","-rn","x"]'.
+    if text.startswith("[") and text.endswith("]"):
+        try:
+            import json
+
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            return _normalize_command(parsed)
     parts = shlex.split(text)
     if not parts:
         raise ValueError("command is required")
