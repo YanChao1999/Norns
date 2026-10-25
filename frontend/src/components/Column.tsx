@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiClient } from '../api/client';
 import { useI18n } from '../i18n';
@@ -18,6 +18,7 @@ interface Props {
   onOpenCard: (card: Card) => void;
   onOpenConfig: (stage: Stage) => void;
   compact?: boolean;
+  workspacePath?: string;
 }
 
 export function Column({
@@ -31,15 +32,27 @@ export function Column({
   openCardId,
   onOpenCard,
   onOpenConfig,
-  compact = false
+  compact = false,
+  workspacePath = ''
 }: Props) {
   const { t } = useI18n();
   const allowlist = stage.agent_config?.tool_allowlist ?? [];
   const noTools = !allowlist.length;
+  const abomOn = allowlist.some((name) => name.trim().toLowerCase() === 'abom');
+  const stageWorkspace = stage.agent_config?.workspace_path || workspacePath;
   const tools = noTools ? t('board.noPlugins') : allowlist.join(' · ');
   const roleBits = [stage.require_approval ? t('board.humanGate') : t('board.autoAdvance'), stage.confirm_writes ? t('board.confirmWrites') : null].filter(
     Boolean
   );
+
+  const { data: linkedSkills } = useQuery({
+    queryKey: ['abom-skills', stageWorkspace],
+    enabled: Boolean(stageWorkspace) && abomOn,
+    queryFn: () => apiClient.get<{ skills: Array<{ name: string }>; count: number }>(`/abom/skills?workspace_path=${encodeURIComponent(stageWorkspace)}`),
+    staleTime: 30_000
+  });
+  const skillCount = linkedSkills?.count ?? linkedSkills?.skills?.length ?? 0;
+  const skillsLine = !abomOn ? null : skillCount ? t('board.skillsCount', { count: skillCount }) : t('board.noSkills');
 
   return (
     <section className={`station column${parallel ? ' is-parallel-row' : ''}${locked ? ' is-locked' : ''}${compact ? ' is-compact' : ''}`}>
@@ -54,10 +67,15 @@ export function Column({
             ({tools}
             {stage.agent_config?.workspace_path || stage.agent_config?.git_url ? ` · ${t('board.ownRepo')}` : ''})
           </p>
+          {skillsLine ? (
+            <p className={`station-skills${abomOn && !skillCount ? ' is-warn' : ''}`} title={abomOn && !skillCount ? t('board.skillsWarn') : undefined}>
+              {skillsLine}
+            </p>
+          ) : null}
         </div>
         <div className="column-actions">
           <span className="column-count">{cards.length}</span>
-          <button type="button" className="btn btn-icon" title={t('board.agent')} onClick={() => onOpenConfig(stage)}>
+          <button type="button" className="btn btn-icon" title={t('board.agentTitle')} onClick={() => onOpenConfig(stage)}>
             {t('board.agent')}
           </button>
         </div>
