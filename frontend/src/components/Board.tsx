@@ -118,6 +118,7 @@ export function Board({ boardId, onEditMachine, practiceMode = false }: Props) {
                 openCardId={liveCard?.id ?? null}
                 onOpenCard={setSelectedCard}
                 onOpenConfig={setSelectedStage}
+                workspacePath={board.workspace_path ?? ''}
               />
             );
           })}
@@ -197,6 +198,7 @@ function StageRail({
                         openCardId={openCardId}
                         onOpenCard={onOpenCard}
                         onOpenConfig={onOpenConfig}
+                        workspacePath={board.workspace_path ?? ''}
                       />
                     ))}
                 </div>
@@ -222,6 +224,7 @@ function StageRail({
               openCardId={openCardId}
               onOpenCard={onOpenCard}
               onOpenConfig={onOpenConfig}
+              workspacePath={board.workspace_path ?? ''}
             />
           </div>
         );

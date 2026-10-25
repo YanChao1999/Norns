@@ -1,10 +1,20 @@
 # Roadmap
 
-Shipped on `main` through **0.0.4** (prep): everything in early 0.0.3 on PyPI, plus Command Light Control Room UX (#48), A-class first-run / practice / git-bind fixes (#47), system-proxy Settings (#52), token usage matrix / board summary (#54), abom skill store (#59), and refreshed GitHub Pages (#61).
+Shipped on `main` through **0.0.4** (on PyPI): early 0.0.3 plus Command Light Control Room (#48), A-class first-run / practice / git-bind (#47), system-proxy Settings (#52), token usage matrix (#54), abom skill store (#59), refreshed Pages (#61), downloads chart (#65), and first-run tool warnings (#66).
+
+**Positioning:** Norns is **agent-first** — each column is an agent whose primary job is orchestrating **tools + skills** (allowlist, abom, MCP). Handoff stays thin (summary / decision / artifacts). Contrast with workflow tools like n8n that orchestrate steps and integrations first.
 
 This file is the remaining backlog. Open GitHub issues without an `A` label still track follow-ups; A-class alpha feedback from #18–#39 is closed on `main`.
 
 ## Now
+
+### Agent-first (tools / skills)
+
+- [x] **Agent workbench** — column + Agent dialog lead with tools and linked skills (what can run, missing connector, abom links); weaken “flow node” framing. Closes [#28](https://github.com/YanChao1999/Norns/issues/28).
+- [x] **Tool / skill bakeoff** — same prompt on parallel arms with different allowlists; compare tokens + outcome (lands [#55](https://github.com/YanChao1999/Norns/pull/55)).
+- [x] **Skills as first-class** — per-stage / Agent dialog skill list (name, abom source, injected when abom allowlisted); handoff stays summary/decision only.
+
+### Already shipped (checklist)
 
 - [x] **pip / uv install** — `uv tool install norns-ide` / `pip install norns-ide` (or `uv tool install .` from a checkout). CI checks the wheel, sdist, packaged UI, and `/api/health`.
 - [x] **Publish 0.0.2 as `norns-ide`** — on PyPI / TestPyPI. Follow [PUBLISH.md](PUBLISH.md) for the next cut.
@@ -15,9 +25,8 @@ This file is the remaining backlog. Open GitHub issues without an `A` label stil
 - [x] **abom skill store** — Agent Config skill store; **Enable** installs + links GitHub recipes into `.abom/`; skills inject into prompts; MCP recipes auto-attach for Cursor ([abom](https://yanchao1999.github.io/abom/), #59).
 - [x] **Publish 0.0.3** — early cut on PyPI (2026-09-26); superseded by 0.0.4 for abom + token usage.
 - [x] **Publish 0.0.4** — on PyPI (`norns-ide==0.0.4`, optional `[abom]`); tag [v0.0.4](https://github.com/YanChao1999/Norns/releases/tag/v0.0.4).
-- [ ] **Agent bakeoff** — same prompt on parallel arms with different tools/settings; compare tokens + outcome ([#55](https://github.com/YanChao1999/Norns/pull/55) draft — rebase onto `main`).
 
-### Out of 0.0.4 (deferred)
+### Deferred infra
 
 - Sandbox microVM / gVisor backends
 - Alembic migrations, multi-user / RBAC, worker lease hardening

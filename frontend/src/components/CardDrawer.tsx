@@ -26,6 +26,7 @@ import { AgentRun, BoardDetail, Card } from '../types';
 import { appendOperatorQuestion } from '../writeGate';
 import { Dialog } from './Dialog';
 import { MarkdownPreview } from './MarkdownPreview';
+import { BakeoffComparePanel } from './BakeoffCompare';
 import { TokenUsageMatrix } from './TokenUsageMatrix';
 import { WaitLive } from './WaitLive';
 
@@ -381,6 +382,10 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
 
             {card?.id ? <TokenUsageMatrix cardId={card.id} active={card.status === 'running' || card.status === 'waiting_tool_approval'} /> : null}
 
+            {card?.id && !card.parent_card_id ? (
+              <BakeoffComparePanel cardId={card.id} idle={card.status === 'idle' || card.status === 'blocked' || card.status === 'done'} />
+            ) : null}
+
             {expandedStageId ? (
               <JourneyStageDetail stageId={expandedStageId} board={board} runs={runs.filter((run) => run.stage_id === expandedStageId)} />
             ) : null}
@@ -471,6 +476,11 @@ export function CardDrawer({ card, board, practiceMode = false, onClose, onOpenH
                     <small>{t('detail.rejectHint')}</small>
                   </span>
                 </button>
+                {writeMutation.isError ? (
+                  <p className="notice" role="alert">
+                    {writeMutation.error instanceof Error ? writeMutation.error.message : String(writeMutation.error)}
+                  </p>
+                ) : null}
               </>
             ) : null}
 

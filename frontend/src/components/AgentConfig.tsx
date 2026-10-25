@@ -170,17 +170,72 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
     return null;
   }
 
+  const workspacePath = form.workspace_path || boardWorkspace?.path || '';
+  const abomEnabled = form.tool_allowlist.includes('abom');
+  const abomAvailable = Boolean(plugins.find((item) => item.name === 'abom')?.available);
+
   return (
     <Dialog open onClose={onClose} labelledBy="agent-config-title" variant="modal">
       <div className="modal-head">
-        <h2 id="agent-config-title">Agent config · {stage.name}</h2>
+        <div>
+          <h2 id="agent-config-title">{t('agent.title', { name: stage.name })}</h2>
+          <p className="muted agent-workbench-sub">{t('agent.subtitle')}</p>
+        </div>
         <button type="button" className="btn btn-ghost" onClick={onClose}>
           Close
         </button>
       </div>
 
+      <div className="field agent-workbench-block">
+        <span>{t('agent.toolsHeading')}</span>
+        <p className="muted">{t('agent.toolsIntro')}</p>
+        {emptyAllowlist ? (
+          <p className="notice" role="status">
+            {t('agent.emptyAllowlist')}
+          </p>
+        ) : null}
+        {missingPlugins.length ? (
+          <p className="notice" role="status">
+            {t('agent.missingConnector', {
+              names: missingPlugins.map((plugin) => plugin.title || plugin.name).join(', ')
+            })}
+          </p>
+        ) : null}
+        <div className="tool-row">
+          {availableTools.map((tool) => {
+            const plugin = plugins.find((item) => item.name === tool);
+            const checked = form.tool_allowlist.includes(tool);
+            return (
+              <label key={tool} title={plugin?.description || tool}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() =>
+                    setForm((current) => ({
+                      ...current,
+                      tool_allowlist: checked ? current.tool_allowlist.filter((item) => item !== tool) : [...current.tool_allowlist, tool]
+                    }))
+                  }
+                />
+                {plugin?.title || tool}
+                {plugin && !plugin.available ? (tool === 'abom' ? ' (install abom CLI)' : ' (no connector)') : ''}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <AbomMaterials
+        workspacePath={workspacePath}
+        abomEnabled={abomEnabled}
+        abomAvailable={abomAvailable}
+        onEnableAbom={() =>
+          setForm((current) => (current.tool_allowlist.includes('abom') ? current : { ...current, tool_allowlist: [...current.tool_allowlist, 'abom'] }))
+        }
+      />
+
       <label className="field">
-        System prompt
+        {t('agent.promptHeading')}
         <textarea
           className="textarea"
           rows={6}
@@ -193,7 +248,7 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
       ) : null}
 
       <label className="field">
-        Model
+        {t('agent.modelHeading')}
         {options.length ? (
           <select
             className="input"
@@ -252,7 +307,7 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
         <p className="muted">
           Leave blank to use the board repo
           {boardWorkspace?.git_url || boardWorkspace?.path ? ` (${boardWorkspace.git_url || boardWorkspace.path}).` : '.'} Only fill this in if this stage
-          should work in another project.
+          should work in another project. Skills link into the board folder&apos;s <code>.abom/</code>.
         </p>
         <label className="field">
           Folder on this machine
@@ -273,61 +328,6 @@ export function AgentConfigModal({ stage, boardWorkspace, onClose }: Props) {
           />
         </label>
       </div>
-
-      <div className="field">
-        <span>{t('agent.toolsHeading')}</span>
-        <p className="muted">
-          Enable norns (cards, stages, prompts, git workspace), sandbox (reproduce / env-build), abom (skill store from{' '}
-          <a href="https://yanchao1999.github.io/abom/" target="_blank" rel="noreferrer">
-            abom
-          </a>
-          ), github, jira, polarion, or an MCP connector from Settings. Cursor stages receive these as MCP servers; OpenAI/DeepSeek stages use the same tools as
-          functions. Confirm writes is per stage on Machine, not bound to column names.
-        </p>
-        {emptyAllowlist ? (
-          <p className="notice" role="status">
-            {t('agent.emptyAllowlist')}
-          </p>
-        ) : null}
-        {missingPlugins.length ? (
-          <p className="notice" role="status">
-            {t('agent.missingConnector', {
-              names: missingPlugins.map((plugin) => plugin.title || plugin.name).join(', ')
-            })}
-          </p>
-        ) : null}
-        <div className="tool-row">
-          {availableTools.map((tool) => {
-            const plugin = plugins.find((item) => item.name === tool);
-            const checked = form.tool_allowlist.includes(tool);
-            return (
-              <label key={tool} title={plugin?.description || tool}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() =>
-                    setForm((current) => ({
-                      ...current,
-                      tool_allowlist: checked ? current.tool_allowlist.filter((item) => item !== tool) : [...current.tool_allowlist, tool]
-                    }))
-                  }
-                />
-                {plugin?.title || tool}
-                {plugin && !plugin.available ? (tool === 'abom' ? ' (install abom CLI)' : ' (no connector)') : ''}
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      <AbomMaterials
-        workspacePath={form.workspace_path || boardWorkspace?.path || ''}
-        abomEnabled={form.tool_allowlist.includes('abom')}
-        abomAvailable={Boolean(plugins.find((item) => item.name === 'abom')?.available)}
-        onEnableAbom={() =>
-          setForm((current) => (current.tool_allowlist.includes('abom') ? current : { ...current, tool_allowlist: [...current.tool_allowlist, 'abom'] }))
-        }
-      />
 
       <button type="button" className="btn btn-primary" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
         {mutation.isPending ? 'Saving…' : 'Save config'}
@@ -363,6 +363,8 @@ function AbomMaterials({
   abomAvailable: boolean;
   onEnableAbom: () => void;
 }) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<RecipeKind>('skill');
   const [busy, setBusy] = useState<string | null>(null);
@@ -372,6 +374,16 @@ function AbomMaterials({
     queryKey: ['abom-status'],
     queryFn: () => apiClient.get<{ installed: boolean; homepage: string; install: string; kinds?: string[] }>('/abom/status'),
     staleTime: 60_000
+  });
+
+  const { data: linkedSkills } = useQuery({
+    queryKey: ['abom-skills', workspacePath],
+    enabled: Boolean(workspacePath),
+    queryFn: () =>
+      apiClient.get<{ skills: Array<{ name: string; description: string; path: string }>; count: number }>(
+        `/abom/skills?workspace_path=${encodeURIComponent(workspacePath)}`
+      ),
+    staleTime: 15_000
   });
 
   const catalogParams = new URLSearchParams();
@@ -414,6 +426,7 @@ function AbomMaterials({
         setMessage(result.text);
       }
       void refetchCatalog();
+      void queryClient.invalidateQueries({ queryKey: ['abom-skills', workspacePath] });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -427,17 +440,37 @@ function AbomMaterials({
     { id: 'package', label: 'Packages' },
     { id: '', label: 'All' }
   ];
+  const skills = linkedSkills?.skills ?? [];
 
   return (
-    <div className="field abom-materials">
-      <span>Skill store (abom)</span>
+    <div className="field abom-materials agent-workbench-block">
+      <span>{t('agent.skillsHeading')}</span>
+      <p className="muted">{t('agent.skillsIntro')}</p>
+      <div className="linked-skills" role="status">
+        <strong>{t('agent.skillsLinked')}</strong>
+        <p className="muted linked-skills-source">{t('agent.skillsSource')}</p>
+        {skills.length ? (
+          <ul className="linked-skills-list">
+            {skills.map((skill) => (
+              <li key={skill.path || skill.name} title={skill.path}>
+                <strong>{skill.name}</strong>
+                {skill.description ? <span className="muted"> — {skill.description}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">{t('agent.skillsNone')}</p>
+        )}
+        {abomEnabled && skills.length ? null : abomEnabled ? null : (
+          <p className="muted">Turn on the abom tool above (or Enable a recipe) so linked skills inject into the prompt.</p>
+        )}
+      </div>
       <p className="muted">
         Browse GitHub-backed recipes from{' '}
         <a href={status?.homepage || 'https://yanchao1999.github.io/abom/'} target="_blank" rel="noreferrer">
           abom
         </a>
-        . <strong>Enable</strong> installs from the catalog and links into the board folder&apos;s <code>.abom/</code> so skills load into the stage prompt (MCP
-        recipes attach for Cursor stages).
+        . <strong>Enable</strong> installs and links into <code>.abom/</code>.
       </p>
       {!abomAvailable ? (
         <p className="muted">CLI missing. {status?.install || "pip install abom  # or: pip install 'norns-ide[abom]'"} then restart Norns.</p>
